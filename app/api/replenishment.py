@@ -24,7 +24,7 @@ def get_replenishment(
 
     for _, row in df.iterrows():
         response.append({
-            "model": row["Model"],
+            "model": row["model"],
             "sales_velocity": int(row["sales_velocity"]),
             "total_units_sold": int(row["total_units_sold"]),
             "amazon_inventory": int(row["amazon_inventory"]),
