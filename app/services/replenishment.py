@@ -230,6 +230,7 @@ def calculate_replenishment(
     remaining_cols = [c for c in df.columns if c not in existing_cols]
 
     df = df[existing_cols + remaining_cols]
+    df = df.rename(columns={"Model": "model"})
 
     # ---------------------------------------------
     # DEBUG AID (safe to keep)
