@@ -1,4 +1,4 @@
-const BASE = "https://am-replenishment.onrender.com";
+const BASE = "https://am-replenishment-1.onrender.com";
 
 /* =========================================================
    GENERIC FETCH HELPER
@@ -10,7 +10,7 @@ async function fetchJSON(url) {
     throw new Error(`API Error: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  return response.json(); 
 }
 
 /* =========================================================
