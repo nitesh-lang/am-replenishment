@@ -1,4 +1,4 @@
-const BASE = "http://127.0.0.1:8060";
+const BASE = "https://am-replenishment.onrender.com";
 
 /* =========================================================
    GENERIC FETCH HELPER
