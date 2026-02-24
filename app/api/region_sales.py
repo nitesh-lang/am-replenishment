@@ -12,7 +12,7 @@ router = APIRouter(
 # =================================================
 # REGION SALES ENDPOINT
 # =================================================
-@router.get("")
+@router.get("/")
 def get_region_sales(
     account: str = Query(default="NEXLEV")
 ):
