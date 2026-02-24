@@ -21,6 +21,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+from app.db.database import engine
+from app.db.models import Base
+
+Base.metadata.create_all(bind=engine)
 # =====================================================
 # CORS (REQUIRED FOR VITE FRONTEND)
 # =====================================================
