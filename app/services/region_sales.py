@@ -4,7 +4,7 @@ from pathlib import Path
 # =================================================
 # CONFIG
 # =================================================
-BASE_DIR = Path(__file__).resolve().parents[3]
+BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data" / "input"
 
 
@@ -83,7 +83,9 @@ def calculate_region_sales(account: str = "Nexlev") -> pd.DataFrame:
 
     cutoff_date = last_date - pd.Timedelta(days=30)
 
-    shipments_30 = shipments
+    shipments_30 = shipments[
+    shipments["Shipment Date"] >= cutoff_date
+]
 
     if shipments_30.empty:
         return pd.DataFrame()
