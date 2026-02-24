@@ -5,6 +5,7 @@ import Replenishment from "./pages/Replenishment";
 import FCAllocation from "./pages/FCAllocation";
 import SalesAnalytics from "./pages/SalesAnalytics";
 import RegionSales from "./pages/RegionSales";
+import ChinaReorder from "./pages/ChinaReorder";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/fc-allocation" element={<FCAllocation />} />
           <Route path="/sales-analytics" element={<SalesAnalytics />} />
           <Route path="/region-sales" element={<RegionSales />} />
+          <Route path="/china-reorder" element={<ChinaReorder />} />
 
           {/* Catch All Route */}
           <Route path="*" element={<Navigate to="/replenishment" replace />} />

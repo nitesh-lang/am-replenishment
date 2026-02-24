@@ -17,6 +17,7 @@ export default function Layout({ children }) {
   const navItems = [
     { name: "Replenishment", path: "/replenishment", icon: LayoutDashboard },
     { name: "FC Allocation", path: "/fc-allocation", icon: Boxes },
+    { name: "China Reorder", path: "/china-reorder", icon: Boxes },   // ✅ ADD THIS
     { name: "Sales Analytics", path: "/sales-analytics", icon: BarChart3 },
     { name: "Region Sales", path: "/region-sales", icon: BarChart3 }, // 👈 ADD THIS
   ];
