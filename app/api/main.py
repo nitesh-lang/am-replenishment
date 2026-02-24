@@ -20,9 +20,8 @@ app = FastAPI(
     title="AM Inventory Replenishment API",
     version="1.0.0"
 )
-
-from app.db.database import engine
-from app.db.models import Base
+from app.database import engine
+from app.models import Base
 
 Base.metadata.create_all(bind=engine)
 # =====================================================
