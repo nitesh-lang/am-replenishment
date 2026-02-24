@@ -1,11 +1,20 @@
 from fastapi import APIRouter, HTTPException, Query
 from app.services.region_sales import calculate_region_sales
 
-router = APIRouter(prefix="/region-sales", tags=["Region Sales"])
+# =================================================
+# ROUTER SETUP
+# =================================================
+router = APIRouter(
+    prefix="/region-sales",
+    tags=["Region Sales"]
+)
 
-@router.get("")
+# =================================================
+# REGION SALES ENDPOINT
+# =================================================
+@router.get("/")
 def get_region_sales(
-    account: str = Query(default="Nexlev")
+    account: str = Query(default="NEXLEV")
 ):
     """
     Returns region-wise sales (last 30 days)
@@ -21,7 +30,6 @@ def get_region_sales(
         if df.empty:
             return []
 
-        # Convert to JSON-friendly format
         return df.to_dict(orient="records")
 
     except Exception as e:
