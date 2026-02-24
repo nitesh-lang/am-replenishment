@@ -17,8 +17,9 @@ router = APIRouter(
 def get_replenishment(
     sales_window: int = Query(default=4, ge=1),
     replenish_weeks: int = Query(default=8, ge=1),
+    account: str = Query(default="NEXLEV"),
 ):
-    df = calculate_replenishment(sales_window, replenish_weeks)
+    df = calculate_replenishment(sales_window, replenish_weeks, account)
 
     response = []
 
@@ -42,7 +43,7 @@ def get_replenishment(
 # =================================================
 # FC FINAL ALLOCATION ENDPOINT
 # =================================================
-@router.get("/fc-final")
+@router.get("/fc-final-allocation")
 def get_fc_final(
     replenish_weeks: int = Query(default=8, ge=1),
 ):

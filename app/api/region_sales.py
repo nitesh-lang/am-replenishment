@@ -3,7 +3,7 @@ from app.services.region_sales import calculate_region_sales
 
 router = APIRouter(prefix="/region-sales", tags=["Region Sales"])
 
-@router.get("/")
+@router.get("")
 def get_region_sales(
     account: str = Query(default="Nexlev")
 ):
