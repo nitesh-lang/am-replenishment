@@ -176,6 +176,10 @@ def calculate_final_allocation(
         df_plan["weekly_velocity"] * replenish_weeks
     )
 
+    print("EXPECTED UNITS SAMPLE:")
+    print(df_plan[["sku","weekly_velocity","expected_units"]].head())
+
+
     df_plan["velocity_fill_ratio"] = (
         df_plan["send_qty"] /
         df_plan["expected_units"].replace(0, pd.NA)
