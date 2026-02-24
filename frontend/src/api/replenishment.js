@@ -28,7 +28,7 @@ export async function getReplenishment(salesWindow, replenishWeeks, account) {
    KPIs
    ========================================================= */
 export async function getKPIs(weeks) {
-  return fetchJSON(`${BASE}/kpis?weeks=${weeks}`);
+  return fetchJSON(`${BASE}/kpis/?weeks=${weeks}`);
 }
 
 /* =========================================================
