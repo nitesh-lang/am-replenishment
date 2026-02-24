@@ -30,7 +30,7 @@ export default function RegionSales() {
   useEffect(() => {
     setLoading(true);
 
-    fetch(`https://am-replenishment-1.onrender.com/region-sales?account=${account}`)
+    fetch(`https://am-replenishment.onrender.com/region-sales?account=${account}`)
       .then((res) => res.json())
       .then((res) => {
         setData(Array.isArray(res) ? res : []);
