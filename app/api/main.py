@@ -21,7 +21,7 @@ app = FastAPI(
     version="1.0.0"
 )
 from app.db import engine
-from app.models import Base
+from app.core.models.base import Base
 
 Base.metadata.create_all(bind=engine)
 # =====================================================
