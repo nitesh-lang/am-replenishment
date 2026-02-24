@@ -11,6 +11,8 @@ def calculate_final_allocation(
     channel: str = "All",
     account: str = "Nexlev"
 ) -> pd.DataFrame:
+    
+    print("🔥 FC FINAL LIVE CHECK 🔥")
 
     """
     Final FC Allocation Engine
