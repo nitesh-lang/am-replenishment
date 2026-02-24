@@ -23,7 +23,9 @@ app = FastAPI(
 from app.db import engine
 from app.core.models.base import Base
 
-Base.metadata.create_all(bind=engine)
+@app.on_event("startup")
+def create_tables():
+    Base.metadata.create_all(bind=engine)
 # =====================================================
 # CORS (REQUIRED FOR VITE FRONTEND)
 # =====================================================
