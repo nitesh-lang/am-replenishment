@@ -165,6 +165,9 @@ def calculate_final_allocation(
     
     df_plan["send_qty"] = df_plan.apply(apply_ist, axis=1)
 
+    print("SEND QTY SAMPLE:")
+    print(df_plan[["sku","send_qty"]].head())
+
     # ==========================================================
     # STEP 5C — VELOCITY DELTA FLAGGING (30% RULE)
     # ==========================================================
