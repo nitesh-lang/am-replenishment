@@ -83,9 +83,7 @@ def calculate_region_sales(account: str = "Nexlev") -> pd.DataFrame:
 
     cutoff_date = last_date - pd.Timedelta(days=30)
 
-    shipments_30 = shipments[
-        shipments["Shipment Date"] >= cutoff_date
-    ]
+    shipments_30 = shipments
 
     if shipments_30.empty:
         return pd.DataFrame()
