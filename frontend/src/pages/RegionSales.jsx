@@ -10,7 +10,7 @@ export default function RegionSales() {
      STATE
   ============================================================ */
 
-  const [account, setAccount] = useState("Nexlev");
+  const [account, setAccount] = useState("NEXLEV");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +30,7 @@ export default function RegionSales() {
   useEffect(() => {
     setLoading(true);
 
-    fetch(`//https://am-replenishment-1.onrender.com/region-sales/?account=${account}`)
+    fetch(`https://am-replenishment-1.onrender.com/region-sales/?account=${account}`)
       .then((res) => res.json())
       .then((res) => {
         setData(Array.isArray(res) ? res : []);
@@ -216,8 +216,8 @@ export default function RegionSales() {
     onChange={(e) => setAccount(e.target.value)}
     className="mt-2 w-full px-4 py-2 border rounded-lg"
   >
-    <option value="Nexlev">Nexlev</option>
-    <option value="Viomi">Viomi</option>
+    <option value="NEXLEV">Nexlev</option>
+    <option value="VIOMI">Viomi</option>
   </select>
 </div>
         <div className="flex items-end">
