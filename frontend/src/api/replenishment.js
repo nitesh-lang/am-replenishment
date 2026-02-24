@@ -1,4 +1,4 @@
-const BASE = "https://am-replenishment-1.onrender.com";
+const BASE = "https://am-replenishment.onrender.com";
 
 /* =========================================================
    GENERIC FETCH HELPER
