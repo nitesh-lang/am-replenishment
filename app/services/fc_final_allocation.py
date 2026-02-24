@@ -124,6 +124,9 @@ def calculate_final_allocation(
         df_plan["target_cover_units"] - df_plan["post_transfer_stock"]
     ).clip(lower=0)
 
+    print("SHORTFALL SAMPLE:")
+    print(df_plan[["sku","target_cover_units","post_transfer_stock","adjusted_shortfall"]].head())
+
     # ==========================================================
     # STEP 5 — FINAL SEND QUANTITY
     # ==========================================================
