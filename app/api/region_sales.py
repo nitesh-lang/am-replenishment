@@ -12,7 +12,7 @@ router = APIRouter(
 # =================================================
 # REGION SALES ENDPOINT
 # =================================================
-@router.get("/")
+@router.get("")
 def get_region_sales(
     account: str = Query(default="NEXLEV")
 ):
@@ -25,7 +25,7 @@ def get_region_sales(
     """
 
     try:
-        df = calculate_region_sales(account=account)
+        df = calculate_region_sales(account=account.upper())
 
         if df.empty:
             return []
