@@ -296,5 +296,6 @@ def calculate_final_allocation(
         ).fillna(0)
 
     print("FINAL DF COLUMNS:", final_df.columns.tolist())
+    print("COLUMNS INSIDE SERVICE:", final_df.columns.tolist())
 
     return final_df
