@@ -1,7 +1,9 @@
 print("RUNNING FILE:", __file__)
+
 import pandas as pd
 from app.services.fc_planning import calculate_fc_plan
 from app.services.fc_transfer import calculate_fc_transfers
+
 
 # ===============================================================
 # FINAL FC ALLOCATION ENGINE
@@ -12,19 +14,8 @@ def calculate_final_allocation(
     channel: str = "All",
     account: str = "Nexlev"
 ) -> pd.DataFrame:
-    
+
     print("🔥 FC FINAL LIVE CHECK 🔥")
-
-    """
-    Final FC Allocation Engine
-
-    1. Pull FC planning
-    2. Pull internal FC transfers
-    3. Adjust shortfall
-    4. Compute final AMPM send quantity
-    5. Apply Hazmat governance rule (35%)
-    6. Apply velocity delta flag (30% threshold)
-    """
 
     # ==========================================================
     # STEP 1 — LOAD FC PLANNING DATA
@@ -38,7 +29,6 @@ def calculate_final_allocation(
 
     if df_plan is None or df_plan.empty:
         return pd.DataFrame()
-
 
     required_cols = [
         "sku",
@@ -61,7 +51,18 @@ def calculate_final_allocation(
     ]
 
     for col in numeric_cols:
-        df_plan[col] = pd.to_numeric(df_plan[col], errors="coerce").fillna(0)
+        df_plan[col] = pd.to_numeric(
+            df_plan[col],
+            errors="coerce"
+        ).fillna(0)
+
+    # Normalize SKU
+    df_plan["sku"] = (
+        df_plan["sku"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
 
     # ==========================================================
     # STEP 2 — LOAD TRANSFER DATA
@@ -81,6 +82,13 @@ def calculate_final_allocation(
             "To FC": "to_fc",
             "Transfer Qty": "transfer_qty"
         })
+
+        df_transfer["sku"] = (
+            df_transfer["sku"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
 
         df_transfer["transfer_qty"] = pd.to_numeric(
             df_transfer.get("transfer_qty", 0),
@@ -110,7 +118,7 @@ def calculate_final_allocation(
     # ==========================================================
 
     df_plan["target_cover_units"] = (
-        df_plan["weekly_velocity"] * replenish_weeks
+        df_plan["weekly_velocity"] * float(replenish_weeks)
     )
 
     df_plan["post_transfer_stock"] = (
@@ -122,19 +130,13 @@ def calculate_final_allocation(
     # ==========================================================
 
     df_plan["adjusted_shortfall"] = (
-        df_plan["target_cover_units"] - df_plan["post_transfer_stock"]
+        df_plan["target_cover_units"] -
+        df_plan["post_transfer_stock"]
     ).clip(lower=0)
-
-    print("SHORTFALL SAMPLE:")
-    print(df_plan[["sku","target_cover_units","post_transfer_stock","adjusted_shortfall"]].head())
-
-    # ==========================================================
-    # STEP 5 — FINAL SEND QUANTITY
-    # ==========================================================
 
     df_plan["send_qty"] = df_plan["adjusted_shortfall"]
 
-       # ==========================================================
+    # ==========================================================
     # STEP 5B — HAZMAT GOVERNANCE (35%)
     # ==========================================================
 
@@ -145,23 +147,44 @@ def calculate_final_allocation(
         repl_path = "data/input/replenishment_master_viomi.xlsx"
         sheet_to_load = "Viomi"
 
-    repl_master = pd.read_excel(repl_path, sheet_name=sheet_to_load)
-    repl_master.columns = repl_master.columns.str.strip()
+    try:
+        repl_master = pd.read_excel(
+            repl_path,
+            sheet_name=sheet_to_load
+        )
 
-    repl_master = repl_master.rename(columns={
-        "SKU": "sku",
-        "Hazmat/non-Hazmat": "ixd_flag",
-        "Model": "model"
-    })
+        repl_master.columns = repl_master.columns.str.strip()
 
-    repl_master = repl_master[["sku", "model", "ixd_flag"]]
-    
-    df_plan["sku"] = df_plan["sku"].astype(str).str.strip().str.upper()
+        repl_master = repl_master.rename(columns={
+            "SKU": "sku",
+            "Hazmat/non-Hazmat": "ixd_flag",
+            "Model": "model"
+        })
 
+        repl_master = repl_master[
+            ["sku", "model", "ixd_flag"]
+        ]
 
-    df_plan = df_plan.merge(repl_master, on="sku", how="left")
-    print("MODEL DEBUG SAMPLE:")
-    print(df_plan[["sku", "model"]].head(10))
+        repl_master["sku"] = (
+            repl_master["sku"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+    except Exception as e:
+        print("⚠️ Excel load failed:", e)
+
+        repl_master = pd.DataFrame(
+            columns=["sku", "model", "ixd_flag"]
+        )
+
+    df_plan = df_plan.merge(
+        repl_master,
+        on="sku",
+        how="left"
+    )
+
     df_plan["model"] = df_plan["model"].fillna("-")
 
     IST_PERCENTAGE = 0.35
@@ -172,43 +195,55 @@ def calculate_final_allocation(
             return row["send_qty"]
         return row["send_qty"] * IST_PERCENTAGE
 
-    df_plan["send_qty"] = df_plan.apply(apply_ist, axis=1)
+    df_plan["send_qty"] = df_plan.apply(
+        apply_ist,
+        axis=1
+    )
 
     # ==========================================================
-    # STEP 5C — VELOCITY DELTA FLAGGING (30% RULE)
+    # STEP 5C — VELOCITY DELTA FLAGGING (SAFE)
     # ==========================================================
-    
-    # Expected demand for the cycle
-    df_plan["expected_units"] = df_plan["weekly_velocity"] * replenish_weeks
 
-    print("EXPECTED UNITS SAMPLE:")
-    print(df_plan[["sku", "weekly_velocity", "expected_units"]].head())
+    df_plan["expected_units"] = (
+        df_plan["weekly_velocity"] *
+        float(replenish_weeks)
+    )
 
-    # Fill ratio
-    df_plan["velocity_fill_ratio"] = (
-        df_plan["send_qty"] / df_plan["expected_units"]
-        )
-    
-    # Handle divide-by-zero / NaN safely
+    df_plan["expected_units"] = (
+        df_plan["expected_units"]
+        .fillna(0)
+    )
+
+    df_plan["velocity_fill_ratio"] = 0.0
+
+    mask = df_plan["expected_units"] > 0
+
+    df_plan.loc[mask, "velocity_fill_ratio"] = (
+        df_plan.loc[mask, "send_qty"] /
+        df_plan.loc[mask, "expected_units"]
+    )
+
     df_plan["velocity_fill_ratio"] = (
         df_plan["velocity_fill_ratio"]
         .replace([float("inf"), -float("inf")], 0)
         .fillna(0)
-)
-    
-    # Velocity flag logic
+    )
+
     def velocity_flag_logic(row):
         if row["expected_units"] == 0:
-         return "NO_DEMAND"
+            return "NO_DEMAND"
         elif row["velocity_fill_ratio"] < 0.70:
-         return "SHORTFALL_30%+"
+            return "SHORTFALL_30%+"
         else:
-         return "OK"
-        
-    df_plan["velocity_flag"] = df_plan.apply(velocity_flag_logic, axis=1)
+            return "OK"
+
+    df_plan["velocity_flag"] = df_plan.apply(
+        velocity_flag_logic,
+        axis=1
+    )
 
     # ==========================================================
-    # STEP 6 — EXPLAINABILITY COLUMNS
+    # STEP 6 — EXPLAINABILITY
     # ==========================================================
 
     df_plan["allocation_logic"] = (
@@ -216,14 +251,16 @@ def calculate_final_allocation(
         "- (fc_inventory + transfer_in))"
     )
 
-    df_plan["coverage_gap_units"] = df_plan["adjusted_shortfall"]
+    df_plan["coverage_gap_units"] = (
+        df_plan["adjusted_shortfall"]
+    )
 
     # ==========================================================
-    # FINAL DATASET FOR UI
+    # FINAL DATASET
     # ==========================================================
 
     final_df = df_plan[[
-        "model",   # ✅ add this
+        "model",
         "sku",
         "fulfillment_center",
         "weekly_velocity",
@@ -256,8 +293,7 @@ def calculate_final_allocation(
             final_df[col],
             errors="coerce"
         ).fillna(0)
-    
+
     print("FINAL DF COLUMNS:", final_df.columns.tolist())
-    print(final_df[["sku", "model"]].head())
 
     return final_df
