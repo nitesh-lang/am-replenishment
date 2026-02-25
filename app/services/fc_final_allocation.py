@@ -174,27 +174,38 @@ def calculate_final_allocation(
 
     df_plan["send_qty"] = df_plan.apply(apply_ist, axis=1)
 
-
     # ==========================================================
     # STEP 5C — VELOCITY DELTA FLAGGING (30% RULE)
     # ==========================================================
-
-    df_plan["expected_units"] = (
-        df_plan["weekly_velocity"] * replenish_weeks
-    )
+    
+    # Expected demand for the cycle
+    df_plan["expected_units"] = df_plan["weekly_velocity"] * replenish_weeks
 
     print("EXPECTED UNITS SAMPLE:")
-    print(df_plan[["sku","weekly_velocity","expected_units"]].head())
+    print(df_plan[["sku", "weekly_velocity", "expected_units"]].head())
 
-
+    # Fill ratio
     df_plan["velocity_fill_ratio"] = (
-    df_plan["send_qty"] /
-    df_plan["expected_units"].replace(0, 1)
+        df_plan["send_qty"] / df_plan["expected_units"]
+        )
+    
+    # Handle divide-by-zero / NaN safely
+    df_plan["velocity_fill_ratio"] = (
+        df_plan["velocity_fill_ratio"]
+        .replace([float("inf"), -float("inf")], 0)
+        .fillna(0)
 )
-
-    df_plan["velocity_flag"] = df_plan["velocity_fill_ratio"].apply(
-        lambda x: "SHORTFALL_30%+" if x < 0.70 else "OK"
-    )
+    
+    # Velocity flag logic
+    def velocity_flag_logic(row):
+        if row["expected_units"] == 0:
+         return "NO_DEMAND"
+        elif row["velocity_fill_ratio"] < 0.70:
+         return "SHORTFALL_30%+"
+        else:
+         return "OK"
+        
+        df_plan["velocity_flag"] = df_plan.apply(velocity_flag_logic, axis=1)
 
     # ==========================================================
     # STEP 6 — EXPLAINABILITY COLUMNS
