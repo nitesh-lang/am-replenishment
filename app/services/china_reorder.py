@@ -29,6 +29,9 @@ def china_reorder_logic():
     sales_df.columns = sales_df.columns.str.lower()
     inv_df.columns = inv_df.columns.str.lower()
 
+    # ✅ FILTER ONLY NEXLEV
+    sales_df = sales_df[sales_df["brand"] == "Nexlev"]
+
     sales_df["model"] = sales_df["model"].str.strip()
     inv_df["model"] = inv_df["model"].str.strip()
 
