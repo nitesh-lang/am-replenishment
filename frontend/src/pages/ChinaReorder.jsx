@@ -30,7 +30,7 @@ export default function ChinaReorder() {
   useEffect(() => {
     setLoading(true);
 
-    fetch("https://your-backend-name.onrender.com/china-reorder/")
+    fetch("https://am-replenishment.onrender.com/china-reorder/")
       .then((res) => res.json())
       .then((res) => {
         setData(Array.isArray(res) ? res : []);
