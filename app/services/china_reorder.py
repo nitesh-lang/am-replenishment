@@ -1,4 +1,3 @@
-print("READING FILE:", sales_path)
 import os
 import pandas as pd
 
