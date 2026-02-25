@@ -40,7 +40,7 @@ export default function FCAllocation() {
       .then((res) => {
         console.log("FC API RESPONSE:", res);
         console.log("SAMPLE ROW:", res?.[0]);
-        
+
         setData(Array.isArray(res) ? res : []);
         
       })
@@ -175,6 +175,7 @@ function exportCSV() {
     "send_qty",
     "expected_units",
     "velocity_fill_ratio",
+    "fill_pct",
     "velocity_flag"
   ];
 
@@ -375,7 +376,7 @@ function exportCSV() {
 </td>
 
 <td className="px-4 py-3">
-  {((row.velocity_fill_ratio ?? 0) * 100).toFixed(0)}%
+  {row.fill_pct ?? 0}%
 </td>
 
 <td className="px-4 py-3">
