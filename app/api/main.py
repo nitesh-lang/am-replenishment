@@ -32,8 +32,11 @@ def create_tables():
 # =====================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,   # 🔥 change this
+    allow_origins=[
+        "http://localhost:5173",
+        "https://am-replenishment-1.onrender.com",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
