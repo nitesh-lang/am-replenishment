@@ -245,5 +245,8 @@ def calculate_final_allocation(
             final_df[col],
             errors="coerce"
         ).fillna(0)
+    
+    print("FINAL DF COLUMNS:", final_df.columns.tolist())
+    print(final_df[["sku", "model"]].head())
 
     return final_df
