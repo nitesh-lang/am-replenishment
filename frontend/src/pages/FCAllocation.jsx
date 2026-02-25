@@ -39,7 +39,10 @@ export default function FCAllocation() {
     getFCFinal(replenishWeeks, channel, account)
       .then((res) => {
         console.log("FC API RESPONSE:", res);
+        console.log("SAMPLE ROW:", res?.[0]);
+        
         setData(Array.isArray(res) ? res : []);
+        
       })
       .finally(() => setLoading(false));
   }, [replenishWeeks, channel, account]);
