@@ -205,7 +205,7 @@ def calculate_final_allocation(
         else:
          return "OK"
         
-        df_plan["velocity_flag"] = df_plan.apply(velocity_flag_logic, axis=1)
+    df_plan["velocity_flag"] = df_plan.apply(velocity_flag_logic, axis=1)
 
     # ==========================================================
     # STEP 6 — EXPLAINABILITY COLUMNS
