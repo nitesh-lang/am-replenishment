@@ -157,26 +157,39 @@ const filteredData = useMemo(() => {
   /* ============================================================
      EXPORT CSV
   ============================================================ */
+function exportCSV() {
+  const headers = [
+    "model",
+    "sku",
+    "fulfillment_center",
+    "weekly_velocity",
+    "fc_inventory",
+    "transfer_in",
+    "target_cover_units",
+    "post_transfer_stock",
+    "coverage_gap_units",
+    "send_qty",
+    "expected_units",
+    "velocity_fill_ratio",
+    "velocity_flag"
+  ];
 
-  function exportCSV() {
-    const headers = ["sku", "fulfillment_center", "send_qty"];
+  const rows = filteredData
+    .map(row =>
+      headers.map(col => row[col]).join(",")
+    )
+    .join("\n");
 
-    const rows = filteredData
-      .map((row) =>
-        headers.map((col) => row[col]).join(",")
-      )
-      .join("\n");
+  const blob = new Blob(
+    [headers.join(",") + "\n" + rows],
+    { type: "text/csv;charset=utf-8;" }
+  );
 
-    const blob = new Blob(
-      [headers.join(",") + "\n" + rows],
-      { type: "text/csv;charset=utf-8;" }
-    );
-
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "fc_allocation_export.csv";
-    link.click();
-  }
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "fc_allocation_full_export.csv";
+  link.click();
+}
 
   /* ============================================================
      RENDER
