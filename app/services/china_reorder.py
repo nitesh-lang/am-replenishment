@@ -10,28 +10,25 @@ def china_reorder_logic():
     sales_path = os.path.join(
         BASE_DIR, "..", "data", "input", "weekly_sales_snapshot - ChinaReorder.csv"
     )
-    
-    print("READING FILE:", sales_path)
 
     inv_path = os.path.join(
         BASE_DIR, "..", "data", "input", "inventory_snapshot_nexlev.xlsx"
     )
+
+    print("READING FILE:", sales_path)
 
     # ===== LOAD FILES =====
     sales_df = pd.read_csv(sales_path)
     inv_df = pd.read_excel(inv_path, engine="openpyxl")
 
     # ===== CLEAN COLUMN NAMES =====
-    sales_df.columns = sales_df.columns.str.strip()
-    inv_df.columns = inv_df.columns.str.strip()
+    sales_df.columns = sales_df.columns.str.strip().str.lower()
+    inv_df.columns = inv_df.columns.str.strip().str.lower()
 
-    # Make column names lowercase for safety
-    sales_df.columns = sales_df.columns.str.lower()
-    inv_df.columns = inv_df.columns.str.lower()
+    # ===== FILTER ONLY NEXLEV BRAND =====
+    sales_df = sales_df[sales_df["brand"].str.strip() == "Nexlev"]
 
-    # ✅ FILTER ONLY NEXLEV
-    sales_df = sales_df[sales_df["brand"] == "Nexlev"]
-
+    # ===== CLEAN MODEL NAMES =====
     sales_df["model"] = sales_df["model"].str.strip()
     inv_df["model"] = inv_df["model"].str.strip()
 
@@ -47,7 +44,7 @@ def china_reorder_logic():
     sales_agg = (
         last_12
         .groupby("model", as_index=False)
-        .agg(last_12w_sales=("units_sold", "sum"))  # ⚠️ change if needed
+        .agg(last_12w_sales=("units_sold", "sum"))
     )
 
     sales_agg["avg_weekly_sales"] = sales_agg["last_12w_sales"] / 12
@@ -56,7 +53,7 @@ def china_reorder_logic():
     inv_agg = (
         inv_df
         .groupby("model", as_index=False)
-        .agg(current_inventory=("qty", "sum"))  # ⚠️ change if needed
+        .agg(current_inventory=("qty", "sum"))
     )
 
     # ===== MERGE SALES + INVENTORY =====
