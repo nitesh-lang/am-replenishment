@@ -230,6 +230,10 @@ def calculate_final_allocation(
         .fillna(0)
     )
 
+    df_plan["fill_pct"] = (
+    df_plan["velocity_fill_ratio"] * 100
+    ).round(1)
+
     def velocity_flag_logic(row):
         if row["expected_units"] == 0:
             return "NO_DEMAND"
@@ -273,6 +277,7 @@ def calculate_final_allocation(
         "send_qty",
         "expected_units",
         "velocity_fill_ratio",
+        "fill_pct",
         "velocity_flag",
         "allocation_logic"
     ]].copy()
