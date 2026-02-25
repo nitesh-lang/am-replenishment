@@ -155,9 +155,9 @@ def calculate_final_allocation(
     })
 
     repl_master = repl_master[["sku", "model", "ixd_flag"]]
-
+    
     df_plan["sku"] = df_plan["sku"].astype(str).str.strip().str.upper()
-    repl_master["sku"] = repl_master["sku"].astype(str).str.strip().str.upper()
+
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left")
     print("MODEL DEBUG SAMPLE:")
