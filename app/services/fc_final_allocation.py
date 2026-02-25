@@ -1,3 +1,4 @@
+print("RUNNING FILE:", __file__)
 import pandas as pd
 from app.services.fc_planning import calculate_fc_plan
 from app.services.fc_transfer import calculate_fc_transfers
@@ -133,43 +134,44 @@ def calculate_final_allocation(
 
     df_plan["send_qty"] = df_plan["adjusted_shortfall"]
 
-    # ==========================================================
+       # ==========================================================
     # STEP 5B — HAZMAT GOVERNANCE (35%)
     # ==========================================================
 
     if account.lower() == "nexlev":
         repl_path = "data/input/replenishment_master_nexlev.xlsx"
+        sheet_to_load = "Nexlev"
     else:
         repl_path = "data/input/replenishment_master_viomi.xlsx"
+        sheet_to_load = "Viomi"
 
-    repl_master = pd.read_excel(repl_path)
+    repl_master = pd.read_excel(repl_path, sheet_name=sheet_to_load)
+    repl_master.columns = repl_master.columns.str.strip()
 
     repl_master = repl_master.rename(columns={
         "SKU": "sku",
         "Hazmat/non-Hazmat": "ixd_flag",
-         "Model": "model"
+        "Model": "model"
     })
 
     repl_master = repl_master[["sku", "model", "ixd_flag"]]
 
-    df_plan = df_plan.merge(repl_master, on="sku", how="left")
+    df_plan["sku"] = df_plan["sku"].astype(str).str.strip().str.upper()
+    repl_master["sku"] = repl_master["sku"].astype(str).str.strip().str.upper()
 
+    df_plan = df_plan.merge(repl_master, on="sku", how="left")
     df_plan["model"] = df_plan["model"].fillna("-")
 
     IST_PERCENTAGE = 0.35
 
     def apply_ist(row):
         flag = str(row.get("ixd_flag", "")).strip().lower()
-        
         if flag == "non-ixd non hazmat":
-            return row["send_qty"]  # full quantity
-        
-        return row["send_qty"] * IST_PERCENTAGE  # 35% for others
-    
+            return row["send_qty"]
+        return row["send_qty"] * IST_PERCENTAGE
+
     df_plan["send_qty"] = df_plan.apply(apply_ist, axis=1)
 
-    print("SEND QTY SAMPLE:")
-    print(df_plan[["sku","send_qty"]].head())
 
     # ==========================================================
     # STEP 5C — VELOCITY DELTA FLAGGING (30% RULE)
@@ -184,9 +186,9 @@ def calculate_final_allocation(
 
 
     df_plan["velocity_fill_ratio"] = (
-        df_plan["send_qty"] /
-        df_plan["expected_units"].replace(0, pd.NA)
-    ).fillna(1)
+    df_plan["send_qty"] /
+    df_plan["expected_units"].replace(0, 1)
+)
 
     df_plan["velocity_flag"] = df_plan["velocity_fill_ratio"].apply(
         lambda x: "SHORTFALL_30%+" if x < 0.70 else "OK"

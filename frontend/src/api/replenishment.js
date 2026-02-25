@@ -34,9 +34,9 @@ export async function getKPIs(weeks) {
 /* =========================================================
    FC FINAL ALLOCATION (AMPM → FC)
    ========================================================= */
-export async function getFCFinal(replenishWeeks, channel) {
+  export async function getFCFinal(replenishWeeks, channel, account) {
   return fetchJSON(
-    `${BASE}/fc-final-allocation?replenish_weeks=${replenishWeeks}&channel=${channel}`
+    `${BASE}/fc-final-allocation?replenish_weeks=${replenishWeeks}&channel=${channel}&account=${account}`
   );
 }
 

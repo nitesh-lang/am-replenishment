@@ -87,6 +87,12 @@ def calculate_fc_plan(
             raise ValueError(f"Missing column in shipments file: {col}")
         # Normalize SKU column (internal standard)
     shipments = shipments.rename(columns={"Merchant SKU": "sku"})
+    shipments["Sales Channel"] = (
+    shipments["Sales Channel"]
+    .astype(str)
+    .str.strip()
+    .str.lower()
+)
     shipments["sku"] = shipments["sku"].astype(str).str.strip().str.upper()
 
     shipments["Shipment Date"] = pd.to_datetime(
@@ -116,9 +122,9 @@ def calculate_fc_plan(
     # SALES CHANNEL FILTER
     # =================================================
 
-    if channel != "All":
+    if channel.lower() != "all":
      shipments_30 = shipments_30[
-        shipments_30["Sales Channel"] == channel
+        shipments_30["Sales Channel"] == channel.strip().lower()
     ].copy()
 
     shipments_30["sku"] = shipments_30["sku"].astype(str).str.strip().str.upper()
