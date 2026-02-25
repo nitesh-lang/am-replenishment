@@ -1,3 +1,4 @@
+print("########## NEW FC FINAL VERSION LOADED ##########")
 print("RUNNING FILE:", __file__)
 
 import pandas as pd
