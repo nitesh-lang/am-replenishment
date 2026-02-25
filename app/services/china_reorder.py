@@ -11,6 +11,8 @@ def china_reorder_logic():
     sales_path = os.path.join(
         BASE_DIR, "..", "data", "input", "weekly_sales_snapshot - ChinaReorder.csv"
     )
+    
+    print("READING FILE:", sales_path)
 
     inv_path = os.path.join(
         BASE_DIR, "..", "data", "input", "inventory_snapshot_nexlev.xlsx"
