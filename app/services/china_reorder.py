@@ -8,7 +8,7 @@ def china_reorder_logic():
 
     # ===== FILE PATHS =====
     sales_path = os.path.join(
-        BASE_DIR, "..", "data", "input", "weekly_sales_snapshot.csv"
+        BASE_DIR, "..", "data", "input", "weekly_sales_snapshot - ChinaReorder.csv"
     )
 
     inv_path = os.path.join(
