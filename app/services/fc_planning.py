@@ -117,7 +117,9 @@ def calculate_fc_plan(
     shipments_30 = shipments[
         shipments["Shipment Date"] >= cutoff_date
     ].copy()
-
+    
+    print("SHIPMENTS LAST 30 DAYS:", len(shipments_30))
+    print("MAX DATE IN FILE:", last_date)
     # =================================================
     # SALES CHANNEL FILTER
     # =================================================
