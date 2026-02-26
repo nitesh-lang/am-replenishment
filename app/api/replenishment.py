@@ -49,19 +49,4 @@ def get_fc_final(
 ):
     df = calculate_final_allocation(replenish_weeks)
 
-    response = []
-
-    for _, row in df.iterrows():
-        response.append({
-            "sku": row["sku"],
-            "fulfillment_center": row["fulfillment_center"],
-            "weekly_velocity": int(row["weekly_velocity"]),
-            "fc_inventory": int(row["fc_inventory"]),
-            "transfer_in": int(row["transfer_in"]),
-            "target_cover_units": int(row["target_cover_units"]),
-            "post_transfer_stock": int(row["post_transfer_stock"]),
-            "coverage_gap_units": int(row["coverage_gap_units"]),
-            "send_qty": int(row["send_qty"]),
-        })
-
-    return response
+    return df.to_dict(orient="records")
