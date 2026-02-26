@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 
-def china_reorder_logic(brand: str = "Nexlev"):
+def china_reorder_logic(brand: str = "Nexlev", months: int = 3):
 
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -37,7 +37,10 @@ def china_reorder_logic(brand: str = "Nexlev"):
     inv_df.columns = inv_df.columns.str.strip().str.lower()
 
     # ===== FILTER SALES BY BRAND =====
-    sales_df = sales_df[sales_df["brand"].str.strip() == brand]
+    sales_df["brand"] = sales_df["brand"].str.strip().str.lower()
+    brand = brand.strip().lower()
+
+    sales_df = sales_df[sales_df["brand"] == brand]
 
     # ===== CLEAN MODEL NAMES =====
     sales_df["model"] = sales_df["model"].str.strip()
@@ -76,7 +79,7 @@ def china_reorder_logic(brand: str = "Nexlev"):
     ).fillna(0)
 
     # ===== CALCULATIONS =====
-    TARGET_WEEKS = 12
+    TARGET_WEEKS = months * 4
 
     df["weeks_cover"] = (
         df["current_inventory"] /

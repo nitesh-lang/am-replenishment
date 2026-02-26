@@ -14,6 +14,7 @@ export default function ChinaReorder() {
   const [loading, setLoading] = useState(false);
 
   const [selectedBrand, setSelectedBrand] = useState("Nexlev"); // 👈 ADD HERE
+  const [selectedMonths, setSelectedMonths] = useState(3);
 
   const [search, setSearch] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -32,13 +33,13 @@ export default function ChinaReorder() {
   useEffect(() => {
     setLoading(true);
 
-    fetch(`https://am-replenishment.onrender.com/china-reorder/?brand=${selectedBrand}`)
+    fetch(`https://am-replenishment.onrender.com/china-reorder/?brand=${selectedBrand}&months=${selectedMonths}`)
       .then((res) => res.json())
       .then((res) => {
         setData(Array.isArray(res) ? res : []);
       })
       .finally(() => setLoading(false));
-  }, [selectedBrand]);
+  }, [selectedBrand, selectedMonths]);
 
   /* ============================================================
      FILTER
@@ -209,6 +210,21 @@ export default function ChinaReorder() {
       <option value="Tonor">Tonor</option>
       <option value="White Mulberry">White Mulberry</option>
       </select>
+      <select
+      value={selectedMonths}
+      onChange={(e) => {
+        setCurrentPage(1);
+        setSelectedMonths(Number(e.target.value));
+        }}
+        className="px-4 py-2 border rounded-lg"
+        >
+        <option value={1}>1 Month</option>
+        <option value={2}>2 Months</option>
+        <option value={3}>3 Months</option>
+        <option value={4}>4 Months</option>
+        <option value={5}>5 Months</option>
+        <option value={6}>6 Months</option>
+        </select>
       <div className="flex justify-between items-center">
         <input
           value={search}

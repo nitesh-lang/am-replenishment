@@ -383,9 +383,11 @@ function exportCSV() {
   <span className={
     row.velocity_flag === "SHORTFALL_30%+"
       ? "text-red-600 font-semibold"
+      : row.velocity_flag === "NO_DEMAND"
+      ? "text-gray-500 font-semibold"
       : "text-green-600"
   }>
-    {row.velocity_flag}
+    {row.velocity_flag || "NO_FLAG"}
   </span>
 </td>
                       </tr>
