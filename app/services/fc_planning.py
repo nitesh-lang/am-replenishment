@@ -128,6 +128,10 @@ def calculate_fc_plan(
      shipments_30 = shipments_30[
         shipments_30["Sales Channel"] == channel.strip().lower()
     ].copy()
+    
+    print("AFTER CHANNEL FILTER:", len(shipments_30))
+    print("CHANNEL SELECTED:", channel)
+    print("UNIQUE CHANNELS:", shipments_30["Sales Channel"].unique())
 
     shipments_30["sku"] = shipments_30["sku"].astype(str).str.strip().str.upper()
 
