@@ -208,6 +208,8 @@ def calculate_fc_plan(
      
     print("AFTER LEDGER MERGE ROWS:", len(df))
     print("NULL FC INVENTORY COUNT:", df["fc_inventory"].isna().sum())
+    print("ROWS WHERE INVENTORY NULL:")
+    print(df[df["fc_inventory"].isna()][["sku","FC"]].head(20))
 
     df["fc_inventory"] = df["fc_inventory"].fillna(0)
 

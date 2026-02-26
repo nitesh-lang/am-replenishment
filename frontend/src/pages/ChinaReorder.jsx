@@ -234,7 +234,7 @@ export default function ChinaReorder() {
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
-                {["model", "last_12w_sales", "current_inventory", "weeks_cover", "suggested_reorder"]
+                {["model", "last_12w_sales", "avg_weekly_sales", "current_inventory", "weeks_cover", "suggested_reorder"]
                   .map((col) => (
                     <th
                       key={col}
@@ -259,6 +259,9 @@ export default function ChinaReorder() {
                   >
                     <td className="px-4 py-3 font-medium">{row.model}</td>
                     <td className="px-4 py-3">{row.last_12w_sales}</td>
+                    <td className="px-4 py-3">
+                      {row.avg_weekly_sales?.toFixed(2)}
+                    </td>
                     <td className="px-4 py-3">{row.current_inventory}</td>
                     <td className="px-4 py-3">{row.weeks_cover?.toFixed(1)}</td>
                     <td className="px-4 py-3 font-semibold text-indigo-700">
