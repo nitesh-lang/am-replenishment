@@ -3,10 +3,8 @@ import pandas as pd
 
 def china_reorder_logic():
 
-    # ===== BASE DIRECTORY =====
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-    # ===== FILE PATHS =====
     sales_path = os.path.join(
         BASE_DIR, "..", "data", "input", "weekly_sales_snapshot - ChinaReorder.csv"
     )
@@ -17,22 +15,17 @@ def china_reorder_logic():
 
     print("READING FILE:", sales_path)
 
-    # ===== LOAD FILES =====
     sales_df = pd.read_csv(sales_path)
     inv_df = pd.read_excel(inv_path, engine="openpyxl")
 
-    # ===== CLEAN COLUMN NAMES =====
     sales_df.columns = sales_df.columns.str.strip().str.lower()
     inv_df.columns = inv_df.columns.str.strip().str.lower()
 
-    # ===== FILTER ONLY NEXLEV BRAND =====
-    sales_df = sales_df[sales_df["brand"].str.strip() == "Nexlev"]
+    # ❌ NO BRAND FILTER HERE
 
-    # ===== CLEAN MODEL NAMES =====
     sales_df["model"] = sales_df["model"].str.strip()
     inv_df["model"] = inv_df["model"].str.strip()
 
-    # ===== SALES (LAST 12 WEEKS PER MODEL) =====
     sales_df = sales_df.sort_values("week", ascending=False)
 
     last_12 = (
@@ -49,14 +42,12 @@ def china_reorder_logic():
 
     sales_agg["avg_weekly_sales"] = sales_agg["last_12w_sales"] / 12
 
-    # ===== INVENTORY AGGREGATION =====
     inv_agg = (
         inv_df
         .groupby("model", as_index=False)
         .agg(current_inventory=("qty", "sum"))
     )
 
-    # ===== MERGE SALES + INVENTORY =====
     df = pd.merge(
         sales_agg,
         inv_agg,
@@ -64,7 +55,6 @@ def china_reorder_logic():
         how="outer"
     ).fillna(0)
 
-    # ===== CALCULATIONS =====
     TARGET_WEEKS = 12
 
     df["weeks_cover"] = (
