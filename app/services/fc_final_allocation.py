@@ -16,6 +16,7 @@ def calculate_final_allocation(
     account: str = "Nexlev"
 ) -> pd.DataFrame:
 
+
     print("🔥 FC FINAL LIVE CHECK 🔥")
     print("🚀 VELOCITY FLAG VERSION ACTIVE 🚀")
 
