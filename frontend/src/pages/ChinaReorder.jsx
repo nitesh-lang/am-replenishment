@@ -13,6 +13,8 @@ export default function ChinaReorder() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const [selectedBrand, setSelectedBrand] = useState("Nexlev"); // 👈 ADD HERE
+
   const [search, setSearch] = useState("");
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -30,13 +32,13 @@ export default function ChinaReorder() {
   useEffect(() => {
     setLoading(true);
 
-    fetch("https://am-replenishment.onrender.com/china-reorder/")
+    fetch(`https://am-replenishment.onrender.com/china-reorder/?brand=${selectedBrand}`)
       .then((res) => res.json())
       .then((res) => {
         setData(Array.isArray(res) ? res : []);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedBrand]);
 
   /* ============================================================
      FILTER
@@ -194,6 +196,19 @@ export default function ChinaReorder() {
       </div>
 
       {/* SEARCH + EXPORT */}
+      <select
+  value={selectedBrand}
+  onChange={(e) => {
+    setCurrentPage(1);
+    setSelectedBrand(e.target.value);
+  }}
+      className="px-4 py-2 border rounded-lg mr-4"
+      >
+      <option value="Nexlev">Nexlev</option>
+      <option value="Audio Array">Audio Array</option>
+      <option value="Tonor">Tonor</option>
+      <option value="White Mulberry">White Mulberry</option>
+      </select>
       <div className="flex justify-between items-center">
         <input
           value={search}

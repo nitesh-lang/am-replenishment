@@ -1,31 +1,49 @@
 import os
 import pandas as pd
 
-def china_reorder_logic():
+
+def china_reorder_logic(brand: str = "Nexlev"):
 
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+    # ===== SALES FILE (COMMON) =====
     sales_path = os.path.join(
         BASE_DIR, "..", "data", "input", "weekly_sales_snapshot - ChinaReorder.csv"
     )
 
+    # ===== INVENTORY FILE (DYNAMIC BASED ON BRAND) =====
+    brand_inventory_map = {
+        "Nexlev": "inventory_snapshot_nexlev.xlsx",
+        "Audio Array": "inventory_snapshot_audio_array.xlsx",
+        "Tonor": "inventory_snapshot_tonor.xlsx",
+        "White Mulberry": "inventory_snapshot_WM.xlsx"
+    }
+
+    inv_file = brand_inventory_map.get(brand, "inventory_snapshot_nexlev.xlsx")
+
     inv_path = os.path.join(
-        BASE_DIR, "..", "data", "input", "inventory_snapshot_nexlev.xlsx"
+        BASE_DIR, "..", "data", "input", inv_file
     )
 
-    print("READING FILE:", sales_path)
+    print("READING SALES:", sales_path)
+    print("READING INVENTORY:", inv_path)
 
+    # ===== LOAD FILES =====
     sales_df = pd.read_csv(sales_path)
     inv_df = pd.read_excel(inv_path, engine="openpyxl")
 
+    # ===== CLEAN COLUMN NAMES =====
     sales_df.columns = sales_df.columns.str.strip().str.lower()
     inv_df.columns = inv_df.columns.str.strip().str.lower()
 
-    # ❌ NO BRAND FILTER HERE
+    # ===== FILTER SALES BY BRAND =====
+    sales_df = sales_df[sales_df["brand"].str.strip() == brand]
 
+    # ===== CLEAN MODEL NAMES =====
     sales_df["model"] = sales_df["model"].str.strip()
     inv_df["model"] = inv_df["model"].str.strip()
 
+    # ===== SALES (LAST 12 WEEKS PER MODEL) =====
     sales_df = sales_df.sort_values("week", ascending=False)
 
     last_12 = (
@@ -42,12 +60,14 @@ def china_reorder_logic():
 
     sales_agg["avg_weekly_sales"] = sales_agg["last_12w_sales"] / 12
 
+    # ===== INVENTORY AGGREGATION =====
     inv_agg = (
         inv_df
         .groupby("model", as_index=False)
         .agg(current_inventory=("qty", "sum"))
     )
 
+    # ===== MERGE SALES + INVENTORY =====
     df = pd.merge(
         sales_agg,
         inv_agg,
@@ -55,6 +75,7 @@ def china_reorder_logic():
         how="outer"
     ).fillna(0)
 
+    # ===== CALCULATIONS =====
     TARGET_WEEKS = 12
 
     df["weeks_cover"] = (

@@ -144,6 +144,9 @@ def calculate_fc_plan(
         .groupby(["sku", "FC"], as_index=False)
         .agg(total_units_30d=("Shipped Quantity", "sum"))
     )
+    
+    print("FC VELOCITY ROWS:", len(fc_velocity))
+    print("SAMPLE VELOCITY:", fc_velocity.head())
 
     fc_velocity["FC"] = fc_velocity["FC"].astype(str).str.strip().str.upper()
 
