@@ -1,4 +1,4 @@
-const BASE = "https://am-replenishment.onrender.com";
+const BASE = import.meta.env.VITE_API_BASE
 
 /* =========================================================
    GENERIC FETCH HELPER

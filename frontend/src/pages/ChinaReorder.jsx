@@ -210,21 +210,24 @@ export default function ChinaReorder() {
       <option value="Tonor">Tonor</option>
       <option value="White Mulberry">White Mulberry</option>
       </select>
-      <select
-      value={selectedMonths}
-      onChange={(e) => {
-        setCurrentPage(1);
-        setSelectedMonths(Number(e.target.value));
-        }}
-        className="px-4 py-2 border rounded-lg"
-        >
-        <option value={1}>1 Month</option>
-        <option value={2}>2 Months</option>
-        <option value={3}>3 Months</option>
-        <option value={4}>4 Months</option>
-        <option value={5}>5 Months</option>
-        <option value={6}>6 Months</option>
-        </select>
+      <div className="flex items-center gap-4">
+  <input
+    type="range"
+    min="1"
+    max="6"
+    step="1"
+    value={selectedMonths}
+    onChange={(e) => {
+      setCurrentPage(1);
+      setSelectedMonths(Number(e.target.value));
+    }}
+    className="w-40"
+  />
+
+  <span className="text-sm font-medium">
+    {selectedMonths} Month{selectedMonths > 1 ? "s" : ""}
+  </span>
+</div>
       <div className="flex justify-between items-center">
         <input
           value={search}
