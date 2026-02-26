@@ -151,11 +151,6 @@ def calculate_final_allocation(
     ]].head(20)
 )
     
-    # 🔥 FORCE TEST CASE
-    df_plan.loc[df_plan.index[:3], "adjusted_shortfall"] = 100
-    df_plan.loc[df_plan.index[:3], "original_required_units"] = 100
-    df_plan.loc[df_plan.index[:3], "send_qty"] = 100
-    
     # NOW create expected_units
     df_plan["expected_units"] = df_plan["original_required_units"]
 
