@@ -17,6 +17,7 @@ def calculate_final_allocation(
 ) -> pd.DataFrame:
 
     print("🔥 FC FINAL LIVE CHECK 🔥")
+    print("🚀 VELOCITY FLAG VERSION ACTIVE 🚀")
 
     # ==========================================================
     # STEP 1 — LOAD FC PLANNING DATA
