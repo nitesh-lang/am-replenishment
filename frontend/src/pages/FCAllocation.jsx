@@ -174,7 +174,6 @@ function exportCSV() {
     "coverage_gap_units",
     "send_qty",
     "expected_units",
-    "velocity_fill_ratio",
     "fill_pct",
     "velocity_flag"
   ];
@@ -320,11 +319,11 @@ function exportCSV() {
     </th>
 
     <th onClick={() => toggleSort("expected_units")} className="px-4 py-3 cursor-pointer">
-      Expected Units {getSortArrow("expected_units")}
+    Original Required {getSortArrow("expected_units")}
     </th>
-
-    <th onClick={() => toggleSort("velocity_fill_ratio")} className="px-4 py-3 cursor-pointer">
-      Fill %
+    
+    <th onClick={() => toggleSort("fill_pct")} className="px-4 py-3 cursor-pointer">
+    Fill %
     </th>
 
     <th className="px-4 py-3">
@@ -381,14 +380,14 @@ function exportCSV() {
 
 <td className="px-4 py-3">
   <span className={
-    row.velocity_flag === "SHORTFALL_30%+"
-      ? "text-red-600 font-semibold"
-      : row.velocity_flag === "NO_DEMAND"
-      ? "text-gray-500 font-semibold"
-      : "text-green-600"
-  }>
-    {row.velocity_flag || "NO_FLAG"}
-  </span>
+  row.velocity_flag === "SHORT_30%+"
+    ? "text-red-600 font-semibold"
+    : row.velocity_flag === "NO_REQUIREMENT"
+    ? "text-gray-500 font-semibold"
+    : "text-green-600"
+}>
+  {row.velocity_flag || "NO_FLAG"}
+</span>
 </td>
                       </tr>
 

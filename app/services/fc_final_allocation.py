@@ -122,10 +122,11 @@ def calculate_final_allocation(
     df_plan["target_cover_units"] = (
         df_plan["weekly_velocity"] * float(replenish_weeks)
     )
-
+   
     df_plan["post_transfer_stock"] = (
         df_plan["fc_inventory"] + df_plan["transfer_in"]
     )
+    
 
     # ==========================================================
     # STEP 4 — ADJUST SHORTFALL
@@ -137,6 +138,25 @@ def calculate_final_allocation(
     ).clip(lower=0)
 
     df_plan["send_qty"] = df_plan["adjusted_shortfall"]
+    df_plan["original_required_units"] = df_plan["adjusted_shortfall"]
+    
+
+    print(
+    df_plan[[
+        "sku",
+        "target_cover_units",
+        "post_transfer_stock",
+        "adjusted_shortfall"
+    ]].head(20)
+)
+    
+    # 🔥 FORCE TEST CASE
+    df_plan.loc[df_plan.index[:3], "adjusted_shortfall"] = 100
+    df_plan.loc[df_plan.index[:3], "original_required_units"] = 100
+    df_plan.loc[df_plan.index[:3], "send_qty"] = 100
+    
+    # NOW create expected_units
+    df_plan["expected_units"] = df_plan["original_required_units"]
 
     # ==========================================================
     # STEP 5B — HAZMAT GOVERNANCE (35%)
@@ -193,60 +213,51 @@ def calculate_final_allocation(
 
     def apply_ist(row):
         flag = str(row.get("ixd_flag", "")).strip().lower()
-        if flag == "non-ixd non hazmat":
-            return row["send_qty"]
+
+     # If it contains "non-ixd" → NOT governed
+        if "non-ixd" in flag:
+          return row["send_qty"]
+
+    # Everything else (Hazmat + Non-Hazmat) → governed
         return row["send_qty"] * IST_PERCENTAGE
 
-    df_plan["send_qty"] = df_plan.apply(
-        apply_ist,
-        axis=1
-    )
+    # APPLY GOVERNANCE
+    df_plan["send_qty"] = df_plan.apply(apply_ist, axis=1)
 
     # ==========================================================
-    # STEP 5C — VELOCITY DELTA FLAGGING (SAFE)
-    # ==========================================================
+# STEP 5C — GOVERNANCE SHORTFALL FLAG
+# ==========================================================
+    df_plan["governance_fill_ratio"] = 0.0
 
-    df_plan["expected_units"] = (
-        df_plan["weekly_velocity"] *
-        float(replenish_weeks)
-    )
+    mask = df_plan["original_required_units"] > 0
 
-    df_plan["expected_units"] = (
-        df_plan["expected_units"]
-        .fillna(0)
-    )
-
-    df_plan["velocity_fill_ratio"] = 0.0
-
-    mask = df_plan["expected_units"] > 0
-
-    df_plan.loc[mask, "velocity_fill_ratio"] = (
+    df_plan.loc[mask, "governance_fill_ratio"] = (
         df_plan.loc[mask, "send_qty"] /
-        df_plan.loc[mask, "expected_units"]
-    )
-
-    df_plan["velocity_fill_ratio"] = (
-        df_plan["velocity_fill_ratio"]
+        df_plan.loc[mask, "original_required_units"]
+        )
+    
+    df_plan["governance_fill_ratio"] = (
+        df_plan["governance_fill_ratio"]
         .replace([float("inf"), -float("inf")], 0)
         .fillna(0)
-    )
-
+        )
+    
     df_plan["fill_pct"] = (
-    df_plan["velocity_fill_ratio"] * 100
-    ).round(1)
-
-    def velocity_flag_logic(row):
-        if row["expected_units"] == 0:
-            return "NO_DEMAND"
-        elif row["velocity_fill_ratio"] < 0.70:
-            return "SHORTFALL_30%+"
+        df_plan["governance_fill_ratio"] * 100
+        ).round(1)
+    
+    def governance_flag_logic(row):
+        if row["original_required_units"] == 0:
+            return "NO_REQUIREMENT"
+        elif row["governance_fill_ratio"] <= 0.70:
+            return "SHORT_30%+"
         else:
             return "OK"
 
     df_plan["velocity_flag"] = df_plan.apply(
-        velocity_flag_logic,
+        governance_flag_logic,
         axis=1
-    )
+        )
 
     # ==========================================================
     # STEP 6 — EXPLAINABILITY
@@ -277,7 +288,6 @@ def calculate_final_allocation(
         "coverage_gap_units",
         "send_qty",
         "expected_units",
-        "velocity_fill_ratio",
         "fill_pct",
         "velocity_flag",
         "allocation_logic"
@@ -292,7 +302,6 @@ def calculate_final_allocation(
         "coverage_gap_units",
         "send_qty",
         "expected_units",
-        "velocity_fill_ratio"
     ]
 
     for col in numeric_cleanup_cols:
@@ -303,5 +312,7 @@ def calculate_final_allocation(
 
     print("FINAL DF COLUMNS:", final_df.columns.tolist())
     print("COLUMNS INSIDE SERVICE:", final_df.columns.tolist())
+    print("COLUMNS BEING RETURNED:", final_df.columns.tolist())
+    print("SAMPLE ROW RETURNED:", final_df.head(1).to_dict(orient="records"))
 
     return final_df
