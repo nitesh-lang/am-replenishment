@@ -16,6 +16,10 @@ export default function ChinaReorder() {
   const [selectedBrand, setSelectedBrand] = useState("Nexlev"); // 👈 ADD HERE
   const [selectedMonths, setSelectedMonths] = useState(3);
 
+  // 👇 ADD HERE
+  const [minCover, setMinCover] = useState("");
+  const [maxCover, setMaxCover] = useState("");
+
   const [search, setSearch] = useState("");
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -46,10 +50,19 @@ export default function ChinaReorder() {
   ============================================================ */
 
   const filteredData = useMemo(() => {
-    return data.filter((row) =>
+  return data
+    .filter((row) =>
       row.model?.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [data, search]);
+    )
+    .filter((row) => {
+      const cover = row.weeks_cover || 0;
+
+      if (minCover !== "" && cover < Number(minCover)) return false;
+      if (maxCover !== "" && cover > Number(maxCover)) return false;
+
+      return true;
+    });
+}, [data, search, minCover, maxCover]);
 
   /* ============================================================
      SORT
@@ -94,25 +107,29 @@ export default function ChinaReorder() {
      HEALTH LOGIC
   ============================================================ */
 
-  function getStatus(row) {
-    if (row.suggested_reorder > 500) return "CRITICAL";
-    if (row.weeks_cover < 8) return "LOW COVER";
-    return "STABLE";
-  }
+ function getStatus(row) {
+  const cover = row.weeks_cover || 0;
 
-  function getRowColor(status) {
-    if (status === "CRITICAL") return "bg-red-50";
-    if (status === "LOW COVER") return "bg-yellow-50";
-    return "bg-emerald-50/40";
-  }
+  if (cover < 12) return "CRITICAL";
+  if (cover >= 12 && cover <= 16) return "MODERATE";
+  return "NO REORDER";
+}
+
+ function getRowColor(status) {
+  if (status === "CRITICAL") return "bg-red-50";
+  if (status === "MODERATE") return "bg-yellow-50";
+  return "bg-emerald-50/40";
+}
 
   function getStatusBadge(status) {
-    if (status === "CRITICAL")
-      return "bg-red-100 text-red-700";
-    if (status === "LOW COVER")
-      return "bg-yellow-100 text-yellow-700";
-    return "bg-emerald-100 text-emerald-700";
-  }
+  if (status === "CRITICAL")
+    return "bg-red-100 text-red-700";
+
+  if (status === "MODERATE")
+    return "bg-yellow-100 text-yellow-700";
+
+  return "bg-emerald-100 text-emerald-700";
+}
 
   /* ============================================================
      PAGINATION
@@ -197,6 +214,23 @@ export default function ChinaReorder() {
       </div>
 
       {/* SEARCH + EXPORT */}
+      <div className="flex gap-3 items-center mt-4">
+  <input
+    type="number"
+    placeholder="Min Weeks Cover"
+    value={minCover}
+    onChange={(e) => setMinCover(e.target.value)}
+    className="px-3 py-2 border rounded w-40"
+  />
+
+  <input
+    type="number"
+    placeholder="Max Weeks Cover"
+    value={maxCover}
+    onChange={(e) => setMaxCover(e.target.value)}
+    className="px-3 py-2 border rounded w-40"
+  />
+</div>
       <select
   value={selectedBrand}
   onChange={(e) => {
