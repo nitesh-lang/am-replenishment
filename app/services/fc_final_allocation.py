@@ -272,33 +272,39 @@ def calculate_final_allocation(
     # FINAL DATASET
     # ==========================================================
 
-    final_df = pd.DataFrame({
-    "Load": df_plan.get("load_flag", ""),
-    "Model": df_plan["model"],
-    "SKU": df_plan["sku"],
-    "FC": df_plan["fulfillment_center"],
-    "Send Qty": df_plan["send_qty"],
-    "Avg Weekly Sales": df_plan["weekly_velocity"],
-    "Ledger Stock": df_plan["fc_inventory"],
-    "Target Cover Units": df_plan["target_cover_units"],
-    "Original Required": df_plan["original_required_units"],
-    "Fill %": df_plan["fill_pct"],
-    "Velocity Flag": df_plan["velocity_flag"],
-})
+    final_df = df_plan[[
+        "model",
+        "sku",
+        "fulfillment_center",
+        "weekly_velocity",
+        "fc_inventory",
+        "transfer_in",
+        "target_cover_units",
+        "post_transfer_stock",
+        "coverage_gap_units",
+        "send_qty",
+        "expected_units",
+        "fill_pct",
+        "velocity_flag",
+        "allocation_logic"
+    ]].copy()
 
     numeric_cleanup_cols = [
-        "Send Qty",
-    "Avg Weekly Sales",
-    "Ledger Stock",
-    "Target Cover Units",
-    "Original Required",
-    "Fill %",
-]
+        "weekly_velocity",
+        "fc_inventory",
+        "transfer_in",
+        "target_cover_units",
+        "post_transfer_stock",
+        "coverage_gap_units",
+        "send_qty",
+        "expected_units",
+    ]
+
     for col in numeric_cleanup_cols:
-     final_df[col] = pd.to_numeric(
-        final_df[col],
-        errors="coerce"
-    ).fillna(0)
+        final_df[col] = pd.to_numeric(
+            final_df[col],
+            errors="coerce"
+        ).fillna(0)
 
     print("FINAL DF COLUMNS:", final_df.columns.tolist())
     print("COLUMNS INSIDE SERVICE:", final_df.columns.tolist())
