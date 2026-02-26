@@ -190,6 +190,11 @@ def calculate_fc_plan(
         .agg(fc_inventory=("Ending Warehouse Balance", "sum"))
     )
     
+    print("LEDGER ROWS:", len(fc_inventory))
+    print("SAMPLE LEDGER:", fc_inventory.head())
+
+    print("UNIQUE FC IN VELOCITY:", fc_velocity["FC"].unique()[:10])
+    print("UNIQUE LOCATION IN LEDGER:", fc_inventory["Location"].unique()[:10])
     # =================================================
     # MERGE VELOCITY + INVENTORY
     # =================================================
@@ -200,6 +205,9 @@ def calculate_fc_plan(
         right_on=["MSKU", "Location"],
         how="left",
     )
+     
+    print("AFTER LEDGER MERGE ROWS:", len(df))
+    print("NULL FC INVENTORY COUNT:", df["fc_inventory"].isna().sum())
 
     df["fc_inventory"] = df["fc_inventory"].fillna(0)
 
