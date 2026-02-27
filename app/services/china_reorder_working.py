@@ -79,12 +79,13 @@ def get_china_reorder_working_data(
     # ============================================================
     # MERGE SALES + INVENTORY
     # ============================================================
-
     df = pd.merge(
-        sales_df,
-        inv_df,
-        on=["brand", "model"],
-        how="left"
-    )
+    sales_df,
+    inv_df,
+    on=["brand", "model"],
+    how="left"
+)
 
+   # FIX JSON ERROR (remove NaN)
+    df = df.fillna(0)
     return df.to_dict(orient="records")

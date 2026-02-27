@@ -1,3 +1,4 @@
+from app.services.validation_engine import run_full_validation
 import os
 from sqlalchemy import create_engine
 import pandas as pd
@@ -291,5 +292,14 @@ def calculate_fc_plan(
         final_df[col] = pd.to_numeric(
             final_df[col], errors="coerce"
         ).fillna(0)
+
+
+    validation_report = run_full_validation(
+    shipments_90,
+    ledger,
+    final_df
+)
+
+    print("VALIDATION REPORT:", validation_report)
 
     return final_df
