@@ -66,7 +66,9 @@ def calculate_final_allocation(
         .str.strip()
         .str.upper()
     )
-
+    print("FINAL ALLOCATION ACCOUNT:", account)
+    print("PLAN ROWS:", len(df_plan))
+    print("PLAN TOTAL REQUIRED:", df_plan["required_units"].sum())
     # ==========================================================
     # STEP 2 — LOAD TRANSFER DATA
     # ==========================================================

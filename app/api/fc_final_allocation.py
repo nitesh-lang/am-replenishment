@@ -37,6 +37,8 @@ def get_fc_final_allocation(
     Final FC Allocation API (JSON)
     """
 
+    print("🚨 ACCOUNT FROM API:", account)
+
     df = calculate_final_allocation(
         replenish_weeks=replenish_weeks,
         channel=channel,
@@ -61,6 +63,8 @@ def export_fc_final_allocation(
     """
     Final FC Allocation Export API (CSV)
     """
+
+    print("🚨 EXPORT ACCOUNT FROM API:", account)
 
     df = calculate_final_allocation(
         replenish_weeks=replenish_weeks,

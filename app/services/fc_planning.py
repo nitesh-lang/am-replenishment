@@ -65,6 +65,10 @@ def calculate_fc_plan(
 
     shipments, ledger = load_fc_data(account)
 
+    print("ACCOUNT IN PLANNING:", account)
+    print("SHIPMENTS TOTAL:", shipments["Shipped Quantity"].sum())
+    print("LEDGER TOTAL:", ledger["Ending Warehouse Balance"].sum())
+
     print("ACCOUNT RECEIVED:", account)
     print("UNIQUE SHIPMENT ACCOUNTS:", shipments["account"].unique())
     print("UNIQUE LEDGER ACCOUNTS:", ledger["account"].unique())
