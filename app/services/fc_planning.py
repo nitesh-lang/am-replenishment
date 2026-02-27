@@ -43,9 +43,9 @@ def load_fc_data(account: str):
 # =================================================
 
 def calculate_fc_plan(
-    replenish_weeks: int = 8,
-    channel: str = "All",
-    account: str = "Nexlev"
+    replenish_weeks: int,
+    channel: str,
+    account: str
 ) -> pd.DataFrame:
     """
     FC-Level Planning Engine
@@ -79,6 +79,10 @@ def calculate_fc_plan(
     print("LEDGER ROWS:", len(ledger))
     print("SHIPMENT SKUS SAMPLE:",
       shipments["Merchant SKU"].astype(str).str.upper().unique()[:5])
+    
+    print("ACCOUNT IN PLANNING:", account)
+    print("SHIPMENT SUM:", shipments["Shipped Quantity"].sum())
+    print("UNIQUE ACCOUNTS IN SHIPMENTS:", shipments["account"].unique())
 
     # =================================================
     # VALIDATE SHIPMENTS STRUCTURE

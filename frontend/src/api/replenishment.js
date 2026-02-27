@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_BASE
+const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
 /* =========================================================
    GENERIC FETCH HELPER

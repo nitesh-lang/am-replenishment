@@ -34,6 +34,8 @@ export default function FCAllocation() {
   ============================================================ */
 
   useEffect(() => {
+    console.log("CALLING API WITH ACCOUNT:", account);  // 👈 ADD THIS
+
     setLoading(true);
 
     getFCFinal(replenishWeeks, channel, account)
@@ -236,7 +238,10 @@ function exportCSV() {
   </label>
   <select
     value={account}
-    onChange={(e) => setAccount(e.target.value)}
+    onChange={(e) => {
+    console.log("DROPDOWN CHANGED TO:", e.target.value);
+  setAccount(e.target.value);
+}}
     className="mt-2 w-full px-4 py-2 border rounded-lg"
   >
     <option value="Nexlev">Nexlev</option>

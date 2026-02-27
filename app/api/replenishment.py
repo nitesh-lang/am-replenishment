@@ -19,7 +19,11 @@ def get_replenishment(
     replenish_weeks: int = Query(default=8, ge=1),
     account: str = Query(default="NEXLEV"),
 ):
-    df = calculate_replenishment(sales_window, replenish_weeks, account)
+    df = calculate_replenishment(
+        sales_window=sales_window,
+        replenish_weeks=replenish_weeks,
+        account=account
+    )
 
     response = []
 
@@ -46,7 +50,13 @@ def get_replenishment(
 @router.get("/fc-final-allocation")
 def get_fc_final(
     replenish_weeks: int = Query(default=8, ge=1),
+    channel: str = Query(default="All"),
+    account: str = Query(default="NEXLEV"),
 ):
-    df = calculate_final_allocation(replenish_weeks)
+    df = calculate_final_allocation(
+        replenish_weeks=replenish_weeks,
+        channel=channel,
+        account=account
+    )
 
     return df.to_dict(orient="records")
