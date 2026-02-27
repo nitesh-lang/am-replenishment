@@ -8,7 +8,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = BASE_DIR / "data" / "input"
 
-SALES_FILE = DATA_DIR / "weekly_sales_snapshot - ChinaReorder.xlsx"
+SALES_FILE = DATA_DIR / "weekly_sales_snapshot - ChinaReorder.csv"
 INVENTORY_FILE = DATA_DIR / "inventory_model_snapshot_China Reoder.xlsx"
 
 
@@ -17,7 +17,7 @@ INVENTORY_FILE = DATA_DIR / "inventory_model_snapshot_China Reoder.xlsx"
 # =====================================================
 
 def load_sales_snapshot():
-    df = pd.read_excel(SALES_FILE)
+    df = pd.read_csv(SALES_FILE)
 
     df.columns = df.columns.str.strip().str.lower()
 
