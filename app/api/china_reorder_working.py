@@ -3,7 +3,7 @@ from typing import Optional
 from app.services.china_reorder_working import get_china_reorder_working_data
 
 router = APIRouter(
-    prefix="",
+    prefix="/api",
     tags=["china-reorder-working"],
 )
 
