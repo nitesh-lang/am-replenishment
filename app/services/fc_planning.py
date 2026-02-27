@@ -126,7 +126,7 @@ def calculate_fc_plan(
     if pd.isna(last_date):
         raise ValueError("Shipment Date column contains no valid dates.")
 
-    cutoff_date = last_date - pd.Timedelta(days=30)
+    cutoff_date = last_date - pd.Timedelta(days=90)
 
     shipments_30 = shipments[
         shipments["Shipment Date"] >= cutoff_date
@@ -166,7 +166,7 @@ def calculate_fc_plan(
 
     # Convert 30-day to weekly velocity
     fc_velocity["weekly_velocity"] = (
-        fc_velocity["total_units_30d"] / 4.285
+        fc_velocity["total_units_30d"] / 12.857
     )
 
     fc_velocity["weekly_velocity"] = fc_velocity[
@@ -268,7 +268,7 @@ def calculate_fc_plan(
     final_df = df[[
         "sku",
         "fulfillment_center",
-        "total_units_30d",
+        "total_units_90d",
         "weekly_velocity",
         "fc_inventory",
         "required_units",
@@ -278,7 +278,7 @@ def calculate_fc_plan(
     ]].copy()
 
     numeric_cols = [
-        "total_units_30d",
+        "total_units_90d",
         "weekly_velocity",
         "fc_inventory",
         "required_units",
