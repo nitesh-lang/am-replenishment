@@ -1,3 +1,5 @@
+import os
+from sqlalchemy import create_engine
 import pandas as pd
 from pathlib import Path
 from typing import Tuple
@@ -14,28 +16,19 @@ DATA_DIR = BASE_DIR / "data" / "input"
 # =================================================
 # DATA LOADERS
 # =================================================
+def load_fc_data(account: str):
 
-def load_fc_data(account: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Load raw shipments + ledger data.
-    Includes safety validation.
-    """
-    if account.lower() == "nexlev":
-        shipments_file = DATA_DIR / "fba_shipments_nexlev.csv"
-        ledger_file = DATA_DIR / "inventory_ledger_nexlev.csv"
-    elif account.lower() == "viomi":
-        shipments_file = DATA_DIR / "fba_shipments_viomi.csv"
-        ledger_file = DATA_DIR / "inventory_ledger_viomi.csv"
-    else:
-        raise ValueError("Invalid account selected")
-    if not shipments_file.exists():
-        raise FileNotFoundError(f"Missing file: {shipments_file}")
+    engine = create_engine(os.getenv("DATABASE_URL"))
 
-    if not ledger_file.exists():
-        raise FileNotFoundError(f"Missing file: {ledger_file}")
+    shipments = pd.read_sql(
+        f"SELECT * FROM shipments WHERE account = '{account.lower()}'",
+        engine
+    )
 
-    shipments = pd.read_csv(shipments_file)
-    ledger = pd.read_csv(ledger_file)
+    ledger = pd.read_sql(
+        f"SELECT * FROM inventory_ledger WHERE account = '{account.lower()}'",
+        engine
+    )
 
     shipments.columns = shipments.columns.str.strip()
     ledger.columns = ledger.columns.str.strip()
