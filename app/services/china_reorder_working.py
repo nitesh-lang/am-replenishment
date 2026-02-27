@@ -37,7 +37,7 @@ def get_china_reorder_working_data(
         "..",
         "data",
         "input",
-        "inventory_model_snapshot_China Reoder.csv"
+        "inventory_model_snapshot_China Reorder.csv"
     )
 
     print("READING SALES:", sales_path)

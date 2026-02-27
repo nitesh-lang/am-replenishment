@@ -14,10 +14,8 @@ def china_reorder_working(
     channel: Optional[str] = Query(None),
     model: Optional[str] = Query(None),
 ):
-    df = get_china_reorder_working_data(
+    return get_china_reorder_working_data(
         brand=brand,
         channel=channel,
         model=model,
     )
-
-    return df.to_dict(orient="records")
