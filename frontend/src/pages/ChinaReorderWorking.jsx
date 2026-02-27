@@ -35,7 +35,7 @@ export default function ChinaReorderWorking() {
     setLoading(true);
 
     fetch(
-  `/api/china-reorder-working?brand=${selectedBrand}&channel=${selectedChannel}`
+  `https://am-replenishment.onrender.com/api/china-reorder-working?brand=${selectedBrand}&channel=${selectedChannel}`
 )
       .then((res) => res.json())
       .then((res) => {
