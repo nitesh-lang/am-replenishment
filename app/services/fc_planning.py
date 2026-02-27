@@ -69,6 +69,12 @@ def calculate_fc_plan(
     """
 
     shipments, ledger = load_fc_data(account)
+    
+    print("ACCOUNT:", account)
+    print("SHIPMENTS ROWS:", len(shipments))
+    print("LEDGER ROWS:", len(ledger))
+    print("SHIPMENT SKUS SAMPLE:",
+      shipments["Merchant SKU"].astype(str).str.upper().unique()[:5])
 
     # =================================================
     # VALIDATE SHIPMENTS STRUCTURE
