@@ -48,11 +48,13 @@ export default function ChinaReorderWorking() {
      FILTER
   ============================================================ */
 
-  const filteredData = useMemo(() => {
-    return data.filter((row) =>
-      row.model?.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [data, search]);
+ const filteredData = useMemo(() => {
+  return data.filter((row) =>
+    String(row.model || "")
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
+}, [data, search]);
 
   /* ============================================================
      SORT
