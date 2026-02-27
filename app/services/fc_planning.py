@@ -64,6 +64,11 @@ def calculate_fc_plan(
     """
 
     shipments, ledger = load_fc_data(account)
+
+    print("ACCOUNT RECEIVED:", account)
+    print("UNIQUE SHIPMENT ACCOUNTS:", shipments["account"].unique())
+    print("UNIQUE LEDGER ACCOUNTS:", ledger["account"].unique())
+    print("TOTAL SHIPMENT UNITS:", shipments["Shipped Quantity"].sum())
     
     print("ACCOUNT:", account)
     print("SHIPMENTS ROWS:", len(shipments))
