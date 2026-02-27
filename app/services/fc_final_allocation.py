@@ -302,6 +302,8 @@ def calculate_final_allocation(
         "expected_units",
     ]
 
+
+   
     for col in numeric_cleanup_cols:
         final_df[col] = pd.to_numeric(
             final_df[col],
@@ -312,5 +314,11 @@ def calculate_final_allocation(
     print("COLUMNS INSIDE SERVICE:", final_df.columns.tolist())
     print("COLUMNS BEING RETURNED:", final_df.columns.tolist())
     print("SAMPLE ROW RETURNED:", final_df.head(1).to_dict(orient="records"))
+    
+    final_df[numeric_cleanup_cols] = (
+    final_df[numeric_cleanup_cols]
+    .round(0)
+    .astype(int)
+)
 
     return final_df
