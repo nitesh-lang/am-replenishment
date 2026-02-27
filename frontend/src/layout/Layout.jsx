@@ -20,6 +20,7 @@ export default function Layout({ children }) {
     { name: "China Reorder", path: "/china-reorder", icon: Boxes },   // ✅ ADD THIS
     { name: "Sales Analytics", path: "/sales-analytics", icon: BarChart3 },
     { name: "Region Sales", path: "/region-sales", icon: BarChart3 }, // 👈 ADD THIS
+    { name: "China Reorder Working", path: "/china-reorder-working", icon: Boxes },
   ];
 
   return (

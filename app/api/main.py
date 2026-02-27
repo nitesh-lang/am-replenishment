@@ -14,6 +14,7 @@ from app.api.fc_transfer import router as fc_transfer_router
 from app.api.fc_final_allocation import router as fc_final_allocation_router
 from app.api.region_sales import router as region_sales_router  # ✅ NEW
 from app.api.china_reorder import router as china_reorder_router
+from app.api.china_reorder_working import router as china_reorder_working_router
 
 
 # =====================================================
@@ -62,6 +63,7 @@ app.include_router(fc_transfer_router)
 app.include_router(fc_final_allocation_router)
 app.include_router(region_sales_router)  # ✅ NEW
 app.include_router(china_reorder_router)
+app.include_router(china_reorder_working_router)
 
 # =====================================================
 # ROOT

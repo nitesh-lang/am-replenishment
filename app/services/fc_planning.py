@@ -52,7 +52,7 @@ def calculate_fc_plan(
 
     Core Logic:
     -------------------------------------------------
-    1. Load shipments (last 30 days)
+    1. Load shipments (last 90 days)
     2. Calculate FC velocity
     3. Load ledger ending balance
     4. Merge velocity + inventory
@@ -118,7 +118,7 @@ def calculate_fc_plan(
     ).fillna(0)
 
     # =================================================
-    # FILTER LAST 30 DAYS
+    # FILTER LAST 90 DAYS
     # =================================================
 
     last_date = shipments["Shipment Date"].max()
@@ -128,35 +128,35 @@ def calculate_fc_plan(
 
     cutoff_date = last_date - pd.Timedelta(days=90)
 
-    shipments_30 = shipments[
+    shipments_90 = shipments[
         shipments["Shipment Date"] >= cutoff_date
     ].copy()
     
-    print("SHIPMENTS LAST 30 DAYS:", len(shipments_30))
+    print("SHIPMENTS LAST 90 DAYS:", len(shipments_90))
     print("MAX DATE IN FILE:", last_date)
     # =================================================
     # SALES CHANNEL FILTER
     # =================================================
 
     if channel.lower() != "all":
-     shipments_30 = shipments_30[
-        shipments_30["Sales Channel"] == channel.strip().lower()
+     shipments_90 = shipments_90[
+        shipments_90["Sales Channel"] == channel.strip().lower()
     ].copy()
     
-    print("AFTER CHANNEL FILTER:", len(shipments_30))
+    print("AFTER CHANNEL FILTER:", len(shipments_90))
     print("CHANNEL SELECTED:", channel)
-    print("UNIQUE CHANNELS:", shipments_30["Sales Channel"].unique())
+    print("UNIQUE CHANNELS:", shipments_90["Sales Channel"].unique())
 
-    shipments_30["sku"] = shipments_30["sku"].astype(str).str.strip().str.upper()
+    shipments_90["sku"] = shipments_90["sku"].astype(str).str.strip().str.upper()
 
     # =================================================
     # FC VELOCITY CALCULATION
     # =================================================
 
     fc_velocity = (
-        shipments_30
+        shipments_90
         .groupby(["sku", "FC"], as_index=False)
-        .agg(total_units_30d=("Shipped Quantity", "sum"))
+        .agg(total_units_90d=("Shipped Quantity", "sum"))
     )
     
     print("FC VELOCITY ROWS:", len(fc_velocity))
@@ -164,9 +164,9 @@ def calculate_fc_plan(
 
     fc_velocity["FC"] = fc_velocity["FC"].astype(str).str.strip().str.upper()
 
-    # Convert 30-day to weekly velocity
+    # Convert 90-day to weekly velocity
     fc_velocity["weekly_velocity"] = (
-        fc_velocity["total_units_30d"] / 12.857
+        fc_velocity["total_units_90d"] / 12.857
     )
 
     fc_velocity["weekly_velocity"] = fc_velocity[
