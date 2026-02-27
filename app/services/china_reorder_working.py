@@ -1,73 +1,90 @@
+import os
 import pandas as pd
-from pathlib import Path
 
-# =====================================================
-# PATH SETUP
-# =====================================================
-
-BASE_DIR = Path(__file__).resolve().parents[3]
-DATA_DIR = BASE_DIR / "data" / "input"
-
-SALES_FILE = DATA_DIR / "weekly_sales_snapshot - ChinaReorder.csv"
-INVENTORY_FILE = DATA_DIR / "inventory_model_snapshot_China Reoder.xlsx"
-
-
-# =====================================================
-# LOAD SALES SNAPSHOT
-# =====================================================
-
-def load_sales_snapshot():
-    df = pd.read_csv(SALES_FILE)
-
-    df.columns = df.columns.str.strip().str.lower()
-
-    return df
-
-
-# =====================================================
-# LOAD INVENTORY SNAPSHOT
-# =====================================================
-
-def load_inventory_snapshot():
-    df = pd.read_excel(INVENTORY_FILE)
-
-    df.columns = df.columns.str.strip().str.lower()
-
-    return df
-
-
-# =====================================================
-# MERGE SALES + INVENTORY
-# =====================================================
 
 def get_china_reorder_working_data(
-    brand: str | None = None,
-    channel: str | None = None,
-    model: str | None = None,
+    brand: str = None,
+    channel: str = None,
+    model: str = None,
 ):
-    sales_df = load_sales_snapshot()
-    inventory_df = load_inventory_snapshot()
 
-    # -------------------------------
-    # Merge on brand + model
-    # -------------------------------
-    merged_df = sales_df.merge(
-        inventory_df,
-        on=["brand", "model"],
-        how="left",
-        suffixes=("", "_inventory")
+    # ============================================================
+    # BASE DIRECTORY (SAME AS WORKING FILE)
+    # ============================================================
+
+    BASE_DIR = os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))
     )
 
-    # -------------------------------
-    # Filters
-    # -------------------------------
+    # ============================================================
+    # SALES FILE
+    # ============================================================
+
+    sales_path = os.path.join(
+        BASE_DIR,
+        "..",
+        "data",
+        "input",
+        "weekly_sales_snapshot - ChinaReorder.csv"
+    )
+
+    # ============================================================
+    # INVENTORY FILE
+    # ============================================================
+
+    inv_path = os.path.join(
+        BASE_DIR,
+        "..",
+        "data",
+        "input",
+        "inventory_model_snapshot_China Reoder.csv"
+    )
+
+    print("READING SALES:", sales_path)
+    print("READING INVENTORY:", inv_path)
+
+    # ============================================================
+    # LOAD FILES
+    # ============================================================
+
+    sales_df = pd.read_csv(sales_path)
+    inv_df = pd.read_csv(inv_path)
+
+    # ============================================================
+    # CLEAN COLUMN NAMES
+    # ============================================================
+
+    sales_df.columns = sales_df.columns.str.strip().str.lower()
+    inv_df.columns = inv_df.columns.str.strip().str.lower()
+
+    # ============================================================
+    # OPTIONAL FILTERS
+    # ============================================================
+
     if brand:
-        merged_df = merged_df[merged_df["brand"] == brand]
+        sales_df = sales_df[
+            sales_df["brand"].str.lower() == brand.lower()
+        ]
 
     if channel:
-        merged_df = merged_df[merged_df["channel"] == channel]
+        sales_df = sales_df[
+            sales_df["channel"].str.lower() == channel.lower()
+        ]
 
     if model:
-        merged_df = merged_df[merged_df["model"] == model]
+        sales_df = sales_df[
+            sales_df["model"].str.lower() == model.lower()
+        ]
 
-    return merged_df
+    # ============================================================
+    # MERGE SALES + INVENTORY
+    # ============================================================
+
+    df = pd.merge(
+        sales_df,
+        inv_df,
+        on=["brand", "model"],
+        how="left"
+    )
+
+    return df.to_dict(orient="records")
