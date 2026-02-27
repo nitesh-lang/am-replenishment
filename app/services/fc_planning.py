@@ -23,13 +23,13 @@ def load_fc_data(account: str):
     shipments = pd.read_sql(
         "SELECT * FROM shipments WHERE LOWER(account) = %s",
     engine,
-    params=[account.lower()]
+    params=(account.lower(),)
 )
 
     ledger = pd.read_sql(
     "SELECT * FROM inventory_ledger WHERE LOWER(account) = %s",
     engine,
-    params=[account.lower()]
+    params=(account.lower(),)
 )
 
     shipments.columns = shipments.columns.str.strip()
