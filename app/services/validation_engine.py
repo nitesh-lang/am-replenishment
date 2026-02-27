@@ -31,7 +31,7 @@ def validate_shipments(shipments: pd.DataFrame) -> Dict[str, Any]:
 
     report["row_count"] = len(shipments)
     report["total_units"] = shipments["Shipped Quantity"].sum()
-    report["unique_skus"] = shipments["Merchant SKU"].nunique()
+    report["unique_skus"] = shipments["sku"].nunique()
     report["min_date"] = shipments["Shipment Date"].min()
     report["max_date"] = shipments["Shipment Date"].max()
 

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Query
 from app.services.replenishment import calculate_replenishment
 from app.services.fc_final_allocation import calculate_final_allocation
+from app.services.fc_planning import calculate_fc_plan, load_fc_data
+from app.services.validation_engine import run_full_validation
 
 # =================================================
 # ROUTER SETUP
@@ -60,3 +62,32 @@ def get_fc_final(
     )
 
     return df.to_dict(orient="records")
+
+
+# =================================================
+# FC VALIDATION ENDPOINT
+# =================================================
+@router.get("/fc-validation")
+def fc_validation(
+    replenish_weeks: int = Query(default=12, ge=1),
+    channel: str = Query(default="All"),
+    account: str = Query(default="NEXLEV"),
+):
+    # Load raw data
+    shipments, ledger = load_fc_data(account)
+
+    # Run planning logic
+    fc_plan_df = calculate_fc_plan(
+        replenish_weeks=replenish_weeks,
+        channel=channel,
+        account=account
+    )
+
+    # Run validation engine
+    validation_report = run_full_validation(
+        shipments,
+        ledger,
+        fc_plan_df
+    )
+
+    return validation_report
