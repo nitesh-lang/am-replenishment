@@ -9,7 +9,7 @@ def get_china_reorder_working_data(
 ):
 
     # ============================================================
-    # BASE DIRECTORY (SAME AS WORKING FILE)
+    # BASE DIRECTORY
     # ============================================================
 
     BASE_DIR = os.path.dirname(
@@ -17,7 +17,7 @@ def get_china_reorder_working_data(
     )
 
     # ============================================================
-    # SALES FILE
+    # FILE PATHS
     # ============================================================
 
     sales_path = os.path.join(
@@ -27,10 +27,6 @@ def get_china_reorder_working_data(
         "input",
         "weekly_sales_snapshot - ChinaReorder.csv"
     )
-
-    # ============================================================
-    # INVENTORY FILE
-    # ============================================================
 
     inv_path = os.path.join(
         BASE_DIR,
@@ -44,7 +40,7 @@ def get_china_reorder_working_data(
     print("READING INVENTORY:", inv_path)
 
     # ============================================================
-    # LOAD FILES
+    # LOAD DATA
     # ============================================================
 
     sales_df = pd.read_csv(sales_path)
@@ -77,15 +73,47 @@ def get_china_reorder_working_data(
         ]
 
     # ============================================================
-    # MERGE SALES + INVENTORY
+    # AGGREGATE SALES FIRST (avoid weekly duplication)
     # ============================================================
-    df = pd.merge(
-    sales_df,
-    inv_df,
-    on=["brand", "model"],
-    how="left"
-)
 
-   # FIX JSON ERROR (remove NaN)
-    df = df.fillna(0)
-    return df.to_dict(orient="records")
+    sales_agg = (
+        sales_df
+        .groupby(["brand", "model"], as_index=False)
+        .agg({
+            "units_sold": "sum",
+            "gross_sales": "sum",
+            "nlc": "sum",
+        })
+    )
+
+    # ============================================================
+    # AGGREGATE INVENTORY FIRST (avoid duplication)
+    # ============================================================
+
+    inv_agg = (
+        inv_df
+        .groupby(["brand", "model"], as_index=False)
+        .agg({
+            "inventory_units": "sum"
+        })
+    )
+
+    # ============================================================
+    # MERGE AFTER AGGREGATION (safe merge)
+    # ============================================================
+
+    final_df = pd.merge(
+        sales_agg,
+        inv_agg,
+        on=["brand", "model"],
+        how="left"
+    )
+
+    # Replace NaN
+    final_df = final_df.fillna(0)
+
+    # ============================================================
+    # RETURN FINAL CLEAN DATA
+    # ============================================================
+
+    return final_df.to_dict(orient="records")

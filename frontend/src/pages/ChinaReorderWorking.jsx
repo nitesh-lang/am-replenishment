@@ -109,24 +109,23 @@ export default function ChinaReorderWorking() {
   /* ============================================================
      KPI SECTION
   ============================================================ */
+   const kpis = useMemo(() => {
+  const totalUnits = sortedData.reduce(
+    (sum, r) => sum + Number(r.units_sold || 0),
+    0
+  );
 
-  const kpis = useMemo(() => {
-    const totalUnits = sortedData.reduce(
-      (sum, r) => sum + (r.units_sold || 0),
-      0
-    );
+  const totalInventory = sortedData.reduce(
+    (sum, r) => sum + Number(r.total_inventory || 0),
+    0
+  );
 
-    const totalInventory = sortedData.reduce(
-      (sum, r) => sum + (r.total_inventory || 0),
-      0
-    );
-
-    return {
-      totalUnits,
-      totalInventory,
-      rows: sortedData.length,
-    };
-  }, [sortedData]);
+  return {
+    totalUnits: Math.round(totalUnits),
+    totalInventory: Math.round(totalInventory),
+    rows: sortedData.length,
+  };
+}, [sortedData]);
 
   /* ============================================================
      CSV EXPORT
@@ -231,7 +230,15 @@ export default function ChinaReorderWorking() {
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
                 {data[0] &&
-                  Object.keys(data[0]).map((col) => (
+                  Object.keys(data[0])
+  .filter(
+    (col) =>
+      col !== "sku_status" &&
+      col !== "gmv" &&
+      col !== "sales_nlc" &&
+      col !== "inventory_value"
+  )
+  .map((col) => (
                     <th
                       key={col}
                       onClick={() => toggleSort(col)}
@@ -253,11 +260,20 @@ export default function ChinaReorderWorking() {
               ) : (
                 paginatedData.map((row, i) => (
                   <tr key={i} className="hover:bg-slate-50">
-                    {Object.values(row).map((val, index) => (
-                      <td key={index} className="px-4 py-3">
-                        {val}
-                      </td>
-                    ))}
+                    {
+                        Object.entries(row)
+  .filter(
+    ([key]) =>
+      key !== "sku_status" &&
+      key !== "gmv" &&
+      key !== "sales_nlc" &&
+      key !== "inventory_value"
+  )
+  .map(([key, val], index) => (
+                    <td key={index} className="px-4 py-3">
+                    {typeof val === "number" ? Math.round(val) : val}
+                    </td>
+))}
                   </tr>
                 ))
               )}
