@@ -7,6 +7,7 @@ import SalesAnalytics from "./pages/SalesAnalytics";
 import RegionSales from "./pages/RegionSales";
 import ChinaReorder from "./pages/ChinaReorder";
 import ChinaReorderWorking from "./pages/ChinaReorderWorking";
+import CBReplenishment from "./pages/CBReplenishment";
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
           <Route path="/region-sales" element={<RegionSales />} />
           <Route path="/china-reorder" element={<ChinaReorder />} />
           <Route path="/china-reorder-working" element={<ChinaReorderWorking />} />
+          <Route path="/cb-replenishment" element={<CBReplenishment />} />
 
           {/* Catch All Route */}
           <Route path="*" element={<Navigate to="/replenishment" replace />} />
