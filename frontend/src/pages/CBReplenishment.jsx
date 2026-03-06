@@ -318,8 +318,12 @@ export default function CBReplenishment() {
                     {Math.round(row.deficiency)}
                   </td>
 
-                  <td className="px-4 py-3 font-semibold">
-  {Math.round(row.po_requirement)}
+                  <td className="px-4 py-3">
+  <input
+    type="number"
+    defaultValue={Math.round(row.po_requirement)}
+    className="border rounded px-2 py-1 w-24"
+  />
 </td>
 
 <td className="px-4 py-3">
