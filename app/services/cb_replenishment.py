@@ -39,6 +39,19 @@ def load_cb_replenishment():
         inventory_df.columns = inventory_df.columns.str.lower().str.strip()
 
         # =========================
+        # NORMALIZE VALUES (FIX)
+        # =========================
+
+        master_df["brand"] = master_df["brand"].astype(str).str.strip()
+        master_df["model"] = master_df["model"].astype(str).str.strip()
+
+        sales_df["brand"] = sales_df["brand"].astype(str).str.strip()
+        sales_df["model"] = sales_df["model"].astype(str).str.strip()
+
+        inventory_df["brand"] = inventory_df["brand"].astype(str).str.strip()
+        inventory_df["model"] = inventory_df["model"].astype(str).str.strip()
+
+        # =========================
         # BRAND FILTER
         # =========================
 
@@ -69,7 +82,7 @@ def load_cb_replenishment():
         )
 
         # =========================
-        # INVENTORY (ONLY 1P)
+        # INVENTORY (ONLY AMAZON / 1P)
         # =========================
 
         if "channel" in inventory_df.columns:
