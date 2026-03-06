@@ -87,7 +87,7 @@ def load_cb_replenishment():
 
         if "channel" in inventory_df.columns:
             inventory_df = inventory_df[
-                inventory_df["channel"] == "1p"
+                inventory_df["channel"].str.lower() == "1p"
             ]
 
         inventory_df = (
