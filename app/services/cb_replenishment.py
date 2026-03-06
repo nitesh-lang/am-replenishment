@@ -64,22 +64,22 @@ def load_cb_replenishment():
         # =========================
 
         cb_sales = (
-            sales_df[sales_df["channel"] == "1p"]
+            sales_df[sales_df["channel"] == "1p Sales"]
             .groupby(["brand", "model"], as_index=False)["units_sold"]
             .sum()
             .rename(columns={"units_sold": "cb_3m_sales"})
-        )
+)
 
         # =========================
         # CAMBIUM SALES
         # =========================
 
         cambium_sales = (
-            sales_df[sales_df["channel"] != "1p"]
+            sales_df[sales_df["channel"] == "Amazon"]
             .groupby(["brand", "model"], as_index=False)["units_sold"]
             .sum()
             .rename(columns={"units_sold": "cambium_3m_sales"})
-        )
+)
 
         # =========================
         # INVENTORY (ONLY AMAZON / 1P)
