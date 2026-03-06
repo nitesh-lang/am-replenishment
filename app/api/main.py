@@ -69,7 +69,7 @@ app.include_router(fc_final_allocation_router)
 app.include_router(region_sales_router)  # ✅ NEW
 app.include_router(china_reorder_router)
 app.include_router(china_reorder_working_router)
-app.include_router(cb_replenishment_router)
+app.include_router(cb_replenishment_router, prefix="/api")
 
 # =====================================================
 # ROOT
