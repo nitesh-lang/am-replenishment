@@ -9,15 +9,19 @@ router = APIRouter(
 @router.get("/")
 def get_cb_replenishment():
 
-    try:
-        df = load_cb_replenishment()
+    df = load_cb_replenishment()
 
+    # debug print
+    print("ROWS RETURNED:", len(df))
+
+    if df.empty:
         return {
-            "data": df.to_dict(orient="records"),
-            "total_models": len(df)
+            "data": [],
+            "total_models": 0,
+            "message": "No data returned from service"
         }
 
-    except Exception as e:
-        return {
-            "error": str(e)
-        }
+    return {
+        "data": df.to_dict(orient="records"),
+        "total_models": len(df)
+    }
