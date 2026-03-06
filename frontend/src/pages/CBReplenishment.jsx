@@ -31,7 +31,7 @@ export default function CBReplenishment() {
   useEffect(() => {
     setLoading(true);
 
-    fetch("https://am-replenishment-1.onrender.com/cb-replenishment/")
+    fetch("https://am-replenishment-1.onrender.com/api/cb-replenishment/")
       .then((res) => res.json())
       .then((res) => {
         setData(res.data || []);
