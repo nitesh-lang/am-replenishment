@@ -69,11 +69,14 @@ export default function CBReplenishment() {
         estimated - (row.final_cb_qty || 0)
       );
 
+      const poRequirement = deficiency;
+
       return {
         ...row,
         estimated_qty: estimated,
         deficiency,
-      };
+        po_requirement: poRequirement,
+        };
 
     });
 
@@ -266,7 +269,9 @@ export default function CBReplenishment() {
                   "cambium_3m_sales",
                   "avg_weekly_sales",
                   "estimated_qty",
-                  "deficiency"
+                  "deficiency",
+                  "po_requirement",
+                  "remarks"
                 ].map((col) => (
                   <th
                     key={col}
@@ -312,6 +317,18 @@ export default function CBReplenishment() {
                   <td className="px-4 py-3 text-red-600 font-semibold">
                     {Math.round(row.deficiency)}
                   </td>
+
+                  <td className="px-4 py-3 font-semibold">
+  {Math.round(row.po_requirement)}
+</td>
+
+<td className="px-4 py-3">
+  <input
+    type="text"
+    placeholder="Remarks"
+    className="border rounded px-2 py-1 w-full"
+  />
+</td>
 
                 </tr>
 
