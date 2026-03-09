@@ -9,15 +9,21 @@ router = APIRouter(
 
 @router.get("/")
 def get_cb_replenishment():
+
     try:
 
-        # Load dataframe from service
+        # =========================
+        # LOAD DATA FROM SERVICE
+        # =========================
+
         df = load_cb_replenishment()
 
-        # Debug log
         print("CB REPLENISHMENT ROWS:", len(df))
 
-        # If no data
+        # =========================
+        # HANDLE EMPTY DATA
+        # =========================
+
         if df is None or df.empty:
             return {
                 "data": [],
@@ -25,10 +31,27 @@ def get_cb_replenishment():
                 "message": "No data returned from service"
             }
 
-        # Return response
+        # =========================
+        # FORMAT RESPONSE
+        # =========================
+
+        response_df = df[[
+            "brand",
+            "model",
+            "final_cb_qty",
+            "cb_3m_sales",
+            "cambium_3m_sales",
+            "avg_weekly_sales",
+            "estimated_qty",
+            "deficiency",
+            "open_po",
+            "in_transit",
+            "po_requirement"
+        ]]
+
         return {
-            "data": df.to_dict(orient="records"),
-            "total_models": len(df)
+            "data": response_df.to_dict(orient="records"),
+            "total_models": len(response_df)
         }
 
     except Exception as e:

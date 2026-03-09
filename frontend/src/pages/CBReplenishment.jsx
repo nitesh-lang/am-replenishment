@@ -69,7 +69,10 @@ export default function CBReplenishment() {
         estimated - (row.final_cb_qty || 0)
       );
 
-      const poRequirement = deficiency;
+      const poRequirement = Math.max(
+        0,
+        deficiency - ((row.open_po || 0) + (row.in_transit || 0))
+        );
 
       return {
         ...row,
@@ -270,6 +273,8 @@ export default function CBReplenishment() {
                   "avg_weekly_sales",
                   "estimated_qty",
                   "deficiency",
+                  "open_po",
+                  "in_transit",
                   "po_requirement",
                   "remarks"
                 ].map((col) => (
@@ -317,6 +322,14 @@ export default function CBReplenishment() {
                   <td className="px-4 py-3 text-red-600 font-semibold">
                     {Math.round(row.deficiency)}
                   </td>
+                   
+                  <td className="px-4 py-3">
+  {row.open_po}
+</td>
+
+<td className="px-4 py-3">
+  {row.in_transit}
+</td>
 
                   <td className="px-4 py-3">
   <input

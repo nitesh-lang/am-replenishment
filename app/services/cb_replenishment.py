@@ -25,6 +25,10 @@ def load_cb_replenishment():
             DATA_PATH / "Inventory_snapshot_tonor.xlsx"
         )
 
+        po_df = pd.read_excel(
+            DATA_PATH / "In_Transit_PO data.xlsx"
+        )
+
         inventory_df = pd.concat(
             [inv_audio_df, inv_tonor_df],
             ignore_index=True
@@ -37,19 +41,17 @@ def load_cb_replenishment():
         master_df.columns = master_df.columns.str.lower().str.strip()
         sales_df.columns = sales_df.columns.str.lower().str.strip()
         inventory_df.columns = inventory_df.columns.str.lower().str.strip()
+        po_df.columns = po_df.columns.str.lower().str.strip()
 
         # =========================
-        # NORMALIZE VALUES (FIX)
+        # NORMALIZE VALUES
         # =========================
 
-        master_df["brand"] = master_df["brand"].astype(str).str.strip()
-        master_df["model"] = master_df["model"].astype(str).str.strip()
+        for df in [master_df, sales_df, inventory_df]:
+            df["brand"] = df["brand"].astype(str).str.strip()
+            df["model"] = df["model"].astype(str).str.strip()
 
-        sales_df["brand"] = sales_df["brand"].astype(str).str.strip()
-        sales_df["model"] = sales_df["model"].astype(str).str.strip()
-
-        inventory_df["brand"] = inventory_df["brand"].astype(str).str.strip()
-        inventory_df["model"] = inventory_df["model"].astype(str).str.strip()
+        po_df["model"] = po_df["model"].astype(str).str.strip()
 
         # =========================
         # BRAND FILTER
@@ -68,7 +70,7 @@ def load_cb_replenishment():
             .groupby(["brand", "model"], as_index=False)["units_sold"]
             .sum()
             .rename(columns={"units_sold": "cb_3m_sales"})
-)
+        )
 
         # =========================
         # CAMBIUM SALES
@@ -79,10 +81,10 @@ def load_cb_replenishment():
             .groupby(["brand", "model"], as_index=False)["units_sold"]
             .sum()
             .rename(columns={"units_sold": "cambium_3m_sales"})
-)
+        )
 
         # =========================
-        # INVENTORY (ONLY AMAZON / 1P)
+        # INVENTORY
         # =========================
 
         if "channel" in inventory_df.columns:
@@ -101,26 +103,36 @@ def load_cb_replenishment():
             )
 
         # =========================
+        # OPEN PO / IN TRANSIT
+        # =========================
+
+        open_po = (
+            po_df[po_df["delivery status"] == "Open PO"]
+            .groupby("model", as_index=False)["accepted quantity"]
+            .sum()
+            .rename(columns={"accepted quantity": "open_po"})
+        )
+
+        in_transit = (
+            po_df[po_df["delivery status"] == "In-Transit"]
+            .groupby("model", as_index=False)["accepted quantity"]
+            .sum()
+            .rename(columns={"accepted quantity": "in_transit"})
+        )
+
+        # =========================
         # MERGE
         # =========================
 
-        df = master_df.merge(
-            cb_sales,
-            on=["brand", "model"],
-            how="left"
-        )
+        df = master_df.merge(cb_sales, on=["brand","model"], how="left")
 
-        df = df.merge(
-            cambium_sales,
-            on=["brand", "model"],
-            how="left"
-        )
+        df = df.merge(cambium_sales, on=["brand","model"], how="left")
 
-        df = df.merge(
-            inventory_df,
-            on=["brand", "model"],
-            how="left"
-        )
+        df = df.merge(inventory_df, on=["brand","model"], how="left")
+
+        df = df.merge(open_po, on="model", how="left")
+
+        df = df.merge(in_transit, on="model", how="left")
 
         df = df.fillna(0)
 
@@ -131,6 +143,21 @@ def load_cb_replenishment():
         df["total_sales"] = df["cb_3m_sales"] + df["cambium_3m_sales"]
 
         df["avg_weekly_sales"] = df["total_sales"] / 12
+
+        # estimated qty based on 8 weeks coverage
+        df["estimated_qty"] = (df["avg_weekly_sales"] * 8).round()
+
+        # deficiency
+        df["deficiency"] = df["estimated_qty"] - df["final_cb_qty"]
+
+        df.loc[df["deficiency"] < 0, "deficiency"] = 0
+
+        # PO requirement excluding Open PO + In-Transit
+        df["po_requirement"] = (
+            df["deficiency"] - (df["open_po"] + df["in_transit"])
+        )
+
+        df.loc[df["po_requirement"] < 0, "po_requirement"] = 0
 
         return df
 
