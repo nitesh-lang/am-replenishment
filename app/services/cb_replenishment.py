@@ -51,7 +51,7 @@ def load_cb_replenishment():
             df["brand"] = df["brand"].astype(str).str.strip()
             df["model"] = df["model"].astype(str).str.strip()
 
-        po_df["model"] = po_df["model"].astype(str).str.strip()
+        po_df["model"] = po_df["model"].fillna(po_df["sku"]).astype(str).str.strip()
 
         # =========================
         # BRAND FILTER
