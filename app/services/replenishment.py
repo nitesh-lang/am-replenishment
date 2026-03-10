@@ -66,19 +66,17 @@ def normalize_week_column(sales_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_last_n_weeks_sales(sales_df: pd.DataFrame, weeks: int) -> pd.DataFrame:
-    """
-    Filters last N weeks from snapshot.
-    """
-
-    if weeks <= 0:
-        raise ValueError("weeks must be >= 1")
 
     df = normalize_week_column(sales_df)
 
     max_week = df["week_num"].max()
-    min_week = max(max_week - weeks + 1, 1)
 
-    return df[df["week_num"] >= min_week]
+    # Always cap to 12 weeks
+    window = min(weeks, 12)
+
+    min_week = max(max_week - window + 1, 1)
+
+    return df[(df["week_num"] >= min_week) & (df["week_num"] <= max_week)]
 
 
 # =================================================
