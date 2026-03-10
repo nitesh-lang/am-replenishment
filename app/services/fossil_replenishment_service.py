@@ -13,7 +13,7 @@ def load_fossil_replenishment(replenish_weeks=8):
     # LOAD DATA
     master_df = pd.read_excel(master_file)
     cambium_df = pd.read_excel(cambium_file)
-    sales_df = pd.read_excel(sales_file)
+    sales_df = pd.read_csv(sales_file)
 
     # =====================
     # CAMBIUM SOH LOOKUP
