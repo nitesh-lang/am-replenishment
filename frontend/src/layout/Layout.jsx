@@ -22,6 +22,7 @@ export default function Layout({ children }) {
     { name: "Region Sales", path: "/region-sales", icon: BarChart3 }, // 👈 ADD THIS
     { name: "CB Replenishment", path: "/cb-replenishment", icon: Boxes },
     { name: "China Reorder Working", path: "/china-reorder-working", icon: Boxes },
+    { name: "Fossil Replenishment", path: "/fossil-replenishment", icon: Boxes },
   ];
 
   return (
