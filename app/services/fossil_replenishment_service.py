@@ -87,4 +87,6 @@ def load_fossil_replenishment(replenish_weeks=8):
         master_df["Required Inventory"] - master_df["Total Inventory"]
     ).clip(lower=0)
 
+    master_df = master_df.fillna(0)
+
     return master_df
