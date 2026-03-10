@@ -47,12 +47,12 @@ def load_fossil_replenishment(replenish_weeks=8):
     # =====================
 
     sales_3m = (
-        sales_df.groupby("Item No")["Quantity"]
+        sales_df.groupby("ASIN")["Quantity"]
         .sum()
         .reset_index()
     )
 
-    master_df = master_df.merge(sales_3m, on="Item No", how="left")
+    master_df = master_df.merge(sales_3m, on="ASIN", how="left")
 
     master_df["3 Months Gross Sales"] = master_df["Quantity"].fillna(0)
 
