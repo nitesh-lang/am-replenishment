@@ -41,7 +41,7 @@ export default function Replenishment() {
 
     Promise.all([
       getKPIs(fromWeek, toWeek),
-      getReplenishment(fromWeek, replenishWeeks, account),
+      getReplenishment(toWeek - fromWeek + 1, replenishWeeks, account),
     ])
       .then(([kpiRes, replRes]) => {
         setKpis(kpiRes);
