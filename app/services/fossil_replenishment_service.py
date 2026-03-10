@@ -53,7 +53,7 @@ def load_fossil_replenishment(replenish_weeks=8):
     )
 
     sales_3m = (
-        sales_df.groupby("Merchant SKU")["Quantity"]
+        sales_df.groupby("Merchant SKU")["Shipped Quantity"]
         .sum()
         .reset_index()
     )
@@ -65,7 +65,7 @@ def load_fossil_replenishment(replenish_weeks=8):
     )
 
 
-    master_df["3 Months Gross Sales"] = master_df["Quantity"].fillna(0)
+    master_df["3 Months Gross Sales"] = master_df["Shipped Quantity"].fillna(0)
 
     # =====================
     # WEEKLY SALES
