@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from app.services.fossil_replenishment_service import load_fossil_replenishment
 
-router = APIRouter()
+router = APIRouter(prefix="/api")
 
 @router.get("/fossil-replenishment")
 def get_fossil_replenishment(weeks: int = 8):
