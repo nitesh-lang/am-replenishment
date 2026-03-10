@@ -10,15 +10,19 @@ DATA_DIR = BASE_DIR / "data" / "input"
 
 
 SALES_FILE = DATA_DIR / "weekly_sales_snapshot.csv"
+INVENTORY_FILE = DATA_DIR / "inventory_snapshot_nexlev.xlsx"
 
 
 # =================================================
 # LOADERS
 # =================================================
-def load_data(account: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def load_data(account: str):
 
     if not SALES_FILE.exists():
         raise FileNotFoundError(f"Missing file: {SALES_FILE}")
+
+    if not INVENTORY_FILE.exists():
+        raise FileNotFoundError(f"Missing file: {INVENTORY_FILE}")
 
     if account.upper() == "VIOMI":
         master_file = DATA_DIR / "replenishment_master_viomi.xlsx"
@@ -30,8 +34,9 @@ def load_data(account: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     master = pd.read_excel(master_file)
     sales = pd.read_csv(SALES_FILE)
+    inventory = pd.read_excel(INVENTORY_FILE)
 
-    return master, sales
+    return master, sales, inventory
 
 
 # =================================================
@@ -110,19 +115,21 @@ def calculate_replenishment(
     # ---------------------------------------------
     # LOAD
     # ---------------------------------------------
-    master, sales = load_data(account)
+    master, sales, inventory = load_data(account)
 
     # ---------------------------------------------
     # NORMALIZE COLUMNS
     # ---------------------------------------------
     master.columns = master.columns.str.strip()
     sales.columns = sales.columns.str.strip()
+    inventory.columns = inventory.columns.str.strip()
 
     validate_columns(
-        master,
-        ["Model", "Total AM Inventory", "AMPM"],
-        "master file"
-    )
+        inventory,
+        ["Model", "Channel", "Qty"],
+        "inventory snapshot"
+        )
+
 
     validate_columns(
         sales,
@@ -171,9 +178,25 @@ def calculate_replenishment(
     # UI-SAFE COLUMN ALIASES
     # (frontend depends on these exact keys)
     # ---------------------------------------------
-    df["amazon_inventory"] = df["Total AM Inventory"].fillna(0)
-    df["ampm_inventory"] = df["AMPM"].fillna(0)
+    inventory_summary = (
+    inventory
+    .groupby(["Model", "Channel"])["Qty"]
+    .sum()
+    .unstack(fill_value=0)
+    .reset_index()
+)
 
+    inventory_summary["amazon_inventory"] = inventory_summary.get("Amazon", 0)
+    inventory_summary["ampm_inventory"] = inventory_summary.get("AMPM", 0)
+
+    df = df.merge(
+    inventory_summary[["Model", "amazon_inventory", "ampm_inventory"]],
+    on="Model",
+    how="left"
+)
+
+    df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
+    df["ampm_inventory"] = df["ampm_inventory"].fillna(0)
     # ---------------------------------------------
     # REQUIREMENT CALCULATION
     # ---------------------------------------------
