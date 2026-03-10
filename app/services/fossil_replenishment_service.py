@@ -8,7 +8,7 @@ def load_fossil_replenishment(replenish_weeks=8):
     # FILES
     master_file = DATA_PATH / "Fossil Replenishment.xlsx"
     cambium_file = DATA_PATH / "Cambium - SOH.xlsx"
-    sales_file = DATA_PATH / "fba_shipments_fossil.xlsx"
+    sales_file = DATA_PATH / "fba_shipments_fossil.csv"
 
     # LOAD DATA
     master_df = pd.read_excel(master_file)
