@@ -39,8 +39,8 @@ def get_replenishment(
 
         response.append({
             "model": row["model"],
-            "asin": row["ASIN"],
-            "sku": row["SKU"],
+            "asin": str(row["ASIN"]) if row["ASIN"] == row["ASIN"] else "",
+            "sku": str(row["SKU"]) if row["SKU"] == row["SKU"] else "",
             "sales_velocity": int(row["sales_velocity"]),
             "total_units_sold": int(row["total_units_sold"]),
             "amazon_inventory": int(row["amazon_inventory"]),
