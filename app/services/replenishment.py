@@ -130,11 +130,20 @@ def calculate_replenishment(
     - amazon_inventory["afn-unsellable-quantity"]
 )
 
+    amazon_inventory["inbound_inventory"] = (
+    amazon_inventory["afn-inbound-working-quantity"]
+    + amazon_inventory["afn-inbound-shipped-quantity"]
+)
+
     amazon_inventory = (
     amazon_inventory
     .groupby("asin", as_index=False)
-    .agg(amazon_inventory=("amazon_inventory", "sum"))
+    .agg(
+        amazon_inventory=("amazon_inventory", "sum"),
+        inbound_inventory=("inbound_inventory", "sum")
+    )
 )
+
 
     # ---------------------------------------------
     # NORMALIZE COLUMNS

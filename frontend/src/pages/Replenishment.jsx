@@ -91,14 +91,16 @@ useEffect(() => {
   }, [replenishment]);
 
    const tableColumns = [
-    "status",
-    "model",
-    "asin",
-    "sku",
-    ...baseColumns.filter(c => !["model","asin","sku","ixd_type","master_carton"].includes(c)),
-    "ixd_type",
-    "master_carton"
-    ];
+  "status",
+  "model",
+  "asin",
+  "sku",
+  "amazon_inventory",
+  "inbound_inventory",
+  ...baseColumns.filter(c => !["model","asin","sku","amazon_inventory","inbound_inventory","ixd_type","master_carton"].includes(c)),
+  "ixd_type",
+  "master_carton"
+];
 
   /* ============================================================
      FILTER
