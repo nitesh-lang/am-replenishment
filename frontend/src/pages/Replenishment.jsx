@@ -61,7 +61,7 @@ export default function Replenishment() {
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
-   const tableColumns = ["status", ...baseColumns, "master_carton"];
+   const tableColumns = ["status", ...baseColumns, "ixd_type", "master_carton"];
 
   /* ============================================================
      FILTER
@@ -173,11 +173,15 @@ export default function Replenishment() {
   ============================================================ */
 
   function exportCSV() {
-  const headers = [...baseColumns, "master_carton"].join(",");
+  const headers = [...baseColumns, "ixd_type", "master_carton"].join(",");
 
   const rows = sortedData
     .map((row) =>
-      [...baseColumns.map(col => row[col]), masterCartons[row.model] || ""].join(",")
+      [
+  ...baseColumns.map(col => row[col]),
+  row.hazmat_non_hazmat === "Hazmat" ? "IXD" : "Non-IXD",
+  masterCartons[row.model] || ""
+].join(",")
     )
     .join("\n");
 
@@ -367,19 +371,37 @@ export default function Replenishment() {
                               {row[col]}
                             </td>
                           );
-                          
+                          if (col === "ixd_type")
+  return (
+    <td className="px-4 py-3">
+      {row.hazmat_non_hazmat === "Hazmat" ? "IXD" : "Non-IXD"}
+    </td>
+  );
                           if (col === "master_carton")
   return (
     <td className="px-4 py-3">
       <input
         type="text"
         value={masterCartons[row.model] || ""}
-        onChange={(e) =>
-          setMasterCartons({
-            ...masterCartons,
-            [row.model]: e.target.value,
-          })
-        }
+        onChange={async (e) => {
+  const value = e.target.value;
+
+  setMasterCartons({
+    ...masterCartons,
+    [row.model]: value,
+  });
+
+  await fetch("https://am-replenishment.onrender.com/save-master-carton", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: row.model,
+      master_carton: value
+    })
+  });
+}}
         className="border px-2 py-1 rounded w-20"
       />
     </td>
