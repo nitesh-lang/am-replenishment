@@ -179,7 +179,7 @@ export default function Replenishment() {
     .map((row) =>
       [
   ...baseColumns.map(col => row[col]),
-  row.hazmat_non_hazmat === "Hazmat" ? "IXD" : "Non-IXD",
+  row.hazmat_non_hazmat === "Non-IXD Non Hazmat" ? "Non-IXD" : "IXD",
   masterCartons[row.model] || ""
 ].join(",")
     )
