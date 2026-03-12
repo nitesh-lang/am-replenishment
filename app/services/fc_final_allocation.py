@@ -126,7 +126,7 @@ def calculate_final_allocation(
         df_plan["weekly_velocity"] * float(replenish_weeks)
     )
    
-    df_plan["total_units_sold"] = df_plan["weekly_velocity"] * replenish_weeks
+    df_plan["total_units_sold"] = df_plan["total_units_90d"]
 
     df_plan["post_transfer_stock"] = (
         df_plan["fc_inventory"] + df_plan["transfer_in"]

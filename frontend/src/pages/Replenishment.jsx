@@ -90,7 +90,15 @@ useEffect(() => {
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
-   const tableColumns = ["status", ...baseColumns.filter(c => c !== "ixd_type" && c !== "master_carton"), "ixd_type", "master_carton"];
+   const tableColumns = [
+    "status",
+    "model",
+    "asin",
+    "sku",
+    ...baseColumns.filter(c => !["model","asin","sku","ixd_type","master_carton"].includes(c)),
+    "ixd_type",
+    "master_carton"
+    ];
 
   /* ============================================================
      FILTER
@@ -201,21 +209,25 @@ useEffect(() => {
      CSV EXPORT
   ============================================================ */
 
-  function exportCSV() {
-  const headers = [...baseColumns, "ixd_type", "master_carton"].join(",");
+function exportCSV() {
+
+  const exportColumns = tableColumns.filter(c => c !== "status");
+
+  const headers = exportColumns.join(",");
 
   const rows = sortedData
-    .map((row) =>
-      [
-  ...baseColumns.map(col => row[col]),
-  row.ixd_type,
-  masterCartons[row.model] || ""
-].join(",")
+    .map(row =>
+      exportColumns
+        .map(col => {
+          if (col === "master_carton") return masterCartons[row.model] ?? row.master_carton ?? "";
+          return row[col] ?? "";
+        })
+        .join(",")
     )
     .join("\n");
 
   const blob = new Blob([headers + "\n" + rows], {
-    type: "text/csv;charset=utf-8;",
+    type: "text/csv;charset=utf-8;"
   });
 
   const link = document.createElement("a");
@@ -223,7 +235,6 @@ useEffect(() => {
   link.download = "replenishment_export.csv";
   link.click();
 }
-
   /* ============================================================
      RENDER
   ============================================================ */
@@ -415,10 +426,10 @@ useEffect(() => {
         onChange={async (e) => {
   const value = e.target.value;
 
-  setMasterCartons({
-    ...masterCartons,
-    [row.model]: value,
-  });
+  setMasterCartons(prev => ({
+     ...prev,
+     [row.model]: value
+     }));
 
   await fetch("https://am-replenishment.onrender.com/save-master-carton", {
     method: "POST",
