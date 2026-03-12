@@ -47,7 +47,13 @@ export default function Replenishment() {
       ])
       .then(([kpiRes, replRes]) => {
         setKpis(kpiRes);
-        setReplenishment(Array.isArray(replRes) ? replRes : []);
+        const data = Array.isArray(replRes) ? replRes : [];
+
+        data.forEach(r => {
+          r.master_carton = masterCartons[r.model] || "";
+          });
+
+          setReplenishment(data);
         })
         .finally(() => setLoading(false));
       }, [fromWeek, toWeek, replenishWeeks, account]);
@@ -76,7 +82,7 @@ export default function Replenishment() {
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
-   const tableColumns = ["status", ...baseColumns, "ixd_type", "master_carton"];
+   const tableColumns = ["status", ...baseColumns.filter(c => c !== "ixd_type"), "ixd_type", "master_carton"];
 
   /* ============================================================
      FILTER
