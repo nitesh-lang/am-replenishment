@@ -403,7 +403,7 @@ export default function Replenishment() {
     <td className="px-4 py-3">
       <input
         type="text"
-        value={masterCartons[row.model] ?? ""}
+        value={masterCartons[row.model] ?? row.master_carton ?? ""}
         onChange={async (e) => {
   const value = e.target.value;
 
