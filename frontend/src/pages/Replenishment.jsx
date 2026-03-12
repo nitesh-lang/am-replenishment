@@ -60,9 +60,7 @@ export default function Replenishment() {
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
-  const tableColumns = useMemo(() => {
-    return ["status", ...baseColumns, "master_carton"];
-  }, [baseColumns]);
+   const tableColumns = ["status", ...baseColumns, "master_carton"];
 
   /* ============================================================
      FILTER
