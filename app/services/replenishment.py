@@ -205,6 +205,8 @@ def calculate_replenishment(
     
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
 
+    df["inbound_inventory"] = df["inbound_inventory"].fillna(0)
+
     # ---------------------------------------------
     # NULL SAFETY
     # ---------------------------------------------
@@ -277,6 +279,7 @@ def calculate_replenishment(
         "sales_velocity",
         "total_units_sold",
         "amazon_inventory",
+        "inbound_inventory",
         "ampm_inventory",
         "required_units",
         "replenishment_qty",
