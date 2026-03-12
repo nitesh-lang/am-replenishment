@@ -152,6 +152,11 @@ def calculate_replenishment(
     sales.columns = sales.columns.str.strip()
     inventory.columns = inventory.columns.str.strip()
 
+    amazon_inventory.columns = amazon_inventory.columns.str.strip()
+
+    master["ASIN"] = master["ASIN"].astype(str).str.strip()
+    amazon_inventory["asin"] = amazon_inventory["asin"].astype(str).str.strip()
+
     validate_columns(
         inventory,
         ["Model", "Channel", "Qty"],
@@ -272,6 +277,7 @@ def calculate_replenishment(
     # FINAL SHAPING FOR API
     # ---------------------------------------------
     df = df.drop(columns=["model"], errors="ignore")
+    df["inbound_inventory"] = df["inbound_inventory"].fillna(0)
 
     # Explicit column order (optional but safer)
     preferred_order = [
