@@ -82,7 +82,7 @@ export default function Replenishment() {
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
-   const tableColumns = ["status", ...baseColumns.filter(c => c !== "ixd_type"), "ixd_type", "master_carton"];
+   const tableColumns = ["status", ...baseColumns.filter(c => c !== "ixd_type" && c !== "master_carton"), "ixd_type", "master_carton"];
 
   /* ============================================================
      FILTER
@@ -403,7 +403,7 @@ export default function Replenishment() {
     <td className="px-4 py-3">
       <input
         type="text"
-        value={masterCartons[row.model] || ""}
+        value={masterCartons[row.model] ?? ""}
         onChange={async (e) => {
   const value = e.target.value;
 
