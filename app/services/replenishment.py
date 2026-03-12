@@ -10,7 +10,10 @@ DATA_DIR = BASE_DIR / "data" / "input"
 
 
 SALES_FILE = DATA_DIR / "weekly_sales_snapshot.csv"
-INVENTORY_FILE = DATA_DIR / "inventory_snapshot_nexlev.xlsx"
+AMAZON_INV_NEXLEV = DATA_DIR / "inventory_amazon_nexlev.csv"
+
+WAREHOUSE_INV_FILE = DATA_DIR / "inventory_snapshot_nexlev.xlsx"
+AMAZON_INV_VIOMI = DATA_DIR / "inventory_amazon_viomi.csv"
 
 
 # =================================================
@@ -21,8 +24,8 @@ def load_data(account: str):
     if not SALES_FILE.exists():
         raise FileNotFoundError(f"Missing file: {SALES_FILE}")
 
-    if not INVENTORY_FILE.exists():
-        raise FileNotFoundError(f"Missing file: {INVENTORY_FILE}")
+    if not WAREHOUSE_INV_FILE.exists():
+        raise FileNotFoundError(f"Missing file: {WAREHOUSE_INV_FILE}")
 
     if account.upper() == "VIOMI":
         master_file = DATA_DIR / "replenishment_master_viomi.xlsx"
@@ -34,9 +37,16 @@ def load_data(account: str):
 
     master = pd.read_excel(master_file)
     sales = pd.read_csv(SALES_FILE)
-    inventory = pd.read_excel(INVENTORY_FILE)
+    
+    if account.upper() == "VIOMI":
+        amazon_inventory = pd.read_csv(AMAZON_INV_VIOMI)
+    else:
+        amazon_inventory = pd.read_csv(AMAZON_INV_NEXLEV)
 
-    return master, sales, inventory
+    inventory = pd.read_excel(WAREHOUSE_INV_FILE)
+    
+
+    return master, sales, inventory, amazon_inventory
 
 
 # =================================================
@@ -113,7 +123,18 @@ def calculate_replenishment(
     # ---------------------------------------------
     # LOAD
     # ---------------------------------------------
-    master, sales, inventory = load_data(account)
+    master, sales, inventory, amazon_inventory = load_data(account)
+
+    amazon_inventory["amazon_inventory"] = (
+    amazon_inventory["afn-total-quantity"]
+    - amazon_inventory["afn-unsellable-quantity"]
+)
+
+    amazon_inventory = (
+    amazon_inventory
+    .groupby("asin", as_index=False)
+    .agg(amazon_inventory=("amazon_inventory", "sum"))
+)
 
     # ---------------------------------------------
     # NORMALIZE COLUMNS
@@ -165,6 +186,15 @@ def calculate_replenishment(
         right_on="model",
         how="left",
     )
+    
+    df = df.merge(
+        amazon_inventory,
+        left_on="ASIN",
+        right_on="asin",
+        how="left"
+        )
+    
+    df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
 
     # ---------------------------------------------
     # NULL SAFETY
@@ -184,11 +214,10 @@ def calculate_replenishment(
     .reset_index()
 )
 
-    inventory_summary["amazon_inventory"] = inventory_summary.get("Amazon", 0)
     inventory_summary["ampm_inventory"] = inventory_summary.get("AMPM", 0)
 
     df = df.merge(
-    inventory_summary[["Model", "amazon_inventory", "ampm_inventory"]],
+    inventory_summary[["Model","ampm_inventory"]],
     on="Model",
     how="left"
 )
