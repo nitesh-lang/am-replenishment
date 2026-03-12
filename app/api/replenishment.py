@@ -4,6 +4,7 @@ from app.services.fc_final_allocation import calculate_final_allocation
 from app.services.fc_planning import calculate_fc_plan, load_fc_data
 from app.services.validation_engine import run_full_validation
 
+
 # =================================================
 # ROUTER SETUP
 # =================================================
@@ -11,6 +12,7 @@ router = APIRouter(
     prefix="",
     tags=["replenishment"],
 )
+
 
 # =================================================
 # REPLENISHMENT ENDPOINT
@@ -30,6 +32,11 @@ def get_replenishment(
     response = []
 
     for _, row in df.iterrows():
+
+        # IXD Logic
+        haz = str(row.get("Hazmat/non-Hazmat", "")).strip()
+        ixd_type = "Non-IXD" if haz == "Non-IXD Non Hazmat" else "IXD"
+
         response.append({
             "model": row["model"],
             "sales_velocity": int(row["sales_velocity"]),
@@ -41,6 +48,7 @@ def get_replenishment(
             "warehouse_shortfall": int(row["warehouse_shortfall"]),
             "is_risky": bool(row["is_risky"]),
             "is_overstock": bool(row["is_overstock"]),
+            "ixd_type": ixd_type
         })
 
     return response
