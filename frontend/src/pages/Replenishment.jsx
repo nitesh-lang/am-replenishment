@@ -374,7 +374,7 @@ export default function Replenishment() {
                           if (col === "ixd_type")
   return (
     <td className="px-4 py-3">
-      {row.hazmat_non_hazmat === "Hazmat" ? "IXD" : "Non-IXD"}
+      {row.hazmat_non_hazmat === "Non-IXD Non Hazmat" ? "Non-IXD" : "IXD"}
     </td>
   );
                           if (col === "master_carton")
