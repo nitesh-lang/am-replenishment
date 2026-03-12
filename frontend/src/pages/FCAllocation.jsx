@@ -315,6 +315,10 @@ function exportCSV() {
       Avg Weekly Sales {getSortArrow("weekly_velocity")}
     </th>
 
+    <th className="px-4 py-3">
+  Total Units Sold
+</th>
+
     <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer">
       Ledger Stock {getSortArrow("fc_inventory")}
     </th>
@@ -368,6 +372,10 @@ function exportCSV() {
 </td>
 
 <td className="px-4 py-3">
+  {row.total_units_sold ?? 0}
+</td>
+
+<td className="px-4 py-3">
   {row.fc_inventory ?? 0}
 </td>
 
@@ -398,7 +406,7 @@ function exportCSV() {
 
                       {expandedRow === i && (
                         <tr>
-                          <td colSpan="11" className="bg-slate-50 p-4 text-sm">
+                          <td colSpan="12" className="bg-slate-50 p-4 text-sm">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
 
   <div>
