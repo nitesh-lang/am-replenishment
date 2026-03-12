@@ -194,7 +194,7 @@ export default function Replenishment() {
     .map((row) =>
       [
   ...baseColumns.map(col => row[col]),
-  row["Hazmat/non-Hazmat"] === "Non-IXD Non Hazmat" ? "Non-IXD" : "IXD",
+  row.ixd_type,
   masterCartons[row.model] || ""
 ].join(",")
     )
@@ -389,7 +389,7 @@ export default function Replenishment() {
                           if (col === "ixd_type")
   return (
     <td className="px-4 py-3">
-      {row["Hazmat/non-Hazmat"] === "Non-IXD Non Hazmat" ? "Non-IXD" : "IXD"}
+      {row.ixd_type}
     </td>
   );
                           if (col === "master_carton")
