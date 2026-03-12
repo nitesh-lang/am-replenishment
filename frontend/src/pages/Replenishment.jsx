@@ -44,13 +44,28 @@ export default function Replenishment() {
     Promise.all([
       getKPIs(fromWeek, toWeek),
       getReplenishment(toWeek - fromWeek + 1, replenishWeeks, account),
-    ])
+      ])
       .then(([kpiRes, replRes]) => {
         setKpis(kpiRes);
         setReplenishment(Array.isArray(replRes) ? replRes : []);
-      })
-      .finally(() => setLoading(false));
-  }, [fromWeek, toWeek, replenishWeeks, account]);
+        })
+        .finally(() => setLoading(false));
+      }, [fromWeek, toWeek, replenishWeeks, account]);
+
+
+    // LOAD MASTER CARTONS
+
+    useEffect(() => {
+      fetch("https://am-replenishment-1.onrender.com/get-master-cartons")
+      .then(res => res.json())
+      .then(data => {
+        const map = {};
+        data.forEach(row => {
+          map[row.model] = row.master_carton;
+          });
+          setMasterCartons(map);
+          });
+          }, []);
 
   /* ============================================================
      COLUMNS
