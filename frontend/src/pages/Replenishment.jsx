@@ -173,22 +173,23 @@ export default function Replenishment() {
   ============================================================ */
 
   function exportCSV() {
-    const headers = baseColumns.join(",");
-    const rows = sortedData
-      .map((row) =>
-        baseColumns.map((col) => row[col]).join(",")
-      )
-      .join("\n");
+  const headers = [...baseColumns, "master_carton"].join(",");
 
-    const blob = new Blob([headers + "\n" + rows], {
-      type: "text/csv;charset=utf-8;",
-    });
+  const rows = sortedData
+    .map((row) =>
+      [...baseColumns.map(col => row[col]), masterCartons[row.model] || ""].join(",")
+    )
+    .join("\n");
 
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "replenishment_export.csv";
-    link.click();
-  }
+  const blob = new Blob([headers + "\n" + rows], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "replenishment_export.csv";
+  link.click();
+}
 
   /* ============================================================
      RENDER
