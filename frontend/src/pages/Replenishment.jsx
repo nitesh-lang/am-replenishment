@@ -61,17 +61,25 @@ export default function Replenishment() {
 
     // LOAD MASTER CARTONS
 
-    useEffect(() => {
-      fetch("https://am-replenishment-1.onrender.com/get-master-cartons")
-      .then(res => res.json())
-      .then(data => {
-        const map = {};
-        data.forEach(row => {
-          map[row.model] = row.master_carton;
-          });
-          setMasterCartons(map);
-          });
-          }, []);
+useEffect(() => {
+  fetch("https://am-replenishment.onrender.com/get-master-cartons")
+    .then(res => res.json())
+    .then(data => {
+      const map = {};
+      data.forEach(row => {
+        map[row.model] = row.master_carton;
+      });
+
+      setMasterCartons(map);
+
+      setReplenishment(prev =>
+        prev.map(r => ({
+          ...r,
+          master_carton: map[r.model] ?? r.master_carton ?? ""
+        }))
+      );
+    });
+}, []);
 
   /* ============================================================
      COLUMNS
