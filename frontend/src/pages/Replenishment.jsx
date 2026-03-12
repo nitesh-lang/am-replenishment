@@ -22,6 +22,7 @@ export default function Replenishment() {
 
   const [search, setSearch] = useState("");
   const [expandedRow, setExpandedRow] = useState(null);
+  const [masterCartons, setMasterCartons] = useState({});
 
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -60,7 +61,7 @@ export default function Replenishment() {
   }, [replenishment]);
 
   const tableColumns = useMemo(() => {
-    return ["status", ...baseColumns];
+    return ["status", ...baseColumns, "master_carton"];
   }, [baseColumns]);
 
   /* ============================================================
@@ -344,7 +345,7 @@ export default function Replenishment() {
               {paginatedData.map((row, i) => {
                 const status = getRowStatus(row);
                 return (
-                  <>
+                  <React.Fragment key={i}>
                     <tr
                       key={i}
                       className={`${getRowColor(status)} hover:bg-slate-50`}
@@ -366,6 +367,23 @@ export default function Replenishment() {
                               {row[col]}
                             </td>
                           );
+                          
+                          if (col === "master_carton")
+  return (
+    <td className="px-4 py-3">
+      <input
+        type="text"
+        value={masterCartons[row.model] || ""}
+        onChange={(e) =>
+          setMasterCartons({
+            ...masterCartons,
+            [row.model]: e.target.value,
+          })
+        }
+        className="border px-2 py-1 rounded w-20"
+      />
+    </td>
+  );
 
                         return <td className="px-4 py-3">{row[col]}</td>;
                       })}
@@ -389,7 +407,7 @@ export default function Replenishment() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>
