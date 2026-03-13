@@ -17,7 +17,7 @@ AMAZON_INV_WM = DATA_DIR / "inventory_amazon_WM.csv"
 WAREHOUSE_INV_FILE = DATA_DIR / "inventory_snapshot_nexlev.xlsx"
 AMAZON_INV_VIOMI = DATA_DIR / "inventory_amazon_viomi.csv"
 
-AA_WM_MASTER_FILE = DATA_DIR / "AA & WM Replenishment.xlsx"
+AA_WM_MASTER_FILE = DATA_DIR / "Audio Array & WM Replenishment" / "AA & WM Replenishment.xlsx"
 
 
 # =================================================
@@ -201,7 +201,7 @@ def calculate_replenishment(
 
     # filter sales for selected account
     sales_n = sales_n[sales_n["brand"].str.upper() == account.upper()]
-    
+
     # ---------------------------------------------
     # AGGREGATE SALES
     # ---------------------------------------------
