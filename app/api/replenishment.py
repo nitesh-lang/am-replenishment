@@ -44,6 +44,7 @@ def get_replenishment(
             "sales_velocity": int(row["sales_velocity"]),
             "total_units_sold": int(row["total_units_sold"]),
             "amazon_inventory": int(row["amazon_inventory"]),
+            "inbound_inventory": int(row["inbound_inventory"]),   # ADD THIS
             "ampm_inventory": int(row["ampm_inventory"]),
             "required_units": int(row["required_units"]),
             "replenishment_qty": int(row["replenishment_qty"]),
