@@ -15,6 +15,9 @@ AMAZON_INV_AUDIO_ARRAY = DATA_DIR / "inventory_amazon_audio_array.csv"
 AMAZON_INV_WM = DATA_DIR / "inventory_amazon_WM.csv"
 
 WAREHOUSE_INV_FILE = DATA_DIR / "inventory_snapshot_nexlev.xlsx"
+WAREHOUSE_INV_AUDIO_ARRAY = DATA_DIR / "Inventory_snapshot_audio_array.xlsx"
+WAREHOUSE_INV_WM = DATA_DIR / "Inventory_snapshot_WM.xlsx"
+
 AMAZON_INV_VIOMI = DATA_DIR / "inventory_amazon_viomi.csv"
 
 AA_WM_MASTER_FILE = DATA_DIR / "Audio Array & WM Replenishment" / "AA & WM Replenishment.xlsx"
@@ -67,7 +70,14 @@ def load_data(account: str):
     else:
       raise ValueError(f"Unsupported account: {account}")
 
-    inventory = pd.read_excel(WAREHOUSE_INV_FILE)
+    if account.upper() == "AUDIO ARRAY":
+        inventory = pd.read_excel(WAREHOUSE_INV_AUDIO_ARRAY)
+
+    elif account.upper() == "WHITE MULBERRY":
+        inventory = pd.read_excel(WAREHOUSE_INV_WM)
+    
+    else:
+        inventory = pd.read_excel(WAREHOUSE_INV_FILE)
     
 
     return master, sales, inventory, amazon_inventory
@@ -200,7 +210,10 @@ def calculate_replenishment(
     sales_n = get_last_n_weeks_sales(sales, sales_window)
 
     # filter sales for selected account
-    sales_n = sales_n[sales_n["brand"].str.upper() == account.upper()]
+    sales_n = sales_n[
+    sales_n["brand"].str.replace(" ", "").str.upper()
+    == account.replace(" ", "").upper()
+]
 
     # ---------------------------------------------
     # AGGREGATE SALES
@@ -257,7 +270,7 @@ def calculate_replenishment(
     .reset_index()
 )
 
-    inventory_summary["ampm_inventory"] = inventory_summary.get("AMPM", 0)
+    inventory_summary["ampm_inventory"] = inventory_summary.get("AMPM", 0).fillna(0)
 
     df = df.merge(
     inventory_summary[["Model","ampm_inventory"]],
