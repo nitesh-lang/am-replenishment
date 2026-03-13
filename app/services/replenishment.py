@@ -11,9 +11,13 @@ DATA_DIR = BASE_DIR / "data" / "input"
 
 SALES_FILE = DATA_DIR / "weekly_sales_snapshot.csv"
 AMAZON_INV_NEXLEV = DATA_DIR / "inventory_amazon_nexlev.csv"
+AMAZON_INV_AUDIO_ARRAY = DATA_DIR / "inventory_amazon_audio_array.csv"
+AMAZON_INV_WM = DATA_DIR / "inventory_amazon_WM.csv"
 
 WAREHOUSE_INV_FILE = DATA_DIR / "inventory_snapshot_nexlev.xlsx"
 AMAZON_INV_VIOMI = DATA_DIR / "inventory_amazon_viomi.csv"
+
+AA_WM_MASTER_FILE = DATA_DIR / "AA & WM Replenishment.xlsx"
 
 
 # =================================================
@@ -27,21 +31,41 @@ def load_data(account: str):
     if not WAREHOUSE_INV_FILE.exists():
         raise FileNotFoundError(f"Missing file: {WAREHOUSE_INV_FILE}")
 
-    if account.upper() == "VIOMI":
-        master_file = DATA_DIR / "replenishment_master_viomi.xlsx"
+    if account.upper() == "NEXLEV":
+        master = pd.read_excel(DATA_DIR / "replenishment_master_nexlev.xlsx")
+
+    elif account.upper() == "VIOMI":
+        master = pd.read_excel(DATA_DIR / "replenishment_master_viomi.xlsx")
+
+    elif account.upper() == "AUDIO ARRAY":
+        master = pd.read_excel(AA_WM_MASTER_FILE, sheet_name="AA")
+
+    elif account.upper() == "WHITE MULBERRY":
+        master = pd.read_excel(AA_WM_MASTER_FILE, sheet_name="WM")
+
     else:
-        master_file = DATA_DIR / "replenishment_master_nexlev.xlsx"
-
-    if not master_file.exists():
-        raise FileNotFoundError(f"Missing file: {master_file}")
-
-    master = pd.read_excel(master_file)
+        raise ValueError(f"Unsupported account: {account}")
+    
     sales = pd.read_csv(SALES_FILE)
     
-    if account.upper() == "VIOMI":
-        amazon_inventory = pd.read_csv(AMAZON_INV_VIOMI)
-    else:
+    if account.upper() == "NEXLEV":
         amazon_inventory = pd.read_csv(AMAZON_INV_NEXLEV)
+
+    elif account.upper() == "VIOMI":
+        amazon_inventory = pd.read_csv(AMAZON_INV_VIOMI)
+
+    elif account.upper() == "AUDIO ARRAY":
+        amazon_inventory = pd.read_csv(AMAZON_INV_AUDIO_ARRAY)
+
+    elif account.upper() == "WHITE MULBERRY":
+
+       wm = pd.read_csv(AMAZON_INV_WM)
+       viomi = pd.read_csv(AMAZON_INV_VIOMI)
+
+       amazon_inventory = pd.concat([wm, viomi], ignore_index=True)
+
+    else:
+      raise ValueError(f"Unsupported account: {account}")
 
     inventory = pd.read_excel(WAREHOUSE_INV_FILE)
     
@@ -173,8 +197,11 @@ def calculate_replenishment(
     # ---------------------------------------------
     # SALES WINDOW
     # ---------------------------------------------
-    sales_n = get_last_n_weeks_sales(sales, sales_window)  
+    sales_n = get_last_n_weeks_sales(sales, sales_window)
 
+    # filter sales for selected account
+    sales_n = sales_n[sales_n["brand"].str.upper() == account.upper()]
+    
     # ---------------------------------------------
     # AGGREGATE SALES
     # ---------------------------------------------

@@ -265,6 +265,8 @@ function exportCSV() {
   >
     <option value="NEXLEV">Nexlev</option>
     <option value="VIOMI">Viomi</option>
+    <option value="AUDIO ARRAY">Audio Array</option>
+    <option value="WHITE MULBERRY">White Mulberry</option>
   </select>
 </div>
 
