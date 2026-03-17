@@ -254,26 +254,7 @@ export default function CBReplenishment() {
           Export CSV
         </button>
 
-        <button
-  onClick={exportCSV}
-  className="px-4 py-2 bg-indigo-900 text-white rounded-lg"
->
-  Export CSV
-</button>
 
-<button
-  onClick={async () => {
-    await fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    alert("Saved");
-  }}
-  className="px-4 py-2 bg-green-600 text-white rounded-lg"
->
-  Save
-</button>
 
       </div>
 
@@ -357,10 +338,22 @@ export default function CBReplenishment() {
   type="number"
   value={row.po_requirement || 0}
   onChange={(e) => {
-    const newData = [...data];
-    newData[i].po_requirement = Number(e.target.value);
-    setData(newData);
-  }}
+  const value = Number(e.target.value);
+
+  const newData = [...data];
+  newData[i].po_requirement = value;
+  setData(newData);
+
+  fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      model: row.model,
+      po_requirement: value,
+      remarks: row.remarks || ""
+    })
+  });
+}}
   className="border rounded px-2 py-1 w-24"
 />
 </td>
@@ -370,10 +363,22 @@ export default function CBReplenishment() {
   type="text"
   value={row.remarks || ""}
   onChange={(e) => {
-    const newData = [...data];
-    newData[i].remarks = e.target.value;
-    setData(newData);
-  }}
+  const value = e.target.value;
+
+  const newData = [...data];
+  newData[i].remarks = value;
+  setData(newData);
+
+  fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      model: row.model,
+      po_requirement: row.po_requirement || 0,
+      remarks: value
+    })
+  });
+}}
   className="border rounded px-2 py-1 w-full"
 />
 </td>
