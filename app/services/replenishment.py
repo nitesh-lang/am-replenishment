@@ -112,13 +112,12 @@ def normalize_week_column(sales_df: pd.DataFrame) -> pd.DataFrame:
 def get_last_n_weeks_sales(sales_df: pd.DataFrame, weeks: int) -> pd.DataFrame:
 
     df = normalize_week_column(sales_df)
-    latest_weeks = (
-        df[["week"]]
-        .drop_duplicates()
-        .tail(min(weeks, 12))
-    )
 
-    return df[df["week"].isin(latest_weeks["week"])]
+    df = df.sort_values("week_num", ascending=False)
+
+    latest_weeks = df["week_num"].drop_duplicates().head(min(weeks, 12))
+
+    return df[df["week_num"].isin(latest_weeks)]
 
 
 # =================================================
@@ -208,11 +207,6 @@ def calculate_replenishment(
     # SALES WINDOW
     # ---------------------------------------------
     # filter brand FIRST
-    sales = sales[
-    sales["brand"].astype(str).str.lower().str.contains(account.lower())
-]
-
-    # then pick last weeks
     sales_n = get_last_n_weeks_sales(sales, sales_window)
 
     # ---------------------------------------------
