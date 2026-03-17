@@ -278,6 +278,7 @@ def calculate_fc_plan(
         sheet = "Viomi"
 
     master_df = pd.read_excel(master_path)
+    master_df.columns = master_df.columns.str.strip()
 
     master_df = master_df.rename(columns={
             "SKU": "sku",
