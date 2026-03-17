@@ -52,7 +52,8 @@ def get_replenishment(
             "warehouse_shortfall": int(row["warehouse_shortfall"]),
             "is_risky": bool(row["is_risky"]),
             "is_overstock": bool(row["is_overstock"]),
-            "ixd_type": ixd_type
+            "ixd_type": ixd_type,
+            "hazmat_type": str(row["Hazmat Type"]) if row.get("Hazmat Type") else "",
         })
 
     return response

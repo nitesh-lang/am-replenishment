@@ -99,6 +99,7 @@ useEffect(() => {
   "inbound_inventory",
   ...baseColumns.filter(c => !["model","asin","sku","amazon_inventory","inbound_inventory","ixd_type","master_carton","is_risky","is_overstock"].includes(c)),
   "ixd_type",
+  "hazmat_type",   // 👈 ADD HERE
   "master_carton"
 ];
 
@@ -416,6 +417,8 @@ function exportCSV() {
                             </td>
                           );
                           if (col === "ixd_type")
+                            if (col === "hazmat_type")
+  return <td className="px-4 py-3">{row.hazmat_type}</td>;
   return (
     <td className="px-4 py-3">
       {row.ixd_type}
