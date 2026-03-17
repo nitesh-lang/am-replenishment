@@ -277,7 +277,7 @@ def calculate_fc_plan(
         master_path = DATA_DIR / "replenishment_master_viomi.xlsx"
         sheet = "Viomi"
 
-    master_df = pd.read_excel(master_path, sheet_name=sheet)
+    master_df = pd.read_excel(master_path)
 
     master_df = master_df.rename(columns={
             "SKU": "sku",
