@@ -321,6 +321,7 @@ def calculate_final_allocation(
         "expected_units",
         "fill_pct",
         "velocity_flag",
+        "ixd_flag",   # 👈 ADD THIS
         "allocation_logic"
     ]].copy()
 

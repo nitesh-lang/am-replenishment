@@ -342,6 +342,10 @@ function exportCSV() {
     <th className="px-4 py-3">
       Velocity Flag
     </th>
+
+    <th className="px-4 py-3">
+  Hazmat Type
+</th>
   </tr>
 </thead>
 
@@ -410,11 +414,15 @@ function exportCSV() {
   {row.velocity_flag || "NO_FLAG"}
 </span>
 </td>
+
+<td className="px-4 py-3">
+  {row.ixd_flag || "-"}
+</td>
                       </tr>
 
                       {expandedRow === i && (
                         <tr>
-                          <td colSpan="12" className="bg-slate-50 p-4 text-sm">
+                          <td colSpan="13" className="bg-slate-50 p-4 text-sm">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
 
   <div>
