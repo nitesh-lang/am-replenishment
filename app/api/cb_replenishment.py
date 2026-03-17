@@ -43,11 +43,15 @@ def get_cb_replenishment():
             columns=["model", "po_requirement_db", "remarks_db"]
         )
 
-        # ✅ MERGE WITH MAIN DF
-        df = df.merge(saved_df, on="model", how="left")
+        # ✅ SAFE MERGE
+        if not saved_df.empty:
+            df = df.merge(saved_df, on="model", how="left")
 
-        df["po_requirement"] = df["po_requirement_db"].fillna(df["po_requirement"])
-        df["remarks"] = df["remarks_db"].fillna(df["remarks"])
+            if "po_requirement_db" in df.columns:
+                df["po_requirement"] = df["po_requirement_db"].fillna(df["po_requirement"])
+
+            if "remarks_db" in df.columns:
+                df["remarks"] = df["remarks_db"].fillna(df.get("remarks", ""))
 
         # =========================
         # FINAL RESPONSE
