@@ -209,6 +209,9 @@ def calculate_replenishment(
     # filter brand FIRST
     sales_n = get_last_n_weeks_sales(sales, sales_window)
 
+    if account.upper() == "AUDIO ARRAY":
+       sales_n = sales_n[sales_n["channel"] == "Amazon"]
+
     # ---------------------------------------------
     # AGGREGATE SALES
     # ---------------------------------------------
