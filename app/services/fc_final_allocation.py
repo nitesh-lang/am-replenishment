@@ -206,7 +206,8 @@ def calculate_final_allocation(
         )
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
-    df_plan["ixd_flag"] = df_plan["ixd_flag"].fillna("-")
+    df_plan["ixd_flag"] = df_plan["ixd_flag"].where(df_plan["ixd_flag"].notna(), None)
+    
 
     if "model_y" in df_plan.columns:
         df_plan["model"] = df_plan["model_y"].combine_first(df_plan.get("model"))
@@ -217,7 +218,14 @@ def calculate_final_allocation(
     IST_PERCENTAGE = 0.35
 
     def apply_ist(row):
-        flag = str(row.get("ixd_flag", "")).strip().lower()
+        raw_flag = row.get("ixd_flag")
+        
+        flag = str(raw_flag).strip().lower() if raw_flag is not None else ""
+        
+        if "non-ixd" in flag:
+            return row["send_qty"]
+
+        return row["send_qty"] * IST_PERCENTAGE
 
      # If it contains "non-ixd" → NOT governed
         if "non-ixd" in flag:
