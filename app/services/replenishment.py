@@ -331,6 +331,7 @@ def calculate_replenishment(
         "warehouse_shortfall",
         "is_risky",
         "is_overstock",
+        "Master Carton",   # 👈 ADD THIS
     ]
 
     existing_cols = [c for c in preferred_order if c in df.columns]
