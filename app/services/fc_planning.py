@@ -265,8 +265,31 @@ def calculate_fc_plan(
     df = df.rename(columns={
     "FC": "fulfillment_center"
 })
+    
+    # =========================
+    # ADD MODEL MAPPING (FIX)
+    # =========================
+
+    if account.lower() == "nexlev":
+       master_path = DATA_DIR / "replenishment_master_nexlev.xlsx"
+       sheet = "Nexlev"
+    else:
+        master_path = DATA_DIR / "replenishment_master_viomi.xlsx"
+        sheet = "Viomi"
+
+        master_df = pd.read_excel(master_path, sheet_name=sheet)
+
+        master_df = master_df.rename(columns={
+            "SKU": "sku",
+            "Model": "model"
+})
+
+        master_df["sku"] = master_df["sku"].astype(str).str.strip().str.upper()
+
+        df = df.merge(master_df[["sku", "model"]], on="sku", how="left")
 
     final_df = df[[
+        "model",
         "sku",
         "fulfillment_center",
         "total_units_90d",
