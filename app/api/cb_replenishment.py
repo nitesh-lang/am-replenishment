@@ -1,5 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from app.services.cb_replenishment import load_cb_replenishment
+import psycopg2
+import os
 
 router = APIRouter(
     prefix="/cb-replenishment",
@@ -7,6 +9,9 @@ router = APIRouter(
 )
 
 
+# =========================
+# GET API (LOAD DATA)
+# =========================
 @router.get("/")
 def get_cb_replenishment():
 
@@ -46,7 +51,8 @@ def get_cb_replenishment():
             "deficiency",
             "open_po",
             "in_transit",
-            "po_requirement"
+            "po_requirement",
+            "remarks"
         ]]
 
         return {
@@ -63,3 +69,47 @@ def get_cb_replenishment():
             "total_models": 0,
             "error": str(e)
         }
+
+
+# =========================
+# SAVE API (VERY IMPORTANT)
+# =========================
+@router.post("/save")
+async def save_cb_inputs(request: Request):
+
+    try:
+
+        data = await request.json()
+
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cursor = conn.cursor()
+
+        # =========================
+        # HANDLE MULTIPLE ROWS
+        # =========================
+
+        for row in data:
+
+            model = row.get("model")
+            po_requirement = int(row.get("po_requirement", 0))
+            remarks = row.get("remarks", "")
+
+            cursor.execute("""
+                INSERT INTO cb_inputs (model, po_requirement, remarks)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (model)
+                DO UPDATE SET
+                    po_requirement = EXCLUDED.po_requirement,
+                    remarks = EXCLUDED.remarks;
+            """, (model, po_requirement, remarks))
+
+        conn.commit()
+        conn.close()
+
+        return {"status": "saved"}
+
+    except Exception as e:
+
+        print("CB SAVE ERROR:", str(e))
+
+        return {"status": "error", "error": str(e)}
