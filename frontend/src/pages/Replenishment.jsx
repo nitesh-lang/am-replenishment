@@ -418,14 +418,9 @@ function exportCSV() {
                           );
                           if (col === "ixd_type")
   return <td className="px-4 py-3">{row.ixd_type}</td>;
-                            if (col === "hazmat_type")
+
+if (col === "hazmat_type")
   return <td className="px-4 py-3">{row.hazmat_type}</td>;
-  return <td className="px-4 py-3">{row.hazmat_type}</td>;
-  return (
-    <td className="px-4 py-3">
-      {row.ixd_type}
-    </td>
-  );
                           if (col === "master_carton")
   return (
     <td className="px-4 py-3">
