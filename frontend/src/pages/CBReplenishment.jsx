@@ -254,6 +254,27 @@ export default function CBReplenishment() {
           Export CSV
         </button>
 
+        <button
+  onClick={exportCSV}
+  className="px-4 py-2 bg-indigo-900 text-white rounded-lg"
+>
+  Export CSV
+</button>
+
+<button
+  onClick={async () => {
+    await fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    alert("Saved");
+  }}
+  className="px-4 py-2 bg-green-600 text-white rounded-lg"
+>
+  Save
+</button>
+
       </div>
 
       {/* TABLE */}
@@ -333,18 +354,28 @@ export default function CBReplenishment() {
 
                   <td className="px-4 py-3">
   <input
-    type="number"
-    defaultValue={Math.round(row.po_requirement)}
-    className="border rounded px-2 py-1 w-24"
-  />
+  type="number"
+  value={row.po_requirement || 0}
+  onChange={(e) => {
+    const newData = [...data];
+    newData[i].po_requirement = Number(e.target.value);
+    setData(newData);
+  }}
+  className="border rounded px-2 py-1 w-24"
+/>
 </td>
 
 <td className="px-4 py-3">
   <input
-    type="text"
-    placeholder="Remarks"
-    className="border rounded px-2 py-1 w-full"
-  />
+  type="text"
+  value={row.remarks || ""}
+  onChange={(e) => {
+    const newData = [...data];
+    newData[i].remarks = e.target.value;
+    setData(newData);
+  }}
+  className="border rounded px-2 py-1 w-full"
+/>
 </td>
 
                 </tr>
