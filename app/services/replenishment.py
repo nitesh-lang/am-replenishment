@@ -207,12 +207,13 @@ def calculate_replenishment(
     # ---------------------------------------------
     # SALES WINDOW
     # ---------------------------------------------
-    sales_n = get_last_n_weeks_sales(sales, sales_window)
-
-    # filter sales for selected account
-    sales_n = sales_n[
-    sales_n["brand"].str.lower().str.contains(account.lower())
+    # filter brand FIRST
+    sales = sales[
+    sales["brand"].astype(str).str.lower().str.contains(account.lower())
 ]
+
+    # then pick last weeks
+    sales_n = get_last_n_weeks_sales(sales, sales_window)
 
     # ---------------------------------------------
     # AGGREGATE SALES
