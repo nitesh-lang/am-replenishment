@@ -112,15 +112,13 @@ def normalize_week_column(sales_df: pd.DataFrame) -> pd.DataFrame:
 def get_last_n_weeks_sales(sales_df: pd.DataFrame, weeks: int) -> pd.DataFrame:
 
     df = normalize_week_column(sales_df)
+    latest_weeks = (
+        df[["week"]]
+        .drop_duplicates()
+        .tail(min(weeks, 12))
+    )
 
-    max_week = df["week_num"].max()
-
-    # Always cap to 12 weeks
-    window = min(weeks, 12)
-
-    min_week = max(max_week - window + 1, 1)
-
-    return df[(df["week_num"] >= min_week) & (df["week_num"] <= max_week)]
+    return df[df["week"].isin(latest_weeks["week"])]
 
 
 # =================================================
@@ -227,9 +225,11 @@ def calculate_replenishment(
     )
 
     # Average weekly velocity
+    actual_weeks = sales_n["week"].nunique()
+
     velocity["sales_velocity"] = (
-    velocity["total_units_sold"] / max(sales_window, 1)
-).round(0)
+    velocity["total_units_sold"] / max(actual_weeks, 1)
+    ).round(0)
 
     # ---------------------------------------------
     # MERGE WITH MASTER
