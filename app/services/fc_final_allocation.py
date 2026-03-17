@@ -282,6 +282,9 @@ def calculate_final_allocation(
 
     ampm_df = ampm_df[ampm_df["channel"].str.lower() == "ampm"]
 
+    ampm_df["model"] = ampm_df["model"].astype(str).str.strip()
+    df_plan["model"] = df_plan["model"].astype(str).str.strip()
+
     ampm_df = ampm_df.groupby("model", as_index=False)["qty"].sum()
 
     ampm_df = ampm_df.rename(columns={"qty": "ampm_inventory"})
