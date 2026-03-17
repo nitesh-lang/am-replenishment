@@ -144,20 +144,43 @@ def load_cb_replenishment():
 
         df["avg_weekly_sales"] = df["total_sales"] / 12
 
-        # estimated qty based on 8 weeks coverage
         df["estimated_qty"] = (df["avg_weekly_sales"] * 8).round()
 
-        # deficiency
         df["deficiency"] = df["estimated_qty"] - df["final_cb_qty"]
 
         df.loc[df["deficiency"] < 0, "deficiency"] = 0
 
-        # PO requirement excluding Open PO + In-Transit
         df["po_requirement"] = (
             df["deficiency"] - (df["open_po"] + df["in_transit"])
         )
 
         df.loc[df["po_requirement"] < 0, "po_requirement"] = 0
+
+        # =========================
+        # DB MERGE (PERSISTED INPUTS)
+        # =========================
+
+        import psycopg2, os
+
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+
+        db_df = pd.read_sql("SELECT * FROM cb_inputs", conn)
+
+        df = df.merge(db_df, on="model", how="left")
+
+        # combine DB + calculated
+        df["po_requirement"] = df["po_requirement_y"].fillna(df["po_requirement_x"])
+
+        # cleanup extra columns
+        df = df.drop(columns=["po_requirement_x", "po_requirement_y"], errors="ignore")
+
+        # remarks safe handling
+        if "remarks" in df.columns:
+            df["remarks"] = df["remarks"].fillna("")
+        else:
+            df["remarks"] = ""
+
+        conn.close()
 
         return df
 
