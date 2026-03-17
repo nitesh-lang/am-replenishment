@@ -166,19 +166,19 @@ def load_cb_replenishment():
 
         db_df = pd.read_sql("SELECT * FROM cb_inputs", conn)
 
-        df = df.merge(db_df, on="model", how="left")
+        df = df.merge(
+            db_df[["model", "po_requirement", "remarks"]],
+            on="model",
+            how="left",
+            suffixes=("", "_db")
+)
 
-        # combine DB + calculated
-        df["po_requirement"] = df["po_requirement_y"].fillna(df["po_requirement_x"])
+     # override calculated with DB values
+        df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
+        df["remarks"] = df["remarks"].fillna("")
 
-        # cleanup extra columns
-        df = df.drop(columns=["po_requirement_x", "po_requirement_y"], errors="ignore")
-
-        # remarks safe handling
-        if "remarks" in df.columns:
-            df["remarks"] = df["remarks"].fillna("")
-        else:
-            df["remarks"] = ""
+    # cleanup
+        df = df.drop(columns=["po_requirement_db"], errors="ignore")
 
         conn.close()
 
