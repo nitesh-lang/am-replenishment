@@ -50,8 +50,8 @@ export default function Replenishment() {
         const data = Array.isArray(replRes) ? replRes : [];
 
         data.forEach(r => {
-          r.master_carton = masterCartons[r.model] || "";
-          });
+  r.master_carton = masterCartons[r.model] ?? r.master_carton ?? "";
+});
 
           setReplenishment(data);
         })

@@ -41,6 +41,7 @@ def get_replenishment(
             "model": row["model"],
             "asin": str(row["ASIN"]) if row["ASIN"] == row["ASIN"] else "",
             "sku": str(row["SKU"]) if row["SKU"] == row["SKU"] else "",
+            "master_carton": int(row["Master Carton"]) if row.get("Master Carton") == row.get("Master Carton") else 0,
             "sales_velocity": int(row["sales_velocity"]),
             "total_units_sold": int(row["total_units_sold"]),
             "amazon_inventory": int(row["amazon_inventory"]),
