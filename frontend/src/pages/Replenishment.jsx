@@ -97,7 +97,7 @@ useEffect(() => {
   "sku",
   "amazon_inventory",
   "inbound_inventory",
-  ...baseColumns.filter(c => !["model","asin","sku","amazon_inventory","inbound_inventory","ixd_type","master_carton"].includes(c)),
+  ...baseColumns.filter(c => !["model","asin","sku","amazon_inventory","inbound_inventory","ixd_type","master_carton","is_risky","is_overstock"].includes(c)),
   "ixd_type",
   "master_carton"
 ];
