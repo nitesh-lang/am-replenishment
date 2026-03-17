@@ -157,6 +157,8 @@ def calculate_replenishment(
     # ---------------------------------------------
     master, sales, inventory, amazon_inventory = load_data(account)
 
+    print(sales["brand"].unique())  # 👈 ADD HERE
+
     amazon_inventory["amazon_inventory"] = (
     amazon_inventory["afn-total-quantity"]
     - amazon_inventory["afn-unsellable-quantity"]
