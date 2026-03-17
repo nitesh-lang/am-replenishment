@@ -3,6 +3,7 @@ from app.services.cb_replenishment import load_cb_replenishment
 import psycopg2
 import os
 import json
+import pandas as pd
 
 router = APIRouter(
     prefix="/cb-replenishment",
@@ -27,6 +28,30 @@ def get_cb_replenishment():
                 "message": "No data returned from service"
             }
 
+        # ✅ FETCH SAVED DATA FROM DB
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT model, po_requirement, remarks FROM cb_inputs")
+        saved_data = cursor.fetchall()
+
+        conn.close()
+
+        # ✅ CONVERT TO DF
+        saved_df = pd.DataFrame(
+            saved_data,
+            columns=["model", "po_requirement_db", "remarks_db"]
+        )
+
+        # ✅ MERGE WITH MAIN DF
+        df = df.merge(saved_df, on="model", how="left")
+
+        df["po_requirement"] = df["po_requirement_db"].fillna(df["po_requirement"])
+        df["remarks"] = df["remarks_db"].fillna(df["remarks"])
+
+        # =========================
+        # FINAL RESPONSE
+        # =========================
         response_df = df[[
             "brand",
             "model",
@@ -49,7 +74,6 @@ def get_cb_replenishment():
 
     except Exception as e:
         print("CB API ERROR:", str(e))
-
         return {
             "data": [],
             "total_models": 0,
@@ -66,7 +90,7 @@ async def save_cb_inputs(request: Request):
     try:
         data = await request.json()
 
-        # 🔥 FIX: handle string / dict / list
+        # handle string / dict / list
         if isinstance(data, str):
             data = json.loads(data)
 
