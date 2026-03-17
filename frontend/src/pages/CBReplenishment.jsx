@@ -340,9 +340,10 @@ export default function CBReplenishment() {
   onChange={(e) => {
   const value = Number(e.target.value);
 
-  const newData = [...data];
-  newData[i].po_requirement = value;
-  setData(newData);
+  const newData = data.map(d =>
+  d.model === row.model ? { ...d, po_requirement: value } : d
+);
+setData(newData);
 
   fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
     method: "POST",
@@ -365,9 +366,10 @@ export default function CBReplenishment() {
   onChange={(e) => {
   const value = e.target.value;
 
-  const newData = [...data];
-  newData[i].remarks = value;
-  setData(newData);
+  const newData = data.map(d =>
+  d.model === row.model ? { ...d, remarks: value } : d
+);
+setData(newData);
 
   fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
     method: "POST",

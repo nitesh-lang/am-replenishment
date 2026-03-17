@@ -2,12 +2,12 @@ from fastapi import APIRouter, Request
 from app.services.cb_replenishment import load_cb_replenishment
 import psycopg2
 import os
+import json
 
 router = APIRouter(
     prefix="/cb-replenishment",
     tags=["CB Replenishment"]
 )
-
 
 # =========================
 # GET API (LOAD DATA)
@@ -16,18 +16,9 @@ router = APIRouter(
 def get_cb_replenishment():
 
     try:
-
-        # =========================
-        # LOAD DATA FROM SERVICE
-        # =========================
-
         df = load_cb_replenishment()
 
         print("CB REPLENISHMENT ROWS:", len(df))
-
-        # =========================
-        # HANDLE EMPTY DATA
-        # =========================
 
         if df is None or df.empty:
             return {
@@ -35,10 +26,6 @@ def get_cb_replenishment():
                 "total_models": 0,
                 "message": "No data returned from service"
             }
-
-        # =========================
-        # FORMAT RESPONSE
-        # =========================
 
         response_df = df[[
             "brand",
@@ -61,7 +48,6 @@ def get_cb_replenishment():
         }
 
     except Exception as e:
-
         print("CB API ERROR:", str(e))
 
         return {
@@ -72,27 +58,25 @@ def get_cb_replenishment():
 
 
 # =========================
-# SAVE API (VERY IMPORTANT)
+# SAVE API
 # =========================
 @router.post("/save")
 async def save_cb_inputs(request: Request):
 
     try:
-
         data = await request.json()
+
+        # 🔥 FIX: handle string / dict / list
+        if isinstance(data, str):
+            data = json.loads(data)
+
+        if isinstance(data, dict):
+            data = [data]
 
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
         cursor = conn.cursor()
 
-        # =========================
-        # HANDLE MULTIPLE ROWS
-        # =========================
-
-        if isinstance(data, dict):
-         data = [data]
-
         for row in data:
-
             model = row.get("model")
             po_requirement = int(row.get("po_requirement", 0))
             remarks = row.get("remarks", "")
@@ -112,7 +96,5 @@ async def save_cb_inputs(request: Request):
         return {"status": "saved"}
 
     except Exception as e:
-
         print("CB SAVE ERROR:", str(e))
-
         return {"status": "error", "error": str(e)}
