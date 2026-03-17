@@ -127,16 +127,17 @@ def china_reorder_logic(
     # SALES AGGREGATION (LAST 12 WEEKS)
     # ============================================================
 
-    sales_df = sales_df.sort_values(
-        "week",
-        ascending=False
-    )
+    sales_df = sales_df.reset_index()
 
-    last_12 = (
-        sales_df
-        .groupby("model")
-        .head(12)
-    )
+    latest_weeks = (
+    sales_df[["week"]]
+    .drop_duplicates()
+    .tail(12)
+)
+
+    last_12 = sales_df[
+    sales_df["week"].isin(latest_weeks["week"])
+]
 
     sales_agg = (
         last_12
