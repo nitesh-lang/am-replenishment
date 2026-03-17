@@ -211,8 +211,7 @@ def calculate_replenishment(
 
     # filter sales for selected account
     sales_n = sales_n[
-    sales_n["brand"].str.replace(" ", "").str.upper()
-    == account.replace(" ", "").upper()
+    sales_n["brand"].str.lower().str.contains(account.lower())
 ]
 
     # ---------------------------------------------
