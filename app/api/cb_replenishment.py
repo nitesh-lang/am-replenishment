@@ -88,6 +88,9 @@ async def save_cb_inputs(request: Request):
         # HANDLE MULTIPLE ROWS
         # =========================
 
+        if isinstance(data, dict):
+         data = [data]
+
         for row in data:
 
             model = row.get("model")
