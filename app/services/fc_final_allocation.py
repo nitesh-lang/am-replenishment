@@ -32,6 +32,10 @@ def calculate_final_allocation(
 
     if df_plan is None or df_plan.empty:
         return pd.DataFrame()
+    
+    # ADD HERE
+    if "model" not in df_plan.columns:
+       df_plan["model"] = "-"
 
     required_cols = [
         "sku",
