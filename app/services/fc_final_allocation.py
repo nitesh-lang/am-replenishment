@@ -206,6 +206,7 @@ def calculate_final_allocation(
         )
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
+    df_plan["ixd_flag"] = df_plan["ixd_flag"].fillna("-")
 
     if "model_y" in df_plan.columns:
         df_plan["model"] = df_plan["model_y"].combine_first(df_plan.get("model"))
