@@ -320,8 +320,12 @@ function exportCSV() {
 </th>
 
     <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer">
-      Ledger Stock {getSortArrow("fc_inventory")}
-    </th>
+  Ledger Stock {getSortArrow("fc_inventory")}
+</th>
+
+<th className="px-4 py-3">
+  AMPM Inventory
+</th>
 
     <th onClick={() => toggleSort("target_cover_units")} className="px-4 py-3 cursor-pointer">
       Target Cover Units {getSortArrow("target_cover_units")}
@@ -377,6 +381,10 @@ function exportCSV() {
 
 <td className="px-4 py-3">
   {row.fc_inventory ?? 0}
+</td>
+
+<td className="px-4 py-3">
+  {row.ampm_inventory ?? 0}
 </td>
 
 <td className="px-4 py-3">

@@ -271,7 +271,29 @@ def calculate_final_allocation(
     df_plan["coverage_gap_units"] = (
         df_plan["adjusted_shortfall"]
     )
+     
+    # =========================
+    # AMPM INVENTORY (NEW)
+    # =========================
 
+    ampm_df = pd.read_excel("data/input/inventory_snapshot_nexlev.xlsx")
+
+    ampm_df.columns = ampm_df.columns.str.lower().str.strip()
+
+    ampm_df = ampm_df[ampm_df["channel"].str.lower() == "ampm"]
+
+    ampm_df = ampm_df.groupby("model", as_index=False)["qty"].sum()
+
+    ampm_df = ampm_df.rename(columns={"qty": "ampm_inventory"})
+
+    # merge with main df
+    df_plan = df_plan.merge(
+        ampm_df,
+        on="model",
+        how="left"
+)
+
+    df_plan["ampm_inventory"] = df_plan["ampm_inventory"].fillna(0)
     # ==========================================================
     # FINAL DATASET
     # ==========================================================
@@ -279,6 +301,7 @@ def calculate_final_allocation(
     final_df = df_plan[[
         "model",
         "sku",
+        "ampm_inventory",
         "fulfillment_center",
         "weekly_velocity",
         "total_units_sold",
