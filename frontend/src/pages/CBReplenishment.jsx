@@ -23,6 +23,7 @@ export default function CBReplenishment() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 15;
+  const [localRemarks, setLocalRemarks] = useState({});
 
   /* ============================================================
      LOAD DATA
@@ -377,28 +378,27 @@ setData(newData);
 <td className="px-4 py-3">
   <input
   type="text"
-  value={row.remarks || ""}
+  value={localRemarks[row.model] ?? row.remarks ?? ""}
   onChange={(e) => {
-  const value = e.target.value;
-
-  const newData = data.map(d =>
-  d.model === row.model ? { ...d, remarks: value } : d
-);
-setData(newData);
-
-  clearTimeout(window._cbRemarkTimer);
-  window._cbRemarkTimer = setTimeout(() => {
-  fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      model: row.model,
-      po_requirement: row.po_requirement || 0,
-      remarks: value
-    })
-  });
-  }, 800);
-}}
+    const value = e.target.value;
+    setLocalRemarks(prev => ({ ...prev, [row.model]: value }));
+    clearTimeout(window._cbRemarkTimer);
+    window._cbRemarkTimer = setTimeout(() => {
+      const newData = data.map(d =>
+        d.model === row.model ? { ...d, remarks: value } : d
+      );
+      setData(newData);
+      fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          model: row.model,
+          po_requirement: row.po_requirement || 0,
+          remarks: value
+        })
+      });
+    }, 800);
+  }}
   className="border rounded px-2 py-1 w-full"
 />
 </td>
