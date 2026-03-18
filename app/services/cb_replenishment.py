@@ -137,6 +137,11 @@ def load_cb_replenishment():
         # MERGE
         # =========================
 
+        master_df = master_df.rename(columns={
+            "hazmat type": "hazmat_type",
+            "china in transit": "china_in_transit"
+        })
+
         df = master_df.merge(cb_sales, on=["brand","model"], how="left")
 
         df = df.merge(cambium_sales, on=["brand","model"], how="left")

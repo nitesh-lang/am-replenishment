@@ -59,6 +59,7 @@ def get_cb_replenishment():
         response_df = df[[
             "brand",
             "model",
+            "china_in_transit",
             "final_cb_qty",
             "ampm_inventory",
             "cb_3m_sales",
@@ -69,7 +70,8 @@ def get_cb_replenishment():
             "open_po",
             "in_transit",
             "po_requirement",
-            "remarks"
+            "remarks",
+            "hazmat_type"
         ]]
 
         return {
