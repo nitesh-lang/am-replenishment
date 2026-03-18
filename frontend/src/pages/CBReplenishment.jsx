@@ -386,6 +386,8 @@ setData(newData);
 );
 setData(newData);
 
+  clearTimeout(window._cbRemarkTimer);
+  window._cbRemarkTimer = setTimeout(() => {
   fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -395,6 +397,7 @@ setData(newData);
       remarks: value
     })
   });
+  }, 800);
 }}
   className="border rounded px-2 py-1 w-full"
 />
