@@ -211,12 +211,28 @@ useEffect(() => {
   /* ============================================================
      CSV EXPORT
   ============================================================ */
-
 function exportCSV() {
 
   const exportColumns = tableColumns.filter(c => c !== "status");
 
-  const headers = exportColumns.join(",");
+  const columnLabels = {
+    model: "MODEL",
+    asin: "ASIN",
+    sku: "SKU",
+    amazon_inventory: "AMAZON INVENTORY",
+    inbound_inventory: "INBOUND INVENTORY",
+    sales_velocity: "SALES VELOCITY",
+    total_units_sold: "TOTAL UNITS SOLD",
+    ampm_inventory: "AMPM INVENTORY",
+    required_units: "REQUIRED UNITS",
+    replenishment_qty: "REPLENISHMENT QTY",
+    warehouse_shortfall: "WAREHOUSE SHORTFALL",
+    ixd_type: "IXD TYPE",
+    hazmat_type: "HAZMAT TYPE",
+    master_carton: "MASTER CARTON",
+  };
+
+  const headers = exportColumns.map(c => columnLabels[c] || c.toUpperCase()).join(",");
 
   const rows = sortedData
     .map(row =>

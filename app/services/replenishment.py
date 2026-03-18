@@ -333,6 +333,7 @@ def calculate_replenishment(
         "is_overstock",
         "Master Carton",   # 👈 ADD THIS
     ]
+    
 
     existing_cols = [c for c in preferred_order if c in df.columns]
     remaining_cols = [c for c in df.columns if c not in existing_cols]
@@ -341,9 +342,27 @@ def calculate_replenishment(
     df = df.rename(columns={"Model": "model"})
 
     # ---------------------------------------------
-    # DEBUG AID (safe to keep)
+    # EXPORT-FRIENDLY COLUMN NAMES
     # ---------------------------------------------
-    # Uncomment if needed
-    # print(df.columns.tolist())
+    export_rename = {
+        "model":              "MODEL",
+        "ASIN":               "ASIN",
+        "SKU":                "SKU",
+        "amazon_inventory":   "AMAZON_INVENTORY",
+        "inbound_inventory":  "INBOUND_INVENTORY",
+        "sales_velocity":     "SALES_VELOCITY",
+        "total_units_sold":   "TOTAL_UNITS_SOLD",
+        "ampm_inventory":     "AMPM_INVENTORY",
+        "required_units":     "REQUIRED_UNITS",
+        "replenishment_qty":  "REPLENISHMENT_QTY",
+        "warehouse_shortfall":"WAREHOUSE_SHORTFALL",
+        "is_risky":           "IS_RISKY",
+        "is_overstock":       "IS_OVERSTOCK",
+        "Master Carton":      "MASTER_CARTON",
+        "IXD_TYPE":           "IXD_TYPE",
+        "HAZMAT_TYPE":        "HAZMAT_TYPE",
+    }
+
+    df = df.rename(columns=export_rename)
 
     return df
