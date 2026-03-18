@@ -90,8 +90,8 @@ export default function WMReplenishment() {
 
       {/* HEADER */}
       <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
-        <h1 className="text-3xl font-semibold">WM Replenishment Intelligence</h1>
-        <p className="text-slate-300 mt-2 text-sm">White Mulberry / WM Inventory Planning</p>
+                <h1 className="text-3xl font-semibold">Clicktech Replenishment Intelligence</h1>
+                <p className="text-slate-300 mt-2 text-sm">Clicktech / WM Inventory Planning</p>
       </div>
 
       {/* KPI */}
@@ -134,7 +134,21 @@ export default function WMReplenishment() {
                   "po_requirement","remarks"
                 ].map((col) => (
                   <th key={col} onClick={() => toggleSort(col)} className="px-4 py-3 cursor-pointer">
-                    {col}
+                    {{
+                      "final_cb_qty": "Clicktech QTY",
+                      "cb_3m_sales": "Clicktech 3M Sales",
+                      "amazon_3m_sales": "Amazon 3M Sales",
+                      "ampm_inventory": "AMPM Inventory",
+                      "hazmat_type": "Hazmat Type",
+                      "avg_weekly_sales": "Avg Weekly Sales",
+                      "estimated_qty": "Estimated QTY",
+                      "deficiency": "Deficiency",
+                      "open_po": "Open PO",
+                      "in_transit": "In Transit",
+                      "po_requirement": "PO Requirement",
+                      "remarks": "Remarks",
+                      "model": "Model"
+                    }[col] || col}
                   </th>
                 ))}
               </tr>

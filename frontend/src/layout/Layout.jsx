@@ -21,7 +21,7 @@ export default function Layout({ children }) {
     { name: "Sales Analytics", path: "/sales-analytics", icon: BarChart3 },
     { name: "Region Sales", path: "/region-sales", icon: BarChart3 }, // 👈 ADD THIS
     { name: "CB Replenishment", path: "/cb-replenishment", icon: Boxes },
-    { name: "WM Replenishment", path: "/wm-replenishment", icon: Boxes },
+    { name: "Clicktech Replenishment", path: "/wm-replenishment", icon: Boxes },
     { name: "China Reorder Working", path: "/china-reorder-working", icon: Boxes },
     { name: "Fossil Replenishment", path: "/fossil-replenishment", icon: Boxes },
   ];
