@@ -269,6 +269,7 @@ export default function CBReplenishment() {
               <tr>
                 {[
                   "model",
+                   "china_in_transit",
                   "final_cb_qty",
                   "ampm_inventory",
                   "cb_3m_sales",
@@ -279,7 +280,8 @@ export default function CBReplenishment() {
                   "open_po",
                   "in_transit",
                   "po_requirement",
-                  "remarks"
+                  "remarks",
+                  "hazmat_type",
                 ].map((col) => (
                   <th
                     key={col}
@@ -312,6 +314,14 @@ export default function CBReplenishment() {
 
                   <td className="px-4 py-3">
                     {row.cb_3m_sales}
+                  </td>
+
+                   <td className="px-4 py-3">
+                    {row.hazmat_type || "-"}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {row.china_in_transit ?? 0}
                   </td>
 
                   <td className="px-4 py-3">
