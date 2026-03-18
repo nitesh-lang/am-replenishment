@@ -154,6 +154,7 @@ def load_cb_replenishment():
         df = df.merge(in_transit, on="model", how="left")
 
         df = df.fillna(0)
+        df["remarks"] = ""
 
         # =========================
         # CALCULATIONS
