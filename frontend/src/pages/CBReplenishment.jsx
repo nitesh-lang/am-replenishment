@@ -12,7 +12,7 @@ export default function CBReplenishment() {
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [selectedBrand, setSelectedBrand] = useState("Audio Array");
+  const [selectedBrand, setSelectedBrand] = useState("All");
 
   const [coverWeeks, setCoverWeeks] = useState(8);
 
@@ -46,12 +46,11 @@ export default function CBReplenishment() {
 
   const filteredData = useMemo(() => {
     return data
-      .filter((row) => row.brand === selectedBrand)
+      .filter((row) => selectedBrand === "All" || row.brand === selectedBrand)
       .filter((row) =>
         row.model?.toLowerCase().includes(search.toLowerCase())
       );
   }, [data, search, selectedBrand]);
-
   /* ============================================================
      CALCULATIONS
   ============================================================ */
@@ -226,6 +225,7 @@ export default function CBReplenishment() {
           onChange={(e) => setSelectedBrand(e.target.value)}
           className="px-4 py-2 border rounded-lg"
         >
+          <option value="All">All</option>
           <option>Audio Array</option>
           <option>Tonor</option>
         </select>
