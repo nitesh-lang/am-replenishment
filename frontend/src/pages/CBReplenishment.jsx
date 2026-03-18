@@ -269,7 +269,7 @@ export default function CBReplenishment() {
               <tr>
                 {[
                   "model",
-                   "china_in_transit",
+                  "china_in_transit",
                   "final_cb_qty",
                   "ampm_inventory",
                   "cb_3m_sales",
@@ -279,9 +279,9 @@ export default function CBReplenishment() {
                   "deficiency",
                   "open_po",
                   "in_transit",
+                  "hazmat_type",
                   "po_requirement",
                   "remarks",
-                  "hazmat_type",
                 ].map((col) => (
                   <th
                     key={col}
@@ -305,6 +305,10 @@ export default function CBReplenishment() {
                   </td>
 
                   <td className="px-4 py-3">
+                    {row.china_in_transit ?? 0}
+                  </td>
+
+                  <td className="px-4 py-3">
                     {row.final_cb_qty}
                   </td>
 
@@ -314,14 +318,6 @@ export default function CBReplenishment() {
 
                   <td className="px-4 py-3">
                     {row.cb_3m_sales}
-                  </td>
-
-                   <td className="px-4 py-3">
-                    {row.hazmat_type || "-"}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    {row.china_in_transit ?? 0}
                   </td>
 
                   <td className="px-4 py-3">
@@ -348,7 +344,11 @@ export default function CBReplenishment() {
   {row.in_transit}
 </td>
 
-                  <td className="px-4 py-3">
+<td className="px-4 py-3">
+  {row.hazmat_type || "-"}
+</td>
+
+<td className="px-4 py-3">
   <input
   type="number"
   value={row.po_requirement || 0}
