@@ -60,6 +60,7 @@ def get_cb_replenishment():
             "brand",
             "model",
             "final_cb_qty",
+            "ampm_inventory",
             "cb_3m_sales",
             "cambium_3m_sales",
             "avg_weekly_sales",

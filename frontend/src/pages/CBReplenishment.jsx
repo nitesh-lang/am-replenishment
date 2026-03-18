@@ -270,6 +270,7 @@ export default function CBReplenishment() {
                 {[
                   "model",
                   "final_cb_qty",
+                  "ampm_inventory",
                   "cb_3m_sales",
                   "cambium_3m_sales",
                   "avg_weekly_sales",
@@ -303,6 +304,10 @@ export default function CBReplenishment() {
 
                   <td className="px-4 py-3">
                     {row.final_cb_qty}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {row.ampm_inventory ?? 0}
                   </td>
 
                   <td className="px-4 py-3">

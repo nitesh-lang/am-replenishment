@@ -86,8 +86,21 @@ def load_cb_replenishment():
         # =========================
         # INVENTORY
         # =========================
+        ampm_inventory_df = pd.DataFrame(columns=["brand", "model", "ampm_inventory"])
 
         if "channel" in inventory_df.columns:
+            print("UNIQUE CHANNELS IN INVENTORY:", inventory_df["channel"].str.strip().unique().tolist())
+
+            ampm_raw = inventory_df[
+                inventory_df["channel"].str.strip().str.lower() == "ampm"
+            ].groupby(["brand", "model"], as_index=False).sum(numeric_only=True)
+
+            print("AMPM ROWS FOUND:", len(ampm_raw))
+
+            if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
+                ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["brand", "model", "ampm_inventory"]]
+
+
             inventory_df = inventory_df[
                 inventory_df["channel"].str.lower() == "1p"
             ]
@@ -129,6 +142,7 @@ def load_cb_replenishment():
         df = df.merge(cambium_sales, on=["brand","model"], how="left")
 
         df = df.merge(inventory_df, on=["brand","model"], how="left")
+        df = df.merge(ampm_inventory_df[["brand", "model", "ampm_inventory"]], on=["brand","model"], how="left")
 
         df = df.merge(open_po, on="model", how="left")
 
