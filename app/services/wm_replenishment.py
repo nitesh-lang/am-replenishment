@@ -12,7 +12,7 @@ def load_wm_replenishment():
         # =========================
 
         master_df = pd.read_excel(
-            DATA_PATH / "Audio Array & WM Replenishment.xlsx",
+            DATA_PATH / "Audio Array & WM Replenishment" / "AA & WM Replenishment.xlsx",
             sheet_name="WM"
         )
 
