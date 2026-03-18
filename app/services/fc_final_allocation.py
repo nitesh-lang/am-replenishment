@@ -184,12 +184,13 @@ def calculate_final_allocation(
         repl_master = repl_master.rename(columns={
             "SKU": "sku",
             "Hazmat/non-Hazmat": "ixd_flag",
+            "Hazmat Type": "hazmat_type",
             "Model": "model"
-        })
+})
 
         repl_master = repl_master[
-            ["sku", "model", "ixd_flag"]
-        ]
+    ["sku", "model", "ixd_flag", "hazmat_type"]
+]
 
         repl_master["sku"] = (
             repl_master["sku"]
@@ -202,7 +203,7 @@ def calculate_final_allocation(
         print("⚠️ Excel load failed:", e)
 
         repl_master = pd.DataFrame(
-            columns=["sku", "model", "ixd_flag"]
+            columns=["sku", "model", "ixd_flag", "hazmat_type"]
         )
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
@@ -326,6 +327,7 @@ def calculate_final_allocation(
         "fill_pct",
         "velocity_flag",
         "ixd_flag",   # 👈 ADD THIS
+        "hazmat_type",
         "allocation_logic"
     ]].copy()
 
@@ -355,6 +357,14 @@ def calculate_final_allocation(
     
     final_df["ixd_flag"] = (
     final_df["ixd_flag"]
+    .astype(str)
+    .str.strip()
+    .replace({"nan": None, "None": None, "<NA>": None, "": None})
+    .fillna("unknown")
+)
+
+    final_df["hazmat_type"] = (
+    final_df["hazmat_type"]
     .astype(str)
     .str.strip()
     .replace({"nan": None, "None": None, "<NA>": None, "": None})
