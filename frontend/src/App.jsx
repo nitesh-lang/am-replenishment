@@ -8,6 +8,7 @@ import RegionSales from "./pages/RegionSales";
 import ChinaReorder from "./pages/ChinaReorder";
 import ChinaReorderWorking from "./pages/ChinaReorderWorking";
 import CBReplenishment from "./pages/CBReplenishment";
+import WMReplenishment from "./pages/WMReplenishment";
 import FossilReplenishment from "./pages/FossilReplenishment";
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
           <Route path="/china-reorder" element={<ChinaReorder />} />
           <Route path="/china-reorder-working" element={<ChinaReorderWorking />} />
           <Route path="/cb-replenishment" element={<CBReplenishment />} />
+          <Route path="/wm-replenishment" element={<WMReplenishment />} />
           <Route path="/fossil-replenishment" element={<FossilReplenishment />} />
 
           {/* Catch All Route */}
