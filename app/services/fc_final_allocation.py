@@ -352,9 +352,14 @@ def calculate_final_allocation(
     print("COLUMNS INSIDE SERVICE:", final_df.columns.tolist())
     print("COLUMNS BEING RETURNED:", final_df.columns.tolist())
     print("SAMPLE ROW RETURNED:", final_df.head(1).to_dict(orient="records"))
-
-    final_df["ixd_flag"] = final_df["ixd_flag"].astype(str)
-    final_df["ixd_flag"] = final_df["ixd_flag"].replace("nan", None)
+    
+    final_df["ixd_flag"] = (
+    final_df["ixd_flag"]
+    .astype(str)
+    .str.strip()
+    .replace({"nan": None, "None": None, "<NA>": None, "": None})
+    .fillna("unknown")
+)
     
     final_df[numeric_cleanup_cols] = (
     final_df[numeric_cleanup_cols]
