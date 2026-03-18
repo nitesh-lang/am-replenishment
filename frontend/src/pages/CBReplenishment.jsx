@@ -379,26 +379,18 @@ setData(newData);
 <td className="px-4 py-3">
   <input
   type="text"
-  value={localRemarks[row.model] ?? row.remarks ?? ""}
-  onChange={(e) => {
+  defaultValue={row.remarks ?? ""}
+  onBlur={(e) => {
     const value = e.target.value;
-    setLocalRemarks(prev => ({ ...prev, [row.model]: value }));
-    clearTimeout(remarkTimerRef.current);
-    remarkTimerRef.current = setTimeout(() => {
-      const newData = data.map(d =>
-        d.model === row.model ? { ...d, remarks: value } : d
-      );
-      setData(newData);
-      fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          model: row.model,
-          po_requirement: row.po_requirement || 0,
-          remarks: value
-        })
-      });
-    }, 800);
+    fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        model: row.model,
+        po_requirement: row.po_requirement || 0,
+        remarks: value
+      })
+    });
   }}
   className="border rounded px-2 py-1 w-full"
 />
