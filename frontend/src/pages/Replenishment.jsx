@@ -238,8 +238,10 @@ function exportCSV() {
     .map(row =>
       exportColumns
         .map(col => {
-          if (col === "master_carton") return masterCartons[row.model] ?? row.master_carton ?? "";
-          return row[col] ?? "";
+          const val = col === "master_carton"
+            ? (masterCartons[row.model] ?? row.master_carton ?? "")
+            : (row[col] ?? "");
+          return `"${String(val).replace(/"/g, '""')}"`;
         })
         .join(",")
     )

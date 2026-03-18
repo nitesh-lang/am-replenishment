@@ -341,28 +341,4 @@ def calculate_replenishment(
     df = df[existing_cols + remaining_cols]
     df = df.rename(columns={"Model": "model"})
 
-    # ---------------------------------------------
-    # EXPORT-FRIENDLY COLUMN NAMES
-    # ---------------------------------------------
-    export_rename = {
-        "model":              "MODEL",
-        "ASIN":               "ASIN",
-        "SKU":                "SKU",
-        "amazon_inventory":   "AMAZON_INVENTORY",
-        "inbound_inventory":  "INBOUND_INVENTORY",
-        "sales_velocity":     "SALES_VELOCITY",
-        "total_units_sold":   "TOTAL_UNITS_SOLD",
-        "ampm_inventory":     "AMPM_INVENTORY",
-        "required_units":     "REQUIRED_UNITS",
-        "replenishment_qty":  "REPLENISHMENT_QTY",
-        "warehouse_shortfall":"WAREHOUSE_SHORTFALL",
-        "is_risky":           "IS_RISKY",
-        "is_overstock":       "IS_OVERSTOCK",
-        "Master Carton":      "MASTER_CARTON",
-        "IXD_TYPE":           "IXD_TYPE",
-        "HAZMAT_TYPE":        "HAZMAT_TYPE",
-    }
-
-    df = df.rename(columns=export_rename)
-
     return df
