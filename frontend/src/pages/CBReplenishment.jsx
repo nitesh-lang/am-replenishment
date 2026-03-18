@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 
 /* ============================================================
    MAIN COMPONENT
@@ -24,6 +24,7 @@ export default function CBReplenishment() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 15;
   const [localRemarks, setLocalRemarks] = useState({});
+  const remarkTimerRef = useRef(null);
 
   /* ============================================================
      LOAD DATA
@@ -382,8 +383,8 @@ setData(newData);
   onChange={(e) => {
     const value = e.target.value;
     setLocalRemarks(prev => ({ ...prev, [row.model]: value }));
-    clearTimeout(window._cbRemarkTimer);
-    window._cbRemarkTimer = setTimeout(() => {
+    clearTimeout(remarkTimerRef.current);
+    remarkTimerRef.current = setTimeout(() => {
       const newData = data.map(d =>
         d.model === row.model ? { ...d, remarks: value } : d
       );
