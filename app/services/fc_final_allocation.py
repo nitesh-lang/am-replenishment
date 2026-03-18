@@ -227,13 +227,6 @@ def calculate_final_allocation(
 
         return row["send_qty"] * IST_PERCENTAGE
 
-     # If it contains "non-ixd" → NOT governed
-        if "non-ixd" in flag:
-          return row["send_qty"]
-
-    # Everything else (Hazmat + Non-Hazmat) → governed
-        return row["send_qty"] * IST_PERCENTAGE
-
     # APPLY GOVERNANCE
     df_plan["send_qty"] = df_plan.apply(apply_ist, axis=1)
 
