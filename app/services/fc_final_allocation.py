@@ -206,7 +206,9 @@ def calculate_final_allocation(
         )
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
-    df_plan["ixd_flag"] = df_plan["ixd_flag"].where(df_plan["ixd_flag"].notna(), None)
+     
+    df_plan["ixd_flag"] = df_plan["ixd_flag"].astype(str)
+    df_plan["ixd_flag"] = df_plan["ixd_flag"].replace("nan", None)
     
 
     if "model_y" in df_plan.columns:
