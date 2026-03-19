@@ -18,6 +18,7 @@ export default function FCAllocation() {
   const [account, setAccount] = useState("Nexlev");
 
   const [search, setSearch] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]);
 
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -52,14 +53,16 @@ export default function FCAllocation() {
   /* ============================================================
      FILTER
   ============================================================ */
-const filteredData = useMemo(() => {
-  if (!search) return data;
+const categories = useMemo(() => {
+  const cats = [...new Set(data.map(r => r.category).filter(Boolean))];
+  return cats.sort();
+}, [data]);
 
-  return data.filter((row) =>
-    row.sku?.toLowerCase().includes(search.toLowerCase()) ||
-    row.model?.toLowerCase().includes(search.toLowerCase())
-  );
-}, [data, search]);
+const filteredData = useMemo(() => {
+  return data
+    .filter((row) => selectedCategories.length === 0 || selectedCategories.includes(row.category))
+    .filter((row) => !search || row.sku?.toLowerCase().includes(search.toLowerCase()) || row.model?.toLowerCase().includes(search.toLowerCase()));
+}, [data, search, selectedCategories]);
 
   /* ============================================================
      SORT
@@ -274,6 +277,34 @@ function exportCSV() {
     Export CSV
   </button>
 </div>
+</div>
+
+{/* CATEGORY FILTER */}
+<div className="flex flex-wrap gap-2 items-center px-1">
+  <span className="text-xs text-slate-400 uppercase">Category:</span>
+  {categories.map(cat => (
+    <button
+      key={cat}
+      onClick={() => setSelectedCategories(prev =>
+        prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+      )}
+      className={`px-3 py-1 text-xs rounded-full border transition ${
+        selectedCategories.includes(cat)
+          ? "bg-slate-900 text-white border-slate-900"
+          : "bg-white text-slate-600 border-slate-300 hover:border-slate-600"
+      }`}
+    >
+      {cat}
+    </button>
+  ))}
+  {selectedCategories.length > 0 && (
+    <button
+      onClick={() => setSelectedCategories([])}
+      className="px-3 py-1 text-xs rounded-full border border-red-300 text-red-500 hover:bg-red-50"
+    >
+      Clear
+    </button>
+  )}
 </div>
 
       {/* KPI STRIP */}

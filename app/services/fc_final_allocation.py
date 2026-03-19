@@ -189,19 +189,22 @@ def calculate_final_allocation(
                 "SKU": "sku",
                 "Hazmat/non-Hazmat": "ixd_flag",
                 "Hazmat Type": "hazmat_type",
-                "Model": "model"
+                "Model": "model",
+                "Category": "category"
             })
         else:
-            # WM sheet uses "Hazmat Type" only, no "Hazmat/non-Hazmat"
             repl_master = repl_master.rename(columns={
                 "SKU": "sku",
                 "Hazmat Type": "ixd_flag",
-                "Model": "model"
+                "Model": "model",
+                "Category": "category"
             })
             repl_master["hazmat_type"] = repl_master["ixd_flag"]
 
+        repl_master["category"] = repl_master.get("category", pd.Series(dtype=str)).fillna("-")
+
         repl_master = repl_master[
-            ["sku", "model", "ixd_flag", "hazmat_type"]
+            ["sku", "model", "ixd_flag", "hazmat_type", "category"]
         ]
 
         repl_master["sku"] = (
@@ -215,7 +218,7 @@ def calculate_final_allocation(
         print("⚠️ Excel load failed:", e)
 
         repl_master = pd.DataFrame(
-            columns=["sku", "model", "ixd_flag", "hazmat_type"]
+            columns=["sku", "model", "ixd_flag", "hazmat_type", "category"]
         )
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
@@ -330,6 +333,7 @@ def calculate_final_allocation(
     final_df = df_plan[[
         "model",
         "sku",
+        "category",
         "ampm_inventory",
         "fulfillment_center",
         "weekly_velocity",
@@ -343,7 +347,7 @@ def calculate_final_allocation(
         "expected_units",
         "fill_pct",
         "velocity_flag",
-        "ixd_flag",   # 👈 ADD THIS
+        "ixd_flag",
         "hazmat_type",
         "allocation_logic"
     ]].copy()
