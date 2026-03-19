@@ -173,9 +173,13 @@ export default function CBReplenishment() {
 
     const rows = sortedData
       .map((row) =>
-        Object.values(row)
-          .map((val) => `"${val}"`)
-          .join(",")
+        Object.keys(row).map(key => {
+          const val = row[key];
+          if (["avg_weekly_sales","estimated_qty","deficiency"].includes(key)) {
+            return `"${Math.round(val)}"`;
+          }
+          return `"${val ?? ""}"`;
+        }).join(",")
       )
       .join("\n");
 
@@ -327,7 +331,7 @@ export default function CBReplenishment() {
                   </td>
 
                   <td className="px-4 py-3">
-                    {row.avg_weekly_sales?.toFixed(2)}
+                    {Math.round(row.avg_weekly_sales)}
                   </td>
 
                   <td className="px-4 py-3 font-semibold text-indigo-700">
