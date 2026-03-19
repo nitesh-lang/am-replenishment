@@ -9,6 +9,7 @@ export default function WMReplenishment() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 15;
+  const [selectedCategory, setSelectedCategory] = useState("All");
 
   useEffect(() => {
     setLoading(true);
