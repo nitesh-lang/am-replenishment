@@ -169,7 +169,8 @@ export default function CBReplenishment() {
 
     if (!sortedData.length) return;
 
-    const headers = Object.keys(sortedData[0]).join(",");
+    const headerMap = { "hazmat_type": "ASIN Sort Details" };
+    const headers = Object.keys(sortedData[0]).map(k => headerMap[k] || k).join(",");
 
     const rows = sortedData
       .map((row) =>
@@ -285,7 +286,7 @@ export default function CBReplenishment() {
                   "deficiency",
                   "open_po",
                   "in_transit",
-                  "hazmat_type",
+                  "asin_sort_details",
                   "po_requirement",
                   "remarks",
                 ].map((col) => (
@@ -294,7 +295,7 @@ export default function CBReplenishment() {
                     onClick={() => toggleSort(col)}
                     className="px-4 py-3 cursor-pointer"
                   >
-                    {col}
+                    {col === "hazmat_type" ? "ASIN Sort Details" : col}
                   </th>
                 ))}
               </tr>
