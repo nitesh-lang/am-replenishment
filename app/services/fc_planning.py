@@ -292,7 +292,10 @@ def calculate_fc_plan(
 
     master_df["sku"] = master_df["sku"].astype(str).str.strip().str.upper()
 
+    print("MASTER SKU SAMPLE:", master_df["sku"].head(5).tolist())
+    print("DF SKU SAMPLE:", df["sku"].head(5).tolist())
     df = df.merge(master_df[["sku", "model"]], on="sku", how="left")
+    print("MODEL NULL COUNT AFTER MERGE:", df["model"].isna().sum())
 
     final_df = df[[
         "model",

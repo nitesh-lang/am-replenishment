@@ -237,7 +237,7 @@ def calculate_final_allocation(
         
         flag = str(raw_flag).strip().lower() if raw_flag is not None else ""
         
-        if "non-ixd" in flag:
+        if "non-ixd" in flag or "non ixd" in flag:
             return row["send_qty"]
 
         return row["send_qty"] * IST_PERCENTAGE
