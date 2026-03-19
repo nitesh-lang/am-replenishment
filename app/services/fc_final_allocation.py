@@ -391,6 +391,14 @@ def calculate_final_allocation(
     .replace({"nan": None, "None": None, "<NA>": None, "": None})
     .fillna("unknown")
 )
+
+    final_df["category"] = (
+    final_df["category"]
+    .astype(str)
+    .str.strip()
+    .replace({"nan": None, "None": None, "<NA>": None, "": None})
+    .fillna("-")
+)
     
     final_df[numeric_cleanup_cols] = (
     final_df[numeric_cleanup_cols]
