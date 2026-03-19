@@ -193,9 +193,9 @@ def load_cb_replenishment():
             suffixes=("", "_db")
 )
 
-     # override calculated with DB values
         df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
-        df["remarks"] = df["remarks"].fillna("")
+        df["remarks"] = df["remarks_db"].fillna("")
+        df = df.drop(columns=["remarks_db"], errors="ignore")
 
     # cleanup
         df = df.drop(columns=["po_requirement_db"], errors="ignore")
