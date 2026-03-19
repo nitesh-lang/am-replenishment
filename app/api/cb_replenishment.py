@@ -72,7 +72,11 @@ def get_cb_replenishment():
             "po_requirement",
             "remarks",
             "hazmat_type"
-        ]]
+        ]].copy()
+
+        for col in ["avg_weekly_sales", "estimated_qty", "deficiency", "cb_3m_sales", "cambium_3m_sales"]:
+            if col in response_df.columns:
+                response_df[col] = response_df[col].round(0).astype(int)
 
         return {
             "data": response_df.to_dict(orient="records"),
