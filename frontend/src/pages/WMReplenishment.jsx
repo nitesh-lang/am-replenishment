@@ -18,16 +18,16 @@ export default function WMReplenishment() {
       .finally(() => setLoading(false));
   }, []);
 
+  const categories = useMemo(() => {
+    const cats = [...new Set(data.map(r => r.category).filter(Boolean))];
+    return ["All", ...cats.sort()];
+  }, [data]);
+
   const filteredData = useMemo(() => {
     return data
       .filter((row) => selectedCategory === "All" || row.category === selectedCategory)
       .filter((row) => row.model?.toLowerCase().includes(search.toLowerCase()));
   }, [data, search, selectedCategory]);
-
-  const categories = useMemo(() => {
-    const cats = [...new Set(data.map(r => r.category).filter(Boolean))];
-    return ["All", ...cats.sort()];
-  }, [data]);
 
   const calculatedData = useMemo(() => {
     return filteredData.map((row) => {
