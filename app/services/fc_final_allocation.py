@@ -325,6 +325,8 @@ def calculate_final_allocation(
         how="left"
 )
 
+    df_plan["ampm_inventory"] = pd.to_numeric(df_plan["ampm_inventory"], errors="coerce").fillna(0)
+
     if "category" in df_plan.columns:
         df_plan["category"] = df_plan["category"].fillna("-").astype(str).str.strip().replace("nan", "-")
     else:
