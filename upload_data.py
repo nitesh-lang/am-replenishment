@@ -19,17 +19,17 @@ print("Uploading shipments...")
 
 ship_nexlev = pd.read_csv("data/input/fba_shipments_nexlev.csv")
 ship_viomi = pd.read_csv("data/input/fba_shipments_viomi.csv")
+ship_wm = pd.read_csv("data/input/fba_shipments_WM.csv")
 
-# Clean column names
 ship_nexlev.columns = ship_nexlev.columns.str.strip()
 ship_viomi.columns = ship_viomi.columns.str.strip()
+ship_wm.columns = ship_wm.columns.str.strip()
 
-# Add account column (CRITICAL)
 ship_nexlev["account"] = "nexlev"
 ship_viomi["account"] = "viomi"
+ship_wm["account"] = "white mulberry"
 
-# Combine
-shipments = pd.concat([ship_nexlev, ship_viomi], ignore_index=True)
+shipments = pd.concat([ship_nexlev, ship_viomi, ship_wm], ignore_index=True)
 
 # Normalize account column
 shipments["account"] = shipments["account"].str.lower().str.strip()
@@ -52,14 +52,17 @@ print("Uploading inventory ledger...")
 
 ledger_nexlev = pd.read_csv("data/input/inventory_ledger_nexlev.csv")
 ledger_viomi = pd.read_csv("data/input/inventory_ledger_viomi.csv")
+ledger_wm = pd.read_csv("data/input/inventory_ledger_WM.csv")
 
 ledger_nexlev.columns = ledger_nexlev.columns.str.strip()
 ledger_viomi.columns = ledger_viomi.columns.str.strip()
+ledger_wm.columns = ledger_wm.columns.str.strip()
 
 ledger_nexlev["account"] = "nexlev"
 ledger_viomi["account"] = "viomi"
+ledger_wm["account"] = "white mulberry"
 
-ledger = pd.concat([ledger_nexlev, ledger_viomi], ignore_index=True)
+ledger = pd.concat([ledger_nexlev, ledger_viomi, ledger_wm], ignore_index=True)
 
 ledger["account"] = ledger["account"].str.lower().str.strip()
 

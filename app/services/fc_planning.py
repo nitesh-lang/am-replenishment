@@ -272,12 +272,17 @@ def calculate_fc_plan(
 
     if account.lower() == "nexlev":
         master_path = DATA_DIR / "replenishment_master_nexlev.xlsx"
-        sheet = "Nexlev"
-    else:
+        master_df = pd.read_excel(master_path)
+    elif account.lower() == "viomi":
         master_path = DATA_DIR / "replenishment_master_viomi.xlsx"
-        sheet = "Viomi"
+        master_df = pd.read_excel(master_path)
+    elif account.lower() == "white mulberry":
+        master_path = DATA_DIR / "Audio Array & WM Replenishment" / "AA & WM Replenishment.xlsx"
+        master_df = pd.read_excel(master_path, sheet_name="WM")
+    else:
+        master_path = DATA_DIR / "replenishment_master_nexlev.xlsx"
+        master_df = pd.read_excel(master_path)
 
-    master_df = pd.read_excel(master_path)
     master_df.columns = master_df.columns.str.strip()
 
     master_df = master_df.rename(columns={

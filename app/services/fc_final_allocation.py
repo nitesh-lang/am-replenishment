@@ -169,9 +169,12 @@ def calculate_final_allocation(
     if account.lower() == "nexlev":
         repl_path = "data/input/replenishment_master_nexlev.xlsx"
         sheet_to_load = "Nexlev"
-    else:
+    elif account.lower() == "viomi":
         repl_path = "data/input/replenishment_master_viomi.xlsx"
         sheet_to_load = "Viomi"
+    else:
+        repl_path = "data/input/Audio Array & WM Replenishment/AA & WM Replenishment.xlsx"
+        sheet_to_load = "WM"
 
     try:
         repl_master = pd.read_excel(
@@ -181,16 +184,25 @@ def calculate_final_allocation(
 
         repl_master.columns = repl_master.columns.str.strip()
 
-        repl_master = repl_master.rename(columns={
-            "SKU": "sku",
-            "Hazmat/non-Hazmat": "ixd_flag",
-            "Hazmat Type": "hazmat_type",
-            "Model": "model"
-})
+        if account.lower() in ["nexlev", "viomi"]:
+            repl_master = repl_master.rename(columns={
+                "SKU": "sku",
+                "Hazmat/non-Hazmat": "ixd_flag",
+                "Hazmat Type": "hazmat_type",
+                "Model": "model"
+            })
+        else:
+            # WM sheet uses "Hazmat Type" only, no "Hazmat/non-Hazmat"
+            repl_master = repl_master.rename(columns={
+                "SKU": "sku",
+                "Hazmat Type": "ixd_flag",
+                "Model": "model"
+            })
+            repl_master["hazmat_type"] = repl_master["ixd_flag"]
 
         repl_master = repl_master[
-    ["sku", "model", "ixd_flag", "hazmat_type"]
-]
+            ["sku", "model", "ixd_flag", "hazmat_type"]
+        ]
 
         repl_master["sku"] = (
             repl_master["sku"]
@@ -285,7 +297,12 @@ def calculate_final_allocation(
     # AMPM INVENTORY (NEW)
     # =========================
 
-    ampm_df = pd.read_excel("data/input/inventory_snapshot_nexlev.xlsx")
+    if account.lower() == "white mulberry":
+        ampm_file = "data/input/Inventory_snapshot_WM.xlsx"
+    else:
+        ampm_file = "data/input/inventory_snapshot_nexlev.xlsx"
+
+    ampm_df = pd.read_excel(ampm_file)
 
     ampm_df.columns = ampm_df.columns.str.lower().str.strip()
 
