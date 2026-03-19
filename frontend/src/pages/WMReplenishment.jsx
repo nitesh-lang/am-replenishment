@@ -19,10 +19,15 @@ export default function WMReplenishment() {
   }, []);
 
   const filteredData = useMemo(() => {
-    return data.filter((row) =>
-      row.model?.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [data, search]);
+    return data
+      .filter((row) => selectedCategory === "All" || row.category === selectedCategory)
+      .filter((row) => row.model?.toLowerCase().includes(search.toLowerCase()));
+  }, [data, search, selectedCategory]);
+
+  const categories = useMemo(() => {
+    const cats = [...new Set(data.map(r => r.category).filter(Boolean))];
+    return ["All", ...cats.sort()];
+  }, [data]);
 
   const calculatedData = useMemo(() => {
     return filteredData.map((row) => {
@@ -103,6 +108,13 @@ export default function WMReplenishment() {
 
       {/* FILTER */}
       <div className="flex gap-4">
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="px-4 py-2 border rounded-lg"
+        >
+          {categories.map(c => <option key={c}>{c}</option>)}
+        </select>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -128,7 +140,7 @@ export default function WMReplenishment() {
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
                 {[
-                  "model","hazmat_type","final_cb_qty","ampm_inventory",
+                  "model","category","hazmat_type","final_cb_qty","ampm_inventory",
                   "cb_3m_sales","amazon_3m_sales","avg_weekly_sales",
                   "estimated_qty","deficiency","open_po","in_transit",
                   "po_requirement","remarks"
@@ -157,6 +169,7 @@ export default function WMReplenishment() {
               {paginatedData.map((row, i) => (
                 <tr key={i} className="hover:bg-slate-50 border-b">
                   <td className="px-4 py-3 font-medium">{row.model}</td>
+                  <td className="px-4 py-3">{row.category || "-"}</td>
                   <td className="px-4 py-3">{row.hazmat_type || "-"}</td>
                   <td className="px-4 py-3">{row.final_cb_qty ?? 0}</td>
                   <td className="px-4 py-3">{row.ampm_inventory ?? 0}</td>
@@ -186,10 +199,9 @@ export default function WMReplenishment() {
                   <td className="px-4 py-3">
                     <input
                       type="text"
-                      value={row.remarks || ""}
-                      onChange={(e) => {
+                      defaultValue={row.remarks ?? ""}
+                      onBlur={(e) => {
                         const value = e.target.value;
-                        setData(data.map(d => d.model === row.model ? { ...d, remarks: value } : d));
                         fetch("https://am-replenishment.onrender.com/api/wm-replenishment/save", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },

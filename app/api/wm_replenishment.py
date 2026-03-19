@@ -51,13 +51,16 @@ def get_wm_replenishment():
                 df["po_requirement"] = df["po_requirement_db"].fillna(df["po_requirement"])
 
             if "remarks_db" in df.columns:
-                df["remarks"] = df["remarks_db"].fillna(df.get("remarks", ""))
+                df["remarks"] = df["remarks_db"].fillna("")
+
+            df = df.drop(columns=["po_requirement_db", "remarks_db"], errors="ignore")
 
         # =========================
         # FINAL RESPONSE
         # =========================
         response_df = df[[
             "model",
+            "category",
             "hazmat_type",
             "final_cb_qty",
             "ampm_inventory",
