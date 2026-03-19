@@ -39,6 +39,7 @@ def get_replenishment(
 
         response.append({
             "model": row["model"],
+            "category": str(row["Category"]) if row.get("Category") == row.get("Category") else "",
             "asin": str(row["ASIN"]) if row["ASIN"] == row["ASIN"] else "",
             "sku": str(row["SKU"]) if row["SKU"] == row["SKU"] else "",
             "master_carton": int(row["Master Carton"]) if row.get("Master Carton") == row.get("Master Carton") else 0,

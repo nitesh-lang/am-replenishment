@@ -22,6 +22,7 @@ export default function Replenishment() {
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [expandedRow, setExpandedRow] = useState(null);
   const [masterCartons, setMasterCartons] = useState({});
 
@@ -85,6 +86,11 @@ useEffect(() => {
      COLUMNS
   ============================================================ */
 
+  const categories = useMemo(() => {
+    const cats = [...new Set(replenishment.map(r => r.category).filter(Boolean))];
+    return cats.sort();
+  }, [replenishment]);
+
   const baseColumns = useMemo(() => {
     if (!replenishment.length) return [];
     return Object.keys(replenishment[0]);
@@ -108,10 +114,10 @@ useEffect(() => {
   ============================================================ */
 
   const filteredData = useMemo(() => {
-    return replenishment.filter((row) =>
-      row.model?.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [replenishment, search]);
+    return replenishment
+      .filter((row) => selectedCategories.length === 0 || selectedCategories.includes(row.category))
+      .filter((row) => row.model?.toLowerCase().includes(search.toLowerCase()));
+  }, [replenishment, search, selectedCategories]);
 
   /* ============================================================
      SORT
@@ -217,6 +223,7 @@ function exportCSV() {
 
   const columnLabels = {
     model: "MODEL",
+    category: "CATEGORY",
     asin: "ASIN",
     sku: "SKU",
     amazon_inventory: "AMAZON INVENTORY",
@@ -375,13 +382,39 @@ function exportCSV() {
       </div>
 
       {/* EXPORT + SEARCH */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-4 flex-wrap">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search model..."
           className="px-4 py-2 border rounded-lg"
         />
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs text-slate-400 uppercase">Category:</span>
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategories(prev =>
+                prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+              )}
+              className={`px-3 py-1 text-xs rounded-full border transition ${
+                selectedCategories.includes(cat)
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-300 hover:border-slate-600"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+          {selectedCategories.length > 0 && (
+            <button
+              onClick={() => setSelectedCategories([])}
+              className="px-3 py-1 text-xs rounded-full border border-red-300 text-red-500 hover:bg-red-50"
+            >
+              Clear
+            </button>
+          )}
+        </div>
         <button
           onClick={exportCSV}
           className="px-4 py-2 bg-slate-900 text-white rounded-lg"
