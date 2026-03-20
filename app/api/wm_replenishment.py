@@ -58,6 +58,10 @@ def get_wm_replenishment():
         # =========================
         # FINAL RESPONSE
         # =========================
+        for col in ["hazmat_type", "category"]:
+            if col not in df.columns:
+                df[col] = "-"
+
         response_df = df[[
             "model",
             "category",
