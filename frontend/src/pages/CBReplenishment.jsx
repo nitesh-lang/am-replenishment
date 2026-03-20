@@ -79,7 +79,7 @@ export default function CBReplenishment() {
         ...row,
         estimated_qty: estimated,
         deficiency,
-        po_requirement: row.po_requirement ?? poRequirement,
+        po_requirement: poRequirement,
         };
 
     });
