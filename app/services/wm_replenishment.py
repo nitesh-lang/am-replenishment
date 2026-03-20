@@ -121,6 +121,7 @@ def load_wm_replenishment():
 
         master_df = master_df.rename(columns={
             "product type": "hazmat_type",
+            "hazmat type": "hazmat_type",
         })
 
         # =========================
