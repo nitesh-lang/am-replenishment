@@ -229,35 +229,41 @@ const validToWeeks = useMemo(() => {
             Sales Window (Range)
           </label>
           <div className="grid grid-cols-2 gap-3 mt-2">
-            <select
-              value={fromWeek}
-              onChange={(e) => {
-                setCurrentPage(1);
-                setFromWeek(Number(e.target.value));
-              }}
-              className="px-4 py-2 border rounded-lg"
-            >
-              {[...Array(52)].map((_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  From {i + 1}
-                </option>
-              ))}
-            </select>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">From</div>
+              <select
+                value={fromWeek}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setFromWeek(Number(e.target.value));
+                }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {[...Array(52)].map((_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {i + 1}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <select
-              value={toWeek}
-              onChange={(e) => {
-                setCurrentPage(1);
-                setToWeek(Number(e.target.value));
-              }}
-              className="px-4 py-2 border rounded-lg"
-            >
-              {validToWeeks.map((w) => (
-                <option key={w} value={w}>
-                  To {w}
-                </option>
-              ))}
-            </select>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">To</div>
+              <select
+                value={toWeek}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setToWeek(Number(e.target.value));
+                }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {validToWeeks.map((w) => (
+                  <option key={w} value={w}>
+                    {w}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
