@@ -90,8 +90,11 @@ def get_wm_replenishment(
 
         try:
             raw_sales = pd.read_csv("data/input/weekly_sales_snapshot.csv")
+            raw_sales.columns = raw_sales.columns.str.lower().str.strip()
             raw_sales = raw_sales[raw_sales["brand"] == "White Mulberry"]
+            print("WM RAW SALES ROWS:", len(raw_sales))
             raw_sales["week_num"] = raw_sales["week"].astype(str).str.extract(r"(\d+)")[0].pipe(pd.to_numeric, errors="coerce")
+            print("WM AVAILABLE WEEKS:", sorted(raw_sales["week_num"].dropna().unique().tolist()))
             available_weeks = sorted(
                 raw_sales["week_num"].dropna().unique().tolist(),
                 reverse=True
