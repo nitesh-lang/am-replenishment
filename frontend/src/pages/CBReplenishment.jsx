@@ -24,8 +24,18 @@ export default function CBReplenishment() {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 15;
-  const remarkTimerRef = useRef(null);
+const rowsPerPage = 15;
+const remarkTimerRef = useRef(null);
+
+// Generate valid "To" weeks — max 12 weeks from fromWeek (with wraparound)
+const validToWeeks = useMemo(() => {
+  const weeks = [];
+  for (let i = 0; i < 12; i++) {
+    const week = ((fromWeek - 1 + i) % 52) + 1;
+    weeks.push(week);
+  }
+  return weeks;
+}, [fromWeek]);
 
   /* ============================================================
      LOAD DATA
@@ -242,9 +252,9 @@ export default function CBReplenishment() {
               }}
               className="px-4 py-2 border rounded-lg"
             >
-              {[...Array(52)].map((_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  To {i + 1}
+              {validToWeeks.map((w) => (
+                <option key={w} value={w}>
+                  To {w}
                 </option>
               ))}
             </select>

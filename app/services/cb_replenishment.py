@@ -94,6 +94,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             window_size = (52 - from_week + 1) + to_week
         else:
             window_size = to_week - from_week + 1
+        window_size = min(window_size, 12)
 
         # =========================
         # CB SALES
