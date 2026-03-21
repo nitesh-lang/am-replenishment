@@ -74,9 +74,10 @@ def load_cb_replenishment(from_week: int = 1, to_week: int = 11, cover_weeks: in
         # =========================
 
         if "week" in sales_df.columns:
+            sales_df["week"] = pd.to_numeric(sales_df["week"], errors="coerce")
             sales_df = sales_df[
                 sales_df["week"].between(from_week, to_week)
-            ]
+                ]
 
         window_size = to_week - from_week + 1  # e.g. 1→11 = 11 weeks
 
