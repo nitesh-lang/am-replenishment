@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query
+from typing import Optional
 from app.services.wm_replenishment import load_wm_replenishment
 import psycopg2
 import os
@@ -14,12 +15,20 @@ router = APIRouter(
 # GET API (LOAD DATA)
 # =========================
 @router.get("/")
-def get_wm_replenishment():
+def get_wm_replenishment(
+    from_week: Optional[int] = Query(default=None, ge=1, le=52),
+    to_week:   Optional[int] = Query(default=None, ge=1, le=52),
+    cover_weeks: int = Query(default=8, ge=1, le=52),
+):
 
     try:
-        df = load_wm_replenishment()
+        df = load_wm_replenishment(
+            from_week=from_week,
+            to_week=to_week,
+            cover_weeks=cover_weeks,
+        )
 
-        print("WM REPLENISHMENT ROWS:", len(df))
+        print(f"WM REPLENISHMENT ROWS: {len(df)} | window: {from_week}→{to_week} | cover: {cover_weeks}w")
 
         if df is None or df.empty:
             return {
@@ -79,9 +88,22 @@ def get_wm_replenishment():
             "remarks"
         ]]
 
+        try:
+            raw_sales = pd.read_csv("data/input/weekly_sales_snapshot.csv")
+            raw_sales = raw_sales[raw_sales["brand"] == "White Mulberry"]
+            raw_sales["week_num"] = raw_sales["week"].astype(str).str.extract(r"(\d+)")[0].pipe(pd.to_numeric, errors="coerce")
+            available_weeks = sorted(
+                raw_sales["week_num"].dropna().unique().tolist(),
+                reverse=True
+            )[:12]
+            available_weeks = sorted([int(w) for w in available_weeks])
+        except:
+            available_weeks = []
+
         return {
             "data": response_df.to_dict(orient="records"),
-            "total_models": len(response_df)
+            "total_models": len(response_df),
+            "available_weeks": available_weeks
         }
 
     except Exception as e:

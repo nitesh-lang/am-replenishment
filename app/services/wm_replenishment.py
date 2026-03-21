@@ -3,7 +3,7 @@ from pathlib import Path
 
 DATA_PATH = Path("data/input")
 
-def load_wm_replenishment():
+def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
 
     try:
 
@@ -51,6 +51,33 @@ def load_wm_replenishment():
         # =========================
 
         sales_df = sales_df[sales_df["brand"] == "White Mulberry"]
+
+        # =========================
+        # SALES WINDOW FILTER
+        # =========================
+
+        if "week" in sales_df.columns:
+            sales_df["week"] = (
+                sales_df["week"].astype(str)
+                .str.extract(r"(\d+)")[0]
+                .pipe(pd.to_numeric, errors="coerce")
+            )
+            available_weeks = sorted(
+                sales_df["week"].dropna().unique().tolist(),
+                reverse=True
+            )[:12]
+
+            if from_week in available_weeks and to_week in available_weeks:
+                from_idx = available_weeks.index(from_week)
+                to_idx = available_weeks.index(to_week)
+                selected_weeks = available_weeks[to_idx:from_idx + 1]
+            else:
+                selected_weeks = available_weeks
+
+            sales_df = sales_df[sales_df["week"].isin(selected_weeks)]
+            window_size = max(len(selected_weeks), 1)
+        else:
+            window_size = 12
 
         # =========================
         # 1P SALES
@@ -142,8 +169,8 @@ def load_wm_replenishment():
         # =========================
 
         df["total_sales"] = df["cb_3m_sales"] + df["amazon_3m_sales"]
-        df["avg_weekly_sales"] = df["total_sales"] / 12
-        df["estimated_qty"] = (df["avg_weekly_sales"] * 8).round()
+        df["avg_weekly_sales"] = df["total_sales"] / window_size
+        df["estimated_qty"] = (df["avg_weekly_sales"] * cover_weeks).round()
         df["deficiency"] = (df["estimated_qty"] - df["final_cb_qty"]).clip(lower=0)
         df["po_requirement"] = (df["deficiency"] - (df["open_po"] + df["in_transit"])).clip(lower=0)
 

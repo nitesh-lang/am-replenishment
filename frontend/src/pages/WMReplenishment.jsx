@@ -10,14 +10,28 @@ export default function WMReplenishment() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 15;
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [fromWeek, setFromWeek] = useState(null);
+  const [toWeek, setToWeek] = useState(null);
+  const [availableWeeks, setAvailableWeeks] = useState([]);
 
   useEffect(() => {
     setLoading(true);
-    fetch("https://am-replenishment.onrender.com/api/wm-replenishment/")
+    const params = new URLSearchParams({ cover_weeks: coverWeeks });
+    if (fromWeek) params.append("from_week", fromWeek);
+    if (toWeek) params.append("to_week", toWeek);
+    fetch(`https://am-replenishment.onrender.com/api/wm-replenishment/?${params}`)
       .then((res) => res.json())
-      .then((res) => setData(res.data || []))
+      .then((res) => {
+        setData(res.data || []);
+        if (res.available_weeks?.length) {
+          const weeks = res.available_weeks;
+          setAvailableWeeks(weeks);
+          if (!fromWeek) setFromWeek(weeks[0]);
+          if (!toWeek) setToWeek(weeks[weeks.length - 1]);
+        }
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [fromWeek, toWeek, coverWeeks]);
 
   const categories = useMemo(() => {
     const cats = [...new Set(data.map(r => r.category).filter(Boolean))];
@@ -30,20 +44,7 @@ export default function WMReplenishment() {
       .filter((row) => row.model?.toLowerCase().includes(search.toLowerCase()));
   }, [data, search, selectedCategory]);
 
-  const calculatedData = useMemo(() => {
-    return filteredData.map((row) => {
-      const avgWeekly = row.avg_weekly_sales || 0;
-      const estimated = avgWeekly * coverWeeks;
-      const deficiency = Math.max(0, estimated - (row.final_cb_qty || 0));
-      const poRequirement = Math.max(0, deficiency - ((row.open_po || 0) + (row.in_transit || 0)));
-      return {
-        ...row,
-        estimated_qty: estimated,
-        deficiency,
-        po_requirement: row.po_requirement ?? poRequirement,
-      };
-    });
-  }, [filteredData, coverWeeks]);
+  const calculatedData = filteredData;
 
   const sortedData = useMemo(() => {
     if (!sortConfig.key) return calculatedData;
@@ -107,6 +108,52 @@ export default function WMReplenishment() {
         <MetricCard title="Models" value={kpis.models} />
       </div>
 
+      {/* SALES WINDOW + COVER WEEKS */}
+      <div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="text-xs uppercase text-slate-400">Sales Window (Range)</label>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <div>
+              <div className="text-xs text-slate-400 mb-1">From</div>
+              <select
+                value={fromWeek || ""}
+                onChange={(e) => { setCurrentPage(1); setFromWeek(Number(e.target.value)); }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {availableWeeks.map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">To</div>
+              <select
+                value={toWeek || ""}
+                onChange={(e) => { setCurrentPage(1); setToWeek(Number(e.target.value)); }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {availableWeeks.map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-400">Cover Weeks</label>
+          <div className="grid grid-cols-1 mt-2">
+            <div>
+              <div className="text-xs text-slate-400 mb-1">&nbsp;</div>
+              <select
+                value={coverWeeks}
+                onChange={(e) => { setCurrentPage(1); setCoverWeeks(Number(e.target.value)); }}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+              >
+                {[4,5,6,7,8,9,10,11,12].map(w => (
+                  <option key={w} value={w}>{w} Week{w > 1 ? "s" : ""}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* FILTER */}
       <div className="flex gap-4">
         <select
@@ -122,13 +169,6 @@ export default function WMReplenishment() {
           placeholder="Search model..."
           className="px-4 py-2 border rounded-lg w-64"
         />
-        <select
-          value={coverWeeks}
-          onChange={(e) => setCoverWeeks(Number(e.target.value))}
-          className="px-4 py-2 border rounded-lg"
-        >
-          {[4,5,6,7,8,9,10,11,12].map(w => <option key={w}>{w}</option>)}
-        </select>
         <button onClick={exportCSV} className="px-4 py-2 bg-slate-900 text-white rounded-lg">
           Export CSV
         </button>
