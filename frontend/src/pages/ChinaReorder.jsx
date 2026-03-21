@@ -18,6 +18,8 @@ export default function ChinaReorder() {
   const [fromWeek, setFromWeek] = useState(null);
   const [toWeek, setToWeek] = useState(null);
   const [availableWeeks, setAvailableWeeks] = useState([]);
+  const [selectedL0, setSelectedL0] = useState("");
+  const [selectedL1, setSelectedL1] = useState("");
 
 
   // 👇 ADD HERE
@@ -33,6 +35,17 @@ export default function ChinaReorder() {
   /* Pagination */
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 50;
+
+  const l0Options = useMemo(() => {
+    return [...new Set(data.map(r => r.category_l0).filter(Boolean))].sort();
+  }, [data]);
+
+  const l1Options = useMemo(() => {
+    if (!selectedL0) return [];
+    return [...new Set(
+      data.filter(r => r.category_l0 === selectedL0).map(r => r.category_l1).filter(Boolean)
+    )].sort();
+  }, [data, selectedL0]);
 
   /* ============================================================
      DATA LOAD
@@ -60,21 +73,18 @@ export default function ChinaReorder() {
   /* ============================================================
      FILTER
   ============================================================ */
-
   const filteredData = useMemo(() => {
   return data
-    .filter((row) =>
-      row.model?.toLowerCase().includes(search.toLowerCase())
-    )
+    .filter((row) => row.model?.toLowerCase().includes(search.toLowerCase()))
     .filter((row) => {
       const cover = row.weeks_cover || 0;
-
       if (minCover !== "" && cover < Number(minCover)) return false;
       if (maxCover !== "" && cover > Number(maxCover)) return false;
-
       return true;
-    });
-}, [data, search, minCover, maxCover]);
+    })
+    .filter((row) => !selectedL0 || row.category_l0 === selectedL0)
+    .filter((row) => !selectedL1 || row.category_l1 === selectedL1);
+}, [data, search, minCover, maxCover, selectedL0, selectedL1]);
 
   /* ============================================================
      SORT
@@ -265,6 +275,8 @@ export default function ChinaReorder() {
               setFromWeek(null);
               setToWeek(null);
               setAvailableWeeks([]);
+              setSelectedL0("");
+              setSelectedL1("");
             }}
             className="px-4 py-2 border rounded-lg"
           >
@@ -285,6 +297,28 @@ export default function ChinaReorder() {
               {selectedMonths} Month{selectedMonths > 1 ? "s" : ""}
             </span>
           </div>
+
+          {l0Options.length > 0 && (
+            <select
+              value={selectedL0}
+              onChange={(e) => { setCurrentPage(1); setSelectedL0(e.target.value); setSelectedL1(""); }}
+              className="px-4 py-2 border rounded-lg"
+            >
+              <option value="">All Categories</option>
+              {l0Options.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+
+          {selectedL0 && l1Options.length > 0 && (
+            <select
+              value={selectedL1}
+              onChange={(e) => { setCurrentPage(1); setSelectedL1(e.target.value); }}
+              className="px-4 py-2 border rounded-lg"
+            >
+              <option value="">All Sub-categories</option>
+              {l1Options.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
 
           <input
             type="number" placeholder="Min Cover"

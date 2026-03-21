@@ -174,6 +174,19 @@ def china_reorder_logic(
     ]
 
     # ============================================================
+    # CATEGORY MAPPING (from inventory)
+    # ============================================================
+
+    cat_cols = [c for c in inv_df.columns if c.startswith("category")]
+    if cat_cols:
+        category_map = (
+            inv_df[["model"] + cat_cols]
+            .drop_duplicates(subset="model")
+        )
+    else:
+        category_map = pd.DataFrame(columns=["model"])
+
+    # ============================================================
     # CURRENT INVENTORY AGG
     # ============================================================
 
@@ -215,12 +228,13 @@ def china_reorder_logic(
     # FINAL MERGE (SALES + INVENTORY)
     # ============================================================
 
-    df = pd.merge(
-        sales_agg,
-        inv_agg,
-        on="model",
-        how="outer"
-    ).fillna(0)
+    df = pd.merge(sales_agg, inv_agg, on="model", how="outer").fillna(0)
+
+    # Merge category columns
+    if not category_map.empty and len(category_map.columns) > 1:
+        df = df.merge(category_map, on="model", how="left")
+        for col in cat_cols:
+            df[col] = df[col].fillna("")
 
     # ============================================================
     # ENSURE NUMERIC TYPES
