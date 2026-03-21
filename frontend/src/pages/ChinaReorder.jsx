@@ -13,8 +13,11 @@ export default function ChinaReorder() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const [selectedBrand, setSelectedBrand] = useState("Nexlev"); // 👈 ADD HERE
+  const [selectedBrand, setSelectedBrand] = useState("Nexlev");
   const [selectedMonths, setSelectedMonths] = useState(3);
+  const [fromWeek, setFromWeek] = useState(null);
+  const [toWeek, setToWeek] = useState(null);
+  const [availableWeeks, setAvailableWeeks] = useState([]);
 
 
   // 👇 ADD HERE
@@ -37,14 +40,22 @@ export default function ChinaReorder() {
 
   useEffect(() => {
     setLoading(true);
-
-    fetch(`https://am-replenishment.onrender.com/china-reorder/?brand=${selectedBrand}&months=${selectedMonths}`)
+    const params = new URLSearchParams({ brand: selectedBrand, months: selectedMonths });
+    if (fromWeek) params.append("from_week", fromWeek);
+    if (toWeek) params.append("to_week", toWeek);
+    fetch(`https://am-replenishment.onrender.com/china-reorder/?${params}`)
       .then((res) => res.json())
       .then((res) => {
-        setData(Array.isArray(res) ? res : []);
+        setData(Array.isArray(res.data) ? res.data : []);
+        if (res.available_weeks?.length) {
+          const weeks = res.available_weeks;
+          setAvailableWeeks(weeks);
+          if (!fromWeek) setFromWeek(weeks[0]);
+          if (!toWeek) setToWeek(weeks[weeks.length - 1]);
+        }
       })
       .finally(() => setLoading(false));
-  }, [selectedBrand, selectedMonths]);
+  }, [selectedBrand, selectedMonths, fromWeek, toWeek]);
 
   /* ============================================================
      FILTER
@@ -212,6 +223,35 @@ export default function ChinaReorder() {
         <MetricCard title="Total Units to Reorder" value={Math.round(kpis.totalReorder)} />
         <MetricCard title="Avg Weeks Cover" value={kpis.avgCover?.toFixed(2)} />
         <MetricCard title="Total Models" value={kpis.models} />
+      </div>
+
+      {/* SALES WINDOW */}
+      <div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="text-xs uppercase text-slate-400">Sales Window (Range)</label>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <div>
+              <div className="text-xs text-slate-400 mb-1">From</div>
+              <select
+                value={fromWeek || ""}
+                onChange={(e) => { setCurrentPage(1); setFromWeek(Number(e.target.value)); }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {availableWeeks.map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">To</div>
+              <select
+                value={toWeek || ""}
+                onChange={(e) => { setCurrentPage(1); setToWeek(Number(e.target.value)); }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {availableWeeks.map((w) => <option key={w} value={w}>{w}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* SEARCH + EXPORT */}

@@ -5,7 +5,9 @@ import pandas as pd
 def china_reorder_logic(
     brand: str = "Nexlev",
     months: int = 3,
-    channel: str = None
+    channel: str = None,
+    from_week=None,
+    to_week=None,
 ):
 
     # ============================================================
@@ -124,31 +126,42 @@ def china_reorder_logic(
     ]
 
     # ============================================================
-    # SALES AGGREGATION (LAST 12 WEEKS)
+    # SALES WINDOW FILTER
     # ============================================================
 
-    sales_df = sales_df.reset_index()
+    sales_df["week_num"] = (
+        sales_df["week"].astype(str)
+        .str.extract(r"(\d+)")[0]
+        .pipe(pd.to_numeric, errors="coerce")
+    )
 
-    latest_weeks = (
-    sales_df[["week"]]
-    .drop_duplicates()
-    .tail(12)
-)
+    available_weeks = sorted(
+        sales_df["week_num"].dropna().unique().tolist(),
+        reverse=True
+    )[:12]
 
-    last_12 = sales_df[
-    sales_df["week"].isin(latest_weeks["week"])
-]
+    if from_week in available_weeks and to_week in available_weeks:
+        from_idx = available_weeks.index(from_week)
+        to_idx = available_weeks.index(to_week)
+        selected_weeks = available_weeks[to_idx:from_idx + 1]
+    else:
+        selected_weeks = available_weeks
+
+    last_12 = sales_df[sales_df["week_num"].isin(selected_weeks)]
+    window_size = max(len(selected_weeks), 1)
+
+    # ============================================================
+    # SALES AGGREGATION
+    # ============================================================
 
     sales_agg = (
         last_12
         .groupby("model", as_index=False)
-        .agg(
-            last_12w_sales=("units_sold", "sum")
-        )
+        .agg(last_12w_sales=("units_sold", "sum"))
     )
 
     sales_agg["avg_weekly_sales"] = (
-        sales_agg["last_12w_sales"] / 12
+        sales_agg["last_12w_sales"] / window_size
     )
 
     # ============================================================
