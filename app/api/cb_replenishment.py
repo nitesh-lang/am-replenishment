@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, Query
+from typing import Optional
 from app.services.cb_replenishment import load_cb_replenishment
 import psycopg2
 import os
@@ -15,8 +16,8 @@ router = APIRouter(
 # =========================
 @router.get("/")
 def get_cb_replenishment(
-    from_week: int = Query(default=None),
-    to_week:   int = Query(default=None),
+    from_week: Optional[int] = Query(default=None),
+    to_week:   Optional[int] = Query(default=None),
     cover_weeks: int = Query(default=8, ge=1, le=52),
 ):
 
