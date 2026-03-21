@@ -3,7 +3,12 @@ from pathlib import Path
 
 DATA_PATH = Path("data/input")
 
-def load_cb_replenishment():
+def load_cb_replenishment(from_week: int = 1, to_week: int = 11, cover_weeks: int = 8):
+    """
+    from_week   : start of sales window (inclusive), default 1
+    to_week     : end   of sales window (inclusive), default 11
+    cover_weeks : weeks of cover for estimated_qty,  default 8
+    """
 
     try:
 
@@ -62,6 +67,20 @@ def load_cb_replenishment():
         ]
 
         # =========================
+        # SALES WINDOW FILTER
+        # Apply from_week / to_week if the CSV has a "week" column.
+        # If the column doesn't exist we fall back to using all rows
+        # (same behaviour as before this change).
+        # =========================
+
+        if "week" in sales_df.columns:
+            sales_df = sales_df[
+                sales_df["week"].between(from_week, to_week)
+            ]
+
+        window_size = to_week - from_week + 1  # e.g. 1→11 = 11 weeks
+
+        # =========================
         # CB SALES
         # =========================
 
@@ -99,7 +118,6 @@ def load_cb_replenishment():
 
             if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
                 ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["brand", "model", "ampm_inventory"]]
-
 
             inventory_df = inventory_df[
                 inventory_df["channel"].str.lower() == "1p"
@@ -158,13 +176,15 @@ def load_cb_replenishment():
 
         # =========================
         # CALCULATIONS
+        # Uses window_size (from_week → to_week) for avg weekly sales
+        # Uses cover_weeks for estimated_qty
         # =========================
 
         df["total_sales"] = df["cb_3m_sales"] + df["cambium_3m_sales"]
 
-        df["avg_weekly_sales"] = df["total_sales"] / 12
+        df["avg_weekly_sales"] = df["total_sales"] / window_size
 
-        df["estimated_qty"] = (df["avg_weekly_sales"] * 8).round()
+        df["estimated_qty"] = (df["avg_weekly_sales"] * cover_weeks).round()
 
         df["deficiency"] = df["estimated_qty"] - df["final_cb_qty"]
 
@@ -191,13 +211,11 @@ def load_cb_replenishment():
             on="model",
             how="left",
             suffixes=("", "_db")
-)
+        )
 
         df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
         df["remarks"] = df["remarks_db"].fillna("")
         df = df.drop(columns=["remarks_db"], errors="ignore")
-
-    # cleanup
         df = df.drop(columns=["po_requirement_db"], errors="ignore")
 
         conn.close()

@@ -14,6 +14,8 @@ export default function CBReplenishment() {
   const [search, setSearch] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("All");
 
+  const [fromWeek, setFromWeek] = useState(1);
+  const [toWeek, setToWeek] = useState(11);
   const [coverWeeks, setCoverWeeks] = useState(8);
 
   const [sortConfig, setSortConfig] = useState({
@@ -23,7 +25,6 @@ export default function CBReplenishment() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 15;
-  const [localRemarks, setLocalRemarks] = useState({});
   const remarkTimerRef = useRef(null);
 
   /* ============================================================
@@ -33,14 +34,20 @@ export default function CBReplenishment() {
   useEffect(() => {
     setLoading(true);
 
-    fetch("https://am-replenishment.onrender.com/api/cb-replenishment/")
+    const params = new URLSearchParams({
+      from_week: fromWeek,
+      to_week: toWeek,
+      cover_weeks: coverWeeks,
+    });
+
+    fetch(`https://am-replenishment.onrender.com/api/cb-replenishment/?${params}`)
       .then((res) => res.json())
       .then((res) => {
         setData(res.data || []);
       })
       .finally(() => setLoading(false));
 
-  }, []);
+  }, [fromWeek, toWeek, coverWeeks]);
 
   /* ============================================================
      FILTER
@@ -53,38 +60,17 @@ export default function CBReplenishment() {
         row.model?.toLowerCase().includes(search.toLowerCase())
       );
   }, [data, search, selectedBrand]);
+
   /* ============================================================
      CALCULATIONS
+     avg_weekly_sales is recalculated from cb_3m_sales using
+     the selected sales window (fromWeek → toWeek).
+     coverWeeks remains a separate control for estimated_qty.
   ============================================================ */
 
-  const calculatedData = useMemo(() => {
-
-    return filteredData.map((row) => {
-
-      const avgWeekly = row.avg_weekly_sales || 0;
-
-      const estimated = avgWeekly * coverWeeks;
-
-      const deficiency = Math.max(
-        0,
-        estimated - (row.final_cb_qty || 0)
-      );
-
-      const poRequirement = Math.max(
-        0,
-        deficiency - ((row.open_po || 0) + (row.in_transit || 0))
-        );
-
-      return {
-        ...row,
-        estimated_qty: estimated,
-        deficiency,
-        po_requirement: poRequirement,
-        };
-
-    });
-
-  }, [filteredData, coverWeeks]);
+  // Backend handles all calculations using from_week, to_week, cover_weeks.
+  // Frontend just passes filtered data through unchanged.
+  const calculatedData = filteredData;
 
   /* ============================================================
      SORT
@@ -223,6 +209,71 @@ export default function CBReplenishment() {
         <MetricCard title="Models" value={kpis.models} />
       </div>
 
+      {/* SALES WINDOW + COVER WEEKS */}
+
+      <div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {/* Sales Window */}
+        <div>
+          <label className="text-xs uppercase text-slate-400">
+            Sales Window (Range)
+          </label>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <select
+              value={fromWeek}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setFromWeek(Number(e.target.value));
+              }}
+              className="px-4 py-2 border rounded-lg"
+            >
+              {[...Array(11)].map((_, i) => (
+                <option key={i + 1} value={i + 1}>
+                  From {i + 1}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={toWeek}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setToWeek(Number(e.target.value));
+              }}
+              className="px-4 py-2 border rounded-lg"
+            >
+              {[...Array(11)].map((_, i) => (
+                <option key={i + 1} value={i + 1}>
+                  To {i + 1}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Cover Weeks */}
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-400">
+            Cover Weeks
+          </label>
+          <select
+            value={coverWeeks}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setCoverWeeks(Number(e.target.value));
+            }}
+            className="mt-2 w-full px-4 py-2 border border-slate-200 rounded-lg"
+          >
+            {[4,5,6,7,8,9,10,11,12].map(w => (
+              <option key={w} value={w}>
+                {w} Week{w > 1 ? "s" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+      </div>
+
       {/* FILTER */}
 
       <div className="flex gap-4">
@@ -244,24 +295,12 @@ export default function CBReplenishment() {
           className="px-4 py-2 border rounded-lg w-64"
         />
 
-        <select
-          value={coverWeeks}
-          onChange={(e) => setCoverWeeks(Number(e.target.value))}
-          className="px-4 py-2 border rounded-lg"
-        >
-          {[4,5,6,7,8,9,10,11,12].map(w => (
-            <option key={w}>{w}</option>
-          ))}
-        </select>
-
         <button
           onClick={exportCSV}
           className="px-4 py-2 bg-indigo-900 text-white rounded-lg"
         >
           Export CSV
         </button>
-
-
 
       </div>
 
@@ -342,64 +381,64 @@ export default function CBReplenishment() {
                   <td className="px-4 py-3 text-red-600 font-semibold">
                     {Math.round(row.deficiency)}
                   </td>
-                   
+
                   <td className="px-4 py-3">
-  {row.open_po}
-</td>
+                    {row.open_po}
+                  </td>
 
-<td className="px-4 py-3">
-  {row.in_transit}
-</td>
+                  <td className="px-4 py-3">
+                    {row.in_transit}
+                  </td>
 
-<td className="px-4 py-3">
-  {row.hazmat_type || "-"}
-</td>
+                  <td className="px-4 py-3">
+                    {row.hazmat_type || "-"}
+                  </td>
 
-<td className="px-4 py-3">
-  <input
-  type="number"
-  value={row.po_requirement || 0}
-  onChange={(e) => {
-  const value = Number(e.target.value);
+                  <td className="px-4 py-3">
+                    <input
+                      type="number"
+                      value={row.po_requirement || 0}
+                      onChange={(e) => {
+                        const value = Number(e.target.value);
 
-  const newData = data.map(d =>
-  d.model === row.model ? { ...d, po_requirement: value } : d
-);
-setData(newData);
+                        const newData = data.map(d =>
+                          d.model === row.model ? { ...d, po_requirement: value } : d
+                        );
+                        setData(newData);
 
-  fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({
-      model: row.model,
-      po_requirement: value,
-      remarks: row.remarks || ""
-    })
-  });
-}}
-  className="border rounded px-2 py-1 w-24"
-/>
-</td>
+                        fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+                          method: "POST",
+                          headers: {"Content-Type": "application/json"},
+                          body: JSON.stringify({
+                            model: row.model,
+                            po_requirement: value,
+                            remarks: row.remarks || ""
+                          })
+                        });
+                      }}
+                      className="border rounded px-2 py-1 w-24"
+                    />
+                  </td>
 
-<td className="px-4 py-3">
-  <input
-  type="text"
-  defaultValue={row.remarks ?? ""}
-  onBlur={(e) => {
-    const value = e.target.value;
-    fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({
-        model: row.model,
-        po_requirement: row.po_requirement || 0,
-        remarks: value
-      })
-    });
-  }}
-  className="border rounded px-2 py-1 w-full"
-/>
-</td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="text"
+                      defaultValue={row.remarks ?? ""}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+                          method: "POST",
+                          headers: {"Content-Type": "application/json"},
+                          body: JSON.stringify({
+                            model: row.model,
+                            po_requirement: row.po_requirement || 0,
+                            remarks: value
+                          })
+                        });
+                      }}
+                      className="border rounded px-2 py-1 w-full"
+                    />
+                  </td>
 
                 </tr>
 

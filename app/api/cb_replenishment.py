@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query
 from app.services.cb_replenishment import load_cb_replenishment
 import psycopg2
 import os
@@ -14,12 +14,20 @@ router = APIRouter(
 # GET API (LOAD DATA)
 # =========================
 @router.get("/")
-def get_cb_replenishment():
+def get_cb_replenishment(
+    from_week: int = Query(default=1,  ge=1, le=11),
+    to_week:   int = Query(default=11, ge=1, le=11),
+    cover_weeks: int = Query(default=8, ge=1, le=52),
+):
 
     try:
-        df = load_cb_replenishment()
+        df = load_cb_replenishment(
+            from_week=from_week,
+            to_week=to_week,
+            cover_weeks=cover_weeks,
+        )
 
-        print("CB REPLENISHMENT ROWS:", len(df))
+        print(f"CB REPLENISHMENT ROWS: {len(df)} | window: {from_week}→{to_week} | cover: {cover_weeks}w")
 
         if df is None or df.empty:
             return {
