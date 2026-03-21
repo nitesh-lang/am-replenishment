@@ -235,7 +235,10 @@ const validToWeeks = useMemo(() => {
                 value={fromWeek}
                 onChange={(e) => {
                   setCurrentPage(1);
-                  setFromWeek(Number(e.target.value));
+                  const newFrom = Number(e.target.value);
+                  setFromWeek(newFrom);
+                  const autoTo = ((newFrom - 1 + 11) % 52) + 1;
+                  setToWeek(autoTo);
                 }}
                 className="w-full px-4 py-2 border rounded-lg"
               >
