@@ -3,7 +3,7 @@ from pathlib import Path
 
 DATA_PATH = Path("data/input")
 
-def load_cb_replenishment(from_week: int = 1, to_week: int = 11, cover_weeks: int = 8):
+def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: int = 8):
     """
     from_week   : start of sales window (inclusive), default 1
     to_week     : end   of sales window (inclusive), default 11

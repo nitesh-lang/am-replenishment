@@ -15,8 +15,8 @@ router = APIRouter(
 # =========================
 @router.get("/")
 def get_cb_replenishment(
-    from_week: int = Query(default=1,  ge=1, le=11),
-    to_week:   int = Query(default=11, ge=1, le=11),
+    from_week: int = Query(default=52, ge=1, le=52),
+    to_week:   int = Query(default=11, ge=1, le=52),
     cover_weeks: int = Query(default=8, ge=1, le=52),
 ):
 

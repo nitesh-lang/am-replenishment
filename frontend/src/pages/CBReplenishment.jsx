@@ -14,7 +14,7 @@ export default function CBReplenishment() {
   const [search, setSearch] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("All");
 
-  const [fromWeek, setFromWeek] = useState(1);
+  const [fromWeek, setFromWeek] = useState(52);
   const [toWeek, setToWeek] = useState(11);
   const [coverWeeks, setCoverWeeks] = useState(8);
 
@@ -227,7 +227,7 @@ export default function CBReplenishment() {
               }}
               className="px-4 py-2 border rounded-lg"
             >
-              {[...Array(11)].map((_, i) => (
+              {[...Array(52)].map((_, i) => (
                 <option key={i + 1} value={i + 1}>
                   From {i + 1}
                 </option>
@@ -242,7 +242,7 @@ export default function CBReplenishment() {
               }}
               className="px-4 py-2 border rounded-lg"
             >
-              {[...Array(11)].map((_, i) => (
+              {[...Array(52)].map((_, i) => (
                 <option key={i + 1} value={i + 1}>
                   To {i + 1}
                 </option>
