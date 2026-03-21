@@ -154,12 +154,11 @@ def china_reorder_logic(
     # ============================================================
     # INVENTORY SPLIT
     # ============================================================
-    open_order_df = inv_df[
-    (inv_df["channel"] == "open order") |
-    (inv_df.get("type", "").astype(str).str.lower() == "in-transit inventory")
-]
-
-    inventory_df = inv_df.drop(open_order_df.index)
+    open_order_df = inv_df[inv_df["channel"] == "open order"]
+    pipeline_df   = inv_df[inv_df["channel"] == "pipeline"]
+    inventory_df  = inv_df[
+        ~inv_df["channel"].isin(["open order", "pipeline"])
+    ]
 
     # ============================================================
     # CURRENT INVENTORY AGG
@@ -168,9 +167,7 @@ def china_reorder_logic(
     inventory_agg = (
         inventory_df
         .groupby("model", as_index=False)
-        .agg(
-            current_inventory=("qty", "sum")
-        )
+        .agg(current_inventory=("qty", "sum"))
     )
 
     # ============================================================
@@ -180,21 +177,26 @@ def china_reorder_logic(
     open_order_agg = (
         open_order_df
         .groupby("model", as_index=False)
-        .agg(
-            open_order_qty=("qty", "sum")
-        )
+        .agg(open_order_qty=("qty", "sum"))
     )
 
     # ============================================================
-    # MERGE INVENTORY + OPEN ORDER
+    # PIPELINE AGG
     # ============================================================
 
-    inv_agg = pd.merge(
-        inventory_agg,
-        open_order_agg,
-        on="model",
-        how="outer"
-    ).fillna(0)
+    pipeline_agg = (
+        pipeline_df
+        .groupby("model", as_index=False)
+        .agg(pipeline_qty=("qty", "sum"))
+    )
+
+    # ============================================================
+    # MERGE INVENTORY + OPEN ORDER + PIPELINE
+    # ============================================================
+
+    inv_agg = pd.merge(inventory_agg, open_order_agg, on="model", how="outer")
+    inv_agg = pd.merge(inv_agg, pipeline_agg, on="model", how="outer")
+    inv_agg = inv_agg.fillna(0)
 
     # ============================================================
     # FINAL MERGE (SALES + INVENTORY)
@@ -244,7 +246,7 @@ def china_reorder_logic(
     )
 
     df["suggested_reorder"] = (
-        df["target_stock"] - df["current_inventory"]
+        df["target_stock"] - df["current_inventory"] - df["open_order_qty"] - df["pipeline_qty"]
     ).clip(lower=0)
 
     # ============================================================
