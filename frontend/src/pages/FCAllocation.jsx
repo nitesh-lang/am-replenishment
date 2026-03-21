@@ -26,7 +26,7 @@ export default function FCAllocation() {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 12;
+  const rowsPerPage = 50;
 
   const [expandedRow, setExpandedRow] = useState(null);
 
@@ -205,7 +205,7 @@ function exportCSV() {
   ============================================================ */
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
 
       {/* HEADER */}
       <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900 text-white shadow-xl">
@@ -218,7 +218,7 @@ function exportCSV() {
       </div>
 
       {/* FILTER PANEL */}
-      <div className="card grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="card grid grid-cols-1 md:grid-cols-4 gap-3 py-3">
         <FilterSelect
           label="Replenish Weeks"
           value={replenishWeeks}
@@ -308,7 +308,7 @@ function exportCSV() {
 </div>
 
       {/* KPI STRIP */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <MetricCard title="Total Units" value={kpis.totalUnits} />
         <MetricCard title="Unique SKUs" value={kpis.uniqueSKUs} />
         <MetricCard title="FC Count" value={kpis.uniqueFCs} />
@@ -321,7 +321,7 @@ function exportCSV() {
         {loading ? (
           <div className="p-8 text-slate-400">Loading data...</div>
         ) : (
-          <div className="overflow-auto max-h-[65vh]">
+          <div className="overflow-auto max-h-[75vh]">
             <table className="w-full text-sm">
               <thead className="bg-slate-100 sticky top-0 z-20">
   <tr>

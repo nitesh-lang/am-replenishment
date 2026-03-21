@@ -8,7 +8,7 @@ export default function WMReplenishment() {
   const [coverWeeks, setCoverWeeks] = useState(8);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 15;
+  const rowsPerPage = 50;
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [fromWeek, setFromWeek] = useState(null);
   const [toWeek, setToWeek] = useState(null);
@@ -93,7 +93,7 @@ export default function WMReplenishment() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
 
       {/* HEADER */}
       <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
@@ -102,14 +102,14 @@ export default function WMReplenishment() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <MetricCard title="Units Required" value={Math.round(kpis.totalRequired)} />
         <MetricCard title="Avg Weekly Sales" value={kpis.avgVelocity?.toFixed(2)} />
         <MetricCard title="Models" value={kpis.models} />
       </div>
 
       {/* SALES WINDOW + COVER WEEKS */}
-      <div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="card grid grid-cols-1 md:grid-cols-2 gap-3 py-3">
         <div>
           <label className="text-xs uppercase text-slate-400">Sales Window (Range)</label>
           <div className="grid grid-cols-2 gap-3 mt-2">
@@ -176,7 +176,7 @@ export default function WMReplenishment() {
 
       {/* TABLE */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-auto max-h-[65vh]">
+        <div className="overflow-auto max-h-[75vh]">
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>

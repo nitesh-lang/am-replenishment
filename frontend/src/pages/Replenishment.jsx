@@ -584,18 +584,18 @@ function AnimatedMetric({ title, value }) {
   }, [value]);
 
   return (
-    <div className="p-6 bg-white rounded-xl shadow-sm border">
+    <div className="p-4 bg-white rounded-xl shadow-sm border">
       <div className="text-xs uppercase text-slate-400">{title}</div>
-      <div className="text-3xl font-semibold mt-3">{display}</div>
+      <div className="text-2xl font-semibold mt-1">{display}</div>
     </div>
   );
 }
 
 function HealthCard({ label, value, color }) {
   return (
-    <div className={`p-6 rounded-xl bg-${color}-50 border border-${color}-200`}>
-      <div className="text-sm text-slate-500">{label}</div>
-      <div className="text-2xl font-semibold mt-2">{value}</div>
+    <div className={`p-4 rounded-xl bg-${color}-50 border border-${color}-200`}>
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="text-2xl font-semibold mt-1">{value}</div>
     </div>
   );
 }

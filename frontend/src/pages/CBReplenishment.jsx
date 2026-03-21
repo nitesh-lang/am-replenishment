@@ -25,7 +25,7 @@ export default function CBReplenishment() {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-const rowsPerPage = 15;
+const rowsPerPage = 50;
 const remarkTimerRef = useRef(null);
 
 // Both dropdowns show same available weeks from API
@@ -197,7 +197,7 @@ const validToWeeks = availableWeeks;
   ============================================================ */
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
 
       {/* HEADER */}
 
@@ -212,7 +212,7 @@ const validToWeeks = availableWeeks;
 
       {/* KPI */}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <MetricCard title="Units Required" value={Math.round(kpis.totalRequired)} />
         <MetricCard title="Avg Weekly Sales" value={kpis.avgVelocity?.toFixed(2)} />
         <MetricCard title="Models" value={kpis.models} />
@@ -220,7 +220,7 @@ const validToWeeks = availableWeeks;
 
       {/* SALES WINDOW + COVER WEEKS */}
 
-      <div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="card grid grid-cols-1 md:grid-cols-2 gap-3 py-3">
 
         {/* Sales Window */}
         <div>
@@ -327,7 +327,7 @@ const validToWeeks = availableWeeks;
       {/* TABLE */}
 
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-auto max-h-[65vh]">
+        <div className="overflow-auto max-h-[75vh]">
 
           <table className="w-full text-sm">
 
@@ -505,12 +505,10 @@ const validToWeeks = availableWeeks;
 ============================================================ */
 
 function MetricCard({ title, value }) {
-
   return (
-    <div className="p-6 bg-white rounded-xl shadow-sm border">
+    <div className="p-4 bg-white rounded-xl shadow-sm border">
       <div className="text-xs uppercase text-slate-400">{title}</div>
-      <div className="text-3xl font-semibold mt-3">{value}</div>
+      <div className="text-2xl font-semibold mt-1">{value}</div>
     </div>
   );
-
 }
