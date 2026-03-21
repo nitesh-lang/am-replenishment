@@ -14,9 +14,10 @@ export default function CBReplenishment() {
   const [search, setSearch] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("All");
 
-  const [fromWeek, setFromWeek] = useState(52);
-  const [toWeek, setToWeek] = useState(11);
+  const [fromWeek, setFromWeek] = useState(null);
+  const [toWeek, setToWeek] = useState(null);
   const [coverWeeks, setCoverWeeks] = useState(8);
+  const [availableWeeks, setAvailableWeeks] = useState([]);
 
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -27,25 +28,9 @@ export default function CBReplenishment() {
 const rowsPerPage = 15;
 const remarkTimerRef = useRef(null);
 
-// Generate valid "To" weeks — max 12 weeks from fromWeek (with wraparound)
-const validToWeeks = useMemo(() => {
-  const weeks = [];
-  for (let i = 0; i < 12; i++) {
-    const week = ((fromWeek - 1 + i) % 52) + 1;
-    weeks.push(week);
-  }
-  return weeks;
-}, [fromWeek]);
-
-// Valid "From" weeks — 12 options ending at toWeek
-const validFromWeeks = useMemo(() => {
-  const weeks = [];
-  for (let i = 11; i >= 0; i--) {
-    const week = ((toWeek - 1 - i + 52) % 52) + 1;
-    weeks.push(week);
-  }
-  return weeks;
-}, [toWeek]);
+// Both dropdowns show same available weeks from API
+const validFromWeeks = availableWeeks;
+const validToWeeks = availableWeeks;
 
   /* ============================================================
      LOAD DATA
@@ -64,6 +49,12 @@ const validFromWeeks = useMemo(() => {
       .then((res) => res.json())
       .then((res) => {
         setData(res.data || []);
+        if (res.available_weeks?.length) {
+          const weeks = res.available_weeks;
+          setAvailableWeeks(weeks);
+          if (!fromWeek) setFromWeek(weeks[0]);
+          if (!toWeek) setToWeek(weeks[weeks.length - 1]);
+        }
       })
       .finally(() => setLoading(false));
 
@@ -245,10 +236,7 @@ const validFromWeeks = useMemo(() => {
                 value={fromWeek}
                 onChange={(e) => {
                   setCurrentPage(1);
-                  const newFrom = Number(e.target.value);
-                  setFromWeek(newFrom);
-                  const autoTo = ((newFrom - 1 + 11) % 52) + 1;
-                  setToWeek(autoTo);
+                  setFromWeek(Number(e.target.value));
                 }}
                 className="w-full px-4 py-2 border rounded-lg"
               >
@@ -285,20 +273,25 @@ const validFromWeeks = useMemo(() => {
           <label className="text-xs uppercase tracking-wider text-slate-400">
             Cover Weeks
           </label>
-          <select
-            value={coverWeeks}
-            onChange={(e) => {
-              setCurrentPage(1);
-              setCoverWeeks(Number(e.target.value));
-            }}
-            className="mt-2 w-full px-4 py-2 border border-slate-200 rounded-lg"
-          >
-            {[4,5,6,7,8,9,10,11,12].map(w => (
-              <option key={w} value={w}>
-                {w} Week{w > 1 ? "s" : ""}
-              </option>
-            ))}
-          </select>
+          <div className="grid grid-cols-1 mt-2">
+            <div>
+              <div className="text-xs text-slate-400 mb-1">&nbsp;</div>
+              <select
+                value={coverWeeks}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setCoverWeeks(Number(e.target.value));
+                }}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+              >
+                {[4,5,6,7,8,9,10,11,12].map(w => (
+                  <option key={w} value={w}>
+                    {w} Week{w > 1 ? "s" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
       </div>

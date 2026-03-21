@@ -15,8 +15,8 @@ router = APIRouter(
 # =========================
 @router.get("/")
 def get_cb_replenishment(
-    from_week: int = Query(default=52, ge=1, le=52),
-    to_week:   int = Query(default=11, ge=1, le=52),
+    from_week: int = Query(default=None),
+    to_week:   int = Query(default=None),
     cover_weeks: int = Query(default=8, ge=1, le=52),
 ):
 
@@ -86,9 +86,22 @@ def get_cb_replenishment(
             if col in response_df.columns:
                 response_df[col] = response_df[col].round(0).astype(int)
 
+        # Get last 12 available weeks for frontend dropdowns
+        try:
+            raw_sales = pd.read_csv("data/input/weekly_sales_snapshot - CB Replenishment.csv")
+            raw_sales["week_num"] = raw_sales["week"].astype(str).str.extract(r"(\d+)")[0].pipe(pd.to_numeric, errors="coerce")
+            available_weeks = sorted(
+                raw_sales["week_num"].dropna().unique().tolist(),
+                reverse=True
+            )[:12]
+            available_weeks = sorted([int(w) for w in available_weeks])
+        except:
+            available_weeks = []
+
         return {
             "data": response_df.to_dict(orient="records"),
-            "total_models": len(response_df)
+            "total_models": len(response_df),
+            "available_weeks": available_weeks
         }
 
     except Exception as e:

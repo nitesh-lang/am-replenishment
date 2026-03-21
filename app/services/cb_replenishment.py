@@ -79,22 +79,24 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
                 .str.extract(r"(\d+)")[0]
                 .pipe(pd.to_numeric, errors="coerce")
             )
-            # Handle year wraparound e.g. week 52 → week 11
-            if from_week > to_week:
-                sales_df = sales_df[
-                    (sales_df["week"] >= from_week) | (sales_df["week"] <= to_week)
-                ]
-            else:
-                sales_df = sales_df[
-                    sales_df["week"].between(from_week, to_week)
-                ]
 
-        # Handle wraparound: 52→11 = (52-52+1) + (11-1+1) = 1 + 11 = 12 weeks
-        if from_week > to_week:
-            window_size = (52 - from_week + 1) + to_week
-        else:
-            window_size = to_week - from_week + 1
-        window_size = min(window_size, 12)
+            # Get last 12 weeks available in data (sorted descending)
+            available_weeks = sorted(
+                sales_df["week"].dropna().unique().tolist(),
+                reverse=True
+            )[:12]
+
+            # Filter to selected from/to within available weeks
+            if from_week in available_weeks and to_week in available_weeks:
+                from_idx = available_weeks.index(from_week)
+                to_idx = available_weeks.index(to_week)
+                # from_idx >= to_idx since list is descending
+                selected_weeks = available_weeks[to_idx:from_idx + 1]
+            else:
+                selected_weeks = available_weeks
+
+            sales_df = sales_df[sales_df["week"].isin(selected_weeks)]
+            window_size = max(len(selected_weeks), 1)
 
         # =========================
         # CB SALES
