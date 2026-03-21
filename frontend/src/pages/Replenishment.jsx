@@ -268,7 +268,7 @@ function exportCSV() {
   ============================================================ */
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
 
       {/* HEADER */}
       <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
@@ -297,7 +297,7 @@ function exportCSV() {
 </div>
 
     {/* SALES WINDOW + REPLENISH WEEKS FILTER */}
-<div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
+<div className="card grid grid-cols-1 md:grid-cols-2 gap-3 py-3">
   <div>
   <label className="text-xs uppercase text-slate-400">
     Sales Window (Range)
@@ -358,7 +358,7 @@ function exportCSV() {
 </div>
       {/* KPI SECTION */}
       {kpis && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <AnimatedMetric
             title="Units to Replenish"
             value={kpis.total_units_to_replenish}
@@ -375,7 +375,7 @@ function exportCSV() {
       )}
 
       {/* HEALTH SUMMARY STRIP */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-3 gap-3">
         <HealthCard label="Critical" value={healthStats.critical} color="red" />
         <HealthCard label="Low Cover" value={healthStats.low} color="yellow" />
         <HealthCard label="Healthy" value={healthStats.healthy} color="emerald" />
