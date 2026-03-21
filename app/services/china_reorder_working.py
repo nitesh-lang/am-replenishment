@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from app.services.file_cache import get
 
 
 def get_china_reorder_working_data(
@@ -43,8 +44,8 @@ def get_china_reorder_working_data(
     # LOAD DATA
     # ============================================================
 
-    sales_df = pd.read_csv(sales_path)
-    inv_df = pd.read_csv(inv_path)
+    sales_df = get("weekly_sales_snapshot - ChinaReorder.csv")
+    inv_df = get("inventory_model_snapshot_China Reorder.csv")
 
     # ============================================================
     # CLEAN COLUMN NAMES

@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from app.services.file_cache import get
 
 DATA_PATH = Path("data/input/Fossil Replenishment")
 
@@ -11,9 +12,9 @@ def load_fossil_replenishment(replenish_weeks=8):
     sales_file = DATA_PATH / "fba_shipments_fossil.csv"
 
     # LOAD DATA
-    master_df = pd.read_excel(master_file)
-    cambium_df = pd.read_excel(cambium_file)
-    sales_df = pd.read_csv(sales_file)
+    master_df = get("Fossil Replenishment/Fossil Replenishment.xlsx")
+    cambium_df = get("Fossil Replenishment/Cambium - SOH.xlsx")
+    sales_df = get("Fossil Replenishment/fba_shipments_fossil.csv")
 
     # =====================
     # CAMBIUM SOH LOOKUP

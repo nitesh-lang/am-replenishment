@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from app.services.file_cache import get
 
 DATA_PATH = Path("data/input")
 
@@ -16,23 +17,11 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # LOAD FILES
         # =========================
 
-        master_df = pd.read_excel(DATA_PATH / "CB Replenishment_Master.xlsx")
-
-        sales_df = pd.read_csv(
-            DATA_PATH / "weekly_sales_snapshot - CB Replenishment.csv"
-        )
-
-        inv_audio_df = pd.read_excel(
-            DATA_PATH / "Inventory_snapshot_audio_array.xlsx"
-        )
-
-        inv_tonor_df = pd.read_excel(
-            DATA_PATH / "Inventory_snapshot_tonor.xlsx"
-        )
-
-        po_df = pd.read_excel(
-            DATA_PATH / "In_Transit_PO data.xlsx"
-        )
+        master_df = get("CB Replenishment_Master.xlsx")
+        sales_df = get("weekly_sales_snapshot - CB Replenishment.csv")
+        inv_audio_df = get("Inventory_snapshot_audio_array.xlsx")
+        inv_tonor_df = get("Inventory_snapshot_tonor.xlsx")
+        po_df = get("In_Transit_PO data.xlsx")
 
         inventory_df = pd.concat(
             [inv_audio_df, inv_tonor_df],

@@ -4,6 +4,7 @@ print("RUNNING FILE:", __file__)
 import pandas as pd
 from app.services.fc_planning import calculate_fc_plan
 from app.services.fc_transfer import calculate_fc_transfers
+from app.services.file_cache import get, get_excel_sheet
 
 
 # ===============================================================
@@ -177,9 +178,9 @@ def calculate_final_allocation(
         sheet_to_load = "WM"
 
     try:
-        repl_master = pd.read_excel(
-            repl_path,
-            sheet_name=sheet_to_load
+        repl_master = get_excel_sheet(
+            repl_path.replace("data/input/", ""),
+            sheet_to_load
         )
 
         repl_master.columns = repl_master.columns.str.strip()
@@ -305,7 +306,7 @@ def calculate_final_allocation(
     else:
         ampm_file = "data/input/inventory_snapshot_nexlev.xlsx"
 
-    ampm_df = pd.read_excel(ampm_file)
+    ampm_df = get(ampm_file.replace("data/input/", ""))
 
     ampm_df.columns = ampm_df.columns.str.lower().str.strip()
 

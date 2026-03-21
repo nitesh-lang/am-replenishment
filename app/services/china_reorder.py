@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+from app.services.file_cache import get
 
 
 def china_reorder_logic(
@@ -56,20 +57,15 @@ def china_reorder_logic(
         inv_file
     )
 
-    if not os.path.exists(inv_path):
-        raise FileNotFoundError(
-            f"Inventory file missing: {inv_path}"
-        )
-
-    print("READING SALES:", sales_path)
-    print("READING INVENTORY:", inv_path)
+    print("READING SALES (cached): weekly_sales_snapshot - ChinaReorder.csv")
+    print("READING INVENTORY (cached):", inv_file)
 
     # ============================================================
     # LOAD FILES
     # ============================================================
 
-    sales_df = pd.read_csv(sales_path)
-    inv_df = pd.read_excel(inv_path, engine="openpyxl")
+    sales_df = get("weekly_sales_snapshot - ChinaReorder.csv")
+    inv_df = get(inv_file)
 
     # ============================================================
     # CLEAN COLUMN NAMES

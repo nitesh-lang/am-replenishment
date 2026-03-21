@@ -1,6 +1,7 @@
 import pandas as pd
 from pathlib import Path
 from typing import Tuple
+from app.services.file_cache import get, get_excel_sheet
 
 # =================================================
 # CONFIG
@@ -35,49 +36,47 @@ def load_data(account: str):
         raise FileNotFoundError(f"Missing file: {WAREHOUSE_INV_FILE}")
 
     if account.upper() == "NEXLEV":
-        master = pd.read_excel(DATA_DIR / "replenishment_master_nexlev.xlsx")
+        master = get("replenishment_master_nexlev.xlsx")
 
     elif account.upper() == "VIOMI":
-        master = pd.read_excel(DATA_DIR / "replenishment_master_viomi.xlsx")
+        master = get("replenishment_master_viomi.xlsx")
 
     elif account.upper() == "AUDIO ARRAY":
-        master = pd.read_excel(AA_WM_MASTER_FILE, sheet_name="AA")
+        master = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")
 
     elif account.upper() == "WHITE MULBERRY":
-        master = pd.read_excel(AA_WM_MASTER_FILE, sheet_name="WM")
+        master = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
 
     else:
         raise ValueError(f"Unsupported account: {account}")
-    
-    sales = pd.read_csv(SALES_FILE)
-    
+
+    sales = get("weekly_sales_snapshot.csv")
+
     if account.upper() == "NEXLEV":
-        amazon_inventory = pd.read_csv(AMAZON_INV_NEXLEV)
+        amazon_inventory = get("inventory_amazon_nexlev.csv")
 
     elif account.upper() == "VIOMI":
-        amazon_inventory = pd.read_csv(AMAZON_INV_VIOMI)
+        amazon_inventory = get("inventory_amazon_viomi.csv")
 
     elif account.upper() == "AUDIO ARRAY":
-        amazon_inventory = pd.read_csv(AMAZON_INV_AUDIO_ARRAY)
+        amazon_inventory = get("inventory_amazon_audio_array.csv")
 
     elif account.upper() == "WHITE MULBERRY":
-
-       wm = pd.read_csv(AMAZON_INV_WM)
-       viomi = pd.read_csv(AMAZON_INV_VIOMI)
-
-       amazon_inventory = pd.concat([wm, viomi], ignore_index=True)
+        wm = get("inventory_amazon_WM.csv")
+        viomi = get("inventory_amazon_viomi.csv")
+        amazon_inventory = pd.concat([wm, viomi], ignore_index=True)
 
     else:
-      raise ValueError(f"Unsupported account: {account}")
+        raise ValueError(f"Unsupported account: {account}")
 
     if account.upper() == "AUDIO ARRAY":
-        inventory = pd.read_excel(WAREHOUSE_INV_AUDIO_ARRAY)
+        inventory = get("Inventory_snapshot_audio_array.xlsx")
 
     elif account.upper() == "WHITE MULBERRY":
-        inventory = pd.read_excel(WAREHOUSE_INV_WM)
-    
+        inventory = get("Inventory_snapshot_WM.xlsx")
+
     else:
-        inventory = pd.read_excel(WAREHOUSE_INV_FILE)
+        inventory = get("inventory_snapshot_nexlev.xlsx")
     
 
     return master, sales, inventory, amazon_inventory

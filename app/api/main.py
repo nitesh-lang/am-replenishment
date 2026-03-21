@@ -36,6 +36,16 @@ from app.core.models.base import Base
 @app.on_event("startup")
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    _preload_data_files()
+
+def _preload_data_files():
+    """Pre-load all heavy Excel/CSV files into memory at startup."""
+    try:
+        from app.services import file_cache
+        file_cache.preload()
+        print("✅ Data files preloaded into cache")
+    except Exception as e:
+        print(f"⚠️ Preload warning: {e}")
 # =====================================================
 # CORS (REQUIRED FOR VITE FRONTEND)
 # =====================================================

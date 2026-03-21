@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from app.services.file_cache import get
 
 # =================================================
 # CONFIG
@@ -37,7 +38,8 @@ def calculate_region_sales(account: str = "Nexlev") -> pd.DataFrame:
     # -------------------------------------------------
     # Load File (Excel)
     # -------------------------------------------------
-    shipments = pd.read_csv(shipments_file)
+    filename = "fba_shipments_nexlev.csv" if account.lower() == "nexlev" else "fba_shipments_viomi.csv"
+    shipments = get(filename)
     shipments.columns = shipments.columns.str.strip()
 
     # -------------------------------------------------

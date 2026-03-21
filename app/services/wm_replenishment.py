@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+from app.services.file_cache import get, get_excel_sheet
 
 DATA_PATH = Path("data/input")
 
@@ -11,22 +12,10 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         # LOAD FILES
         # =========================
 
-        master_df = pd.read_excel(
-            DATA_PATH / "Audio Array & WM Replenishment" / "AA & WM Replenishment.xlsx",
-            sheet_name="WM"
-        )
-
-        sales_df = pd.read_csv(
-            DATA_PATH / "weekly_sales_snapshot.csv"
-        )
-
-        inv_df = pd.read_excel(
-            DATA_PATH / "Inventory_snapshot_WM.xlsx"
-        )
-
-        po_df = pd.read_excel(
-            DATA_PATH / "In_Transit_PO data - WM.xlsx"
-        )
+        master_df = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
+        sales_df = get("weekly_sales_snapshot.csv")
+        inv_df = get("Inventory_snapshot_WM.xlsx")
+        po_df = get("In_Transit_PO data - WM.xlsx")
 
         # =========================
         # NORMALIZE COLUMNS

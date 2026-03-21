@@ -1,4 +1,5 @@
 from app.services.validation_engine import run_full_validation
+from app.services.file_cache import get, get_excel_sheet
 import os
 from sqlalchemy import create_engine
 import pandas as pd
@@ -271,17 +272,13 @@ def calculate_fc_plan(
     # =========================
 
     if account.lower() == "nexlev":
-        master_path = DATA_DIR / "replenishment_master_nexlev.xlsx"
-        master_df = pd.read_excel(master_path)
+        master_df = get("replenishment_master_nexlev.xlsx")
     elif account.lower() == "viomi":
-        master_path = DATA_DIR / "replenishment_master_viomi.xlsx"
-        master_df = pd.read_excel(master_path)
+        master_df = get("replenishment_master_viomi.xlsx")
     elif account.lower() == "white mulberry":
-        master_path = DATA_DIR / "Audio Array & WM Replenishment" / "AA & WM Replenishment.xlsx"
-        master_df = pd.read_excel(master_path, sheet_name="WM")
+        master_df = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
     else:
-        master_path = DATA_DIR / "replenishment_master_nexlev.xlsx"
-        master_df = pd.read_excel(master_path)
+        master_df = get("replenishment_master_nexlev.xlsx")
 
     master_df.columns = master_df.columns.str.strip()
 
