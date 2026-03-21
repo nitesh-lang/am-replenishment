@@ -33,7 +33,7 @@ export default function Replenishment() {
 
   /* Pagination */
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 15;
+  const rowsPerPage = 50;
 
   /* ============================================================
      DATA LOAD
@@ -425,7 +425,7 @@ function exportCSV() {
 
       {/* TABLE */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-auto max-h-[65vh]">
+        <div className="overflow-auto max-h-[75vh]">
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
