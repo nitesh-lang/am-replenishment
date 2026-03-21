@@ -37,6 +37,16 @@ const validToWeeks = useMemo(() => {
   return weeks;
 }, [fromWeek]);
 
+// Valid "From" weeks — 12 options ending at toWeek
+const validFromWeeks = useMemo(() => {
+  const weeks = [];
+  for (let i = 11; i >= 0; i--) {
+    const week = ((toWeek - 1 - i + 52) % 52) + 1;
+    weeks.push(week);
+  }
+  return weeks;
+}, [toWeek]);
+
   /* ============================================================
      LOAD DATA
   ============================================================ */
@@ -242,9 +252,9 @@ const validToWeeks = useMemo(() => {
                 }}
                 className="w-full px-4 py-2 border rounded-lg"
               >
-                {[...Array(52)].map((_, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    {i + 1}
+                {validFromWeeks.map((w) => (
+                  <option key={w} value={w}>
+                    {w}
                   </option>
                 ))}
               </select>
