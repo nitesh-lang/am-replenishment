@@ -39,11 +39,9 @@ const validToWeeks = availableWeeks;
   useEffect(() => {
     setLoading(true);
 
-    const params = new URLSearchParams({
-      from_week: fromWeek,
-      to_week: toWeek,
-      cover_weeks: coverWeeks,
-    });
+    const params = new URLSearchParams({ cover_weeks: coverWeeks });
+    if (fromWeek) params.append("from_week", fromWeek);
+    if (toWeek) params.append("to_week", toWeek);
 
     fetch(`https://am-replenishment.onrender.com/api/cb-replenishment/?${params}`)
       .then((res) => res.json())
