@@ -78,12 +78,22 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
                 sales_df["week"].astype(str)
                 .str.extract(r"(\d+)")[0]
                 .pipe(pd.to_numeric, errors="coerce")
-                )
-            sales_df = sales_df[
-                sales_df["week"].between(from_week, to_week)
+            )
+            # Handle year wraparound e.g. week 52 → week 11
+            if from_week > to_week:
+                sales_df = sales_df[
+                    (sales_df["week"] >= from_week) | (sales_df["week"] <= to_week)
+                ]
+            else:
+                sales_df = sales_df[
+                    sales_df["week"].between(from_week, to_week)
                 ]
 
-        window_size = to_week - from_week + 1  # e.g. 1→11 = 11 weeks
+        # Handle wraparound: 52→11 = (52-52+1) + (11-1+1) = 1 + 11 = 12 weeks
+        if from_week > to_week:
+            window_size = (52 - from_week + 1) + to_week
+        else:
+            window_size = to_week - from_week + 1
 
         # =========================
         # CB SALES
