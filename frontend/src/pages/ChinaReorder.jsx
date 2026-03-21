@@ -277,6 +277,9 @@ export default function ChinaReorder() {
   onChange={(e) => {
     setCurrentPage(1);
     setSelectedBrand(e.target.value);
+    setFromWeek(null);
+    setToWeek(null);
+    setAvailableWeeks([]);
   }}
       className="px-4 py-2 border rounded-lg mr-4"
       >
