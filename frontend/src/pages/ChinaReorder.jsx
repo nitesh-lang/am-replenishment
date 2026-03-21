@@ -32,7 +32,7 @@ export default function ChinaReorder() {
 
   /* Pagination */
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 15;
+  const rowsPerPage = 50;
 
   /* ============================================================
      DATA LOAD
@@ -206,7 +206,7 @@ export default function ChinaReorder() {
   ============================================================ */
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
 
       {/* HEADER */}
       <div className="rounded-2xl p-8 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 text-white shadow-xl">
@@ -219,14 +219,14 @@ export default function ChinaReorder() {
       </div>
 
       {/* KPI SECTION */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <MetricCard title="Total Units to Reorder" value={Math.round(kpis.totalReorder)} />
         <MetricCard title="Avg Weeks Cover" value={kpis.avgCover?.toFixed(2)} />
         <MetricCard title="Total Models" value={kpis.models} />
       </div>
 
       {/* SALES WINDOW */}
-      <div className="card grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="card grid grid-cols-1 md:grid-cols-2 gap-3 py-3">
         <div>
           <label className="text-xs uppercase text-slate-400">Sales Window (Range)</label>
           <div className="grid grid-cols-2 gap-3 mt-2">
@@ -254,68 +254,57 @@ export default function ChinaReorder() {
         </div>
       </div>
 
-      {/* SEARCH + EXPORT */}
-      <div className="flex gap-3 items-center mt-4">
-  <input
-    type="number"
-    placeholder="Min Weeks Cover"
-    value={minCover}
-    onChange={(e) => setMinCover(e.target.value)}
-    className="px-3 py-2 border rounded w-40"
-  />
+      {/* FILTERS */}
+      <div className="flex flex-wrap gap-3 items-center justify-between">
+        <div className="flex flex-wrap gap-3 items-center">
+          <select
+            value={selectedBrand}
+            onChange={(e) => {
+              setCurrentPage(1);
+              setSelectedBrand(e.target.value);
+              setFromWeek(null);
+              setToWeek(null);
+              setAvailableWeeks([]);
+            }}
+            className="px-4 py-2 border rounded-lg"
+          >
+            <option value="Nexlev">Nexlev</option>
+            <option value="Audio Array">Audio Array</option>
+            <option value="Tonor">Tonor</option>
+            <option value="White Mulberry">White Mulberry</option>
+          </select>
 
-  <input
-    type="number"
-    placeholder="Max Weeks Cover"
-    value={maxCover}
-    onChange={(e) => setMaxCover(e.target.value)}
-    className="px-3 py-2 border rounded w-40"
-  />
-</div>
-      <select
-  value={selectedBrand}
-  onChange={(e) => {
-    setCurrentPage(1);
-    setSelectedBrand(e.target.value);
-    setFromWeek(null);
-    setToWeek(null);
-    setAvailableWeeks([]);
-  }}
-      className="px-4 py-2 border rounded-lg mr-4"
-      >
-      <option value="Nexlev">Nexlev</option>
-      <option value="Audio Array">Audio Array</option>
-      <option value="Tonor">Tonor</option>
-      <option value="White Mulberry">White Mulberry</option>
-      </select>
-      <div className="flex items-center gap-4">
-  <input
-    type="range"
-    min="1"
-    max="6"
-    step="1"
-    value={selectedMonths}
-    onChange={(e) => {
-      setCurrentPage(1);
-      setSelectedMonths(Number(e.target.value));
-    }}
-    className="w-40"
-  />
+          <div className="flex items-center gap-2">
+            <input
+              type="range" min="1" max="6" step="1"
+              value={selectedMonths}
+              onChange={(e) => { setCurrentPage(1); setSelectedMonths(Number(e.target.value)); }}
+              className="w-32"
+            />
+            <span className="text-sm font-medium whitespace-nowrap">
+              {selectedMonths} Month{selectedMonths > 1 ? "s" : ""}
+            </span>
+          </div>
 
-  <span className="text-sm font-medium">
-    {selectedMonths} Month{selectedMonths > 1 ? "s" : ""}
-  </span>
-</div>
-      <div className="flex justify-between items-center">
-        <input
-          value={search}
-          onChange={(e) => {
-            setCurrentPage(1);
-            setSearch(e.target.value);
-          }}
-          placeholder="Search model..."
-          className="px-4 py-2 border rounded-lg w-64"
-        />
+          <input
+            type="number" placeholder="Min Cover"
+            value={minCover}
+            onChange={(e) => setMinCover(e.target.value)}
+            className="px-3 py-2 border rounded w-32"
+          />
+          <input
+            type="number" placeholder="Max Cover"
+            value={maxCover}
+            onChange={(e) => setMaxCover(e.target.value)}
+            className="px-3 py-2 border rounded w-32"
+          />
+          <input
+            value={search}
+            onChange={(e) => { setCurrentPage(1); setSearch(e.target.value); }}
+            placeholder="Search model..."
+            className="px-4 py-2 border rounded-lg w-48"
+          />
+        </div>
 
         <button
           onClick={exportCSV}
@@ -327,7 +316,7 @@ export default function ChinaReorder() {
 
       {/* TABLE */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-auto max-h-[65vh]">
+        <div className="overflow-auto max-h-[75vh]">
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
