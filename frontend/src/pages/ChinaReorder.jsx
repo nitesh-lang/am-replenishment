@@ -361,7 +361,10 @@ export default function ChinaReorder() {
                       onClick={() => toggleSort(col)}
                       className="px-4 py-3 cursor-pointer"
                     >
-                      {col} {getSortArrow(col)}
+                      {{
+                        "open_order_qty": "PO Yet to Pickup",
+                        "pipeline_qty": "PO Picked Up",
+                      }[col] || col} {getSortArrow(col)}
                     </th>
                   ))}
                 <th>Status</th>
