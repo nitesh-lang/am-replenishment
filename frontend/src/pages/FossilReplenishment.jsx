@@ -10,7 +10,6 @@ const BRANDS = [
   "Skagen",
 ];
 
-// Weeks of cover reference matrix (mirrors the backend)
 const WOC_MATRIX = [
   { brand: "Fossil",          fp: 9, discount: 4, vd: 6 },
   { brand: "Armani Exchange", fp: 6, discount: 4, vd: 6 },
@@ -34,7 +33,6 @@ export default function FossilReplenishment() {
   const rowsPerPage = 15;
 
   /* LOAD DATA */
-
   useEffect(() => {
     setLoading(true);
     fetch(`https://am-replenishment.onrender.com/api/fossil-replenishment`)
@@ -43,8 +41,31 @@ export default function FossilReplenishment() {
       .finally(() => setLoading(false));
   }, []);
 
-  /* FILTER */
+  /* DYNAMIC BRAND OPTIONS
+     Only show brands that actually exist in the data */
+  const availableBrands = useMemo(() => {
+    const brandsInData = new Set(data.map(r => r["Brand"]).filter(Boolean));
+    return ["All", ...BRANDS.filter(b => b === "All" || brandsInData.has(b))];
+  }, [data]);
 
+  /* DYNAMIC ASSORTMENT OPTIONS
+     Only show assortment types that exist for the currently selected brand */
+  const availableAssortmentTypes = useMemo(() => {
+    const subset = brandFilter === "All" ? data : data.filter(r => r["Brand"] === brandFilter);
+    const types = new Set(subset.map(r => r["Assortment Type"]).filter(Boolean));
+    // Preserve order: FP → Discount → VD
+    const ordered = ["FP", "Discount", "VD"].filter(t => types.has(t));
+    return ["All", ...ordered];
+  }, [data, brandFilter]);
+
+  /* If current assortmentFilter no longer exists in available options, reset it */
+  useEffect(() => {
+    if (assortmentFilter !== "All" && !availableAssortmentTypes.includes(assortmentFilter)) {
+      setAssortmentFilter("All");
+    }
+  }, [availableAssortmentTypes]);
+
+  /* FILTER */
   const filteredData = useMemo(() => {
     return data.filter(row => {
       const matchSearch = row["Item No"]?.toLowerCase().includes(search.toLowerCase());
@@ -55,11 +76,19 @@ export default function FossilReplenishment() {
   }, [data, search, brandFilter, assortmentFilter]);
 
   /* RESET PAGE ON FILTER CHANGE */
-
   useEffect(() => { setCurrentPage(1); }, [search, brandFilter, assortmentFilter]);
 
-  /* PAGINATION */
+  /* RESET ALL FILTERS */
+  function resetFilters() {
+    setSearch("");
+    setBrandFilter("All");
+    setAssortmentFilter("All");
+    setCurrentPage(1);
+  }
 
+  const isFiltered = search !== "" || brandFilter !== "All" || assortmentFilter !== "All";
+
+  /* PAGINATION */
   const totalPages = Math.ceil(filteredData.length / rowsPerPage);
 
   const paginatedData = useMemo(() => {
@@ -68,11 +97,8 @@ export default function FossilReplenishment() {
   }, [filteredData, currentPage]);
 
   /* KPI */
-
   const kpis = useMemo(() => {
-    const totalRequired = filteredData.reduce(
-      (sum, r) => sum + (r["Replenishment Qty"] || 0), 0
-    );
+    const totalRequired = filteredData.reduce((sum, r) => sum + (r["Replenishment Qty"] || 0), 0);
     const avgWeekly =
       filteredData.reduce((sum, r) => sum + (r["Fossil Weekly Sales"] || 0), 0) /
       (filteredData.length || 1);
@@ -80,7 +106,6 @@ export default function FossilReplenishment() {
   }, [filteredData]);
 
   /* EXPORT */
-
   function exportCSV() {
     if (!filteredData.length) return;
     const headers = Object.keys(filteredData[0]).join(",");
@@ -95,7 +120,6 @@ export default function FossilReplenishment() {
   }
 
   /* HELPERS */
-
   function wocColor(weeks) {
     if (weeks >= 9) return "bg-purple-100 text-purple-700";
     if (weeks >= 6) return "bg-blue-100 text-blue-700";
@@ -124,7 +148,7 @@ export default function FossilReplenishment() {
         <MetricCard title="Filtered SKUs"      value={kpis.skus} />
       </div>
 
-      {/* WEEKS OF COVER MATRIX TOGGLE */}
+      {/* WEEKS OF COVER MATRIX */}
       <div>
         <button
           onClick={() => setShowMatrix(v => !v)}
@@ -150,19 +174,13 @@ export default function FossilReplenishment() {
                   <tr key={row.brand} className="border-t hover:bg-slate-50">
                     <td className="px-5 py-2 font-medium">{row.brand}</td>
                     <td className="px-5 py-2 text-center">
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.fp)}`}>
-                        {row.fp}w
-                      </span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.fp)}`}>{row.fp}w</span>
                     </td>
                     <td className="px-5 py-2 text-center">
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.discount)}`}>
-                        {row.discount}w
-                      </span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.discount)}`}>{row.discount}w</span>
                     </td>
                     <td className="px-5 py-2 text-center">
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.vd)}`}>
-                        {row.vd}w
-                      </span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.vd)}`}>{row.vd}w</span>
                     </td>
                   </tr>
                 ))}
@@ -175,6 +193,7 @@ export default function FossilReplenishment() {
       {/* FILTERS */}
       <div className="flex flex-wrap gap-4 items-end">
 
+        {/* Search */}
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">Search</label>
           <input
@@ -185,27 +204,36 @@ export default function FossilReplenishment() {
           />
         </div>
 
+        {/* Brand Dropdown — only brands present in data */}
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">Brand</label>
           <select
             value={brandFilter}
-            onChange={(e) => setBrandFilter(e.target.value)}
+            onChange={(e) => { setBrandFilter(e.target.value); setAssortmentFilter("All"); }}
             className="px-4 py-2 border rounded-lg min-w-[180px] bg-white"
           >
-            {BRANDS.map(b => (
+            {availableBrands.map(b => (
               <option key={b} value={b}>{b === "All" ? "All Brands" : b}</option>
             ))}
           </select>
         </div>
 
+        {/* Assortment Type — only types that exist for selected brand */}
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">Assortment Type</label>
+          <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">
+            Assortment Type
+            {brandFilter !== "All" && (
+              <span className="ml-1 text-indigo-500 normal-case font-normal">
+                ({brandFilter})
+              </span>
+            )}
+          </label>
           <select
             value={assortmentFilter}
             onChange={(e) => setAssortmentFilter(e.target.value)}
-            className="px-4 py-2 border rounded-lg bg-white"
+            className="px-4 py-2 border rounded-lg bg-white min-w-[160px]"
           >
-            {["All", "FP", "Discount", "VD"].map(t => (
+            {availableAssortmentTypes.map(t => (
               <option key={t} value={t}>{t === "All" ? "All Types" : t}</option>
             ))}
           </select>
@@ -216,7 +244,7 @@ export default function FossilReplenishment() {
           {brandFilter !== "All" && (
             <span className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">
               {brandFilter}
-              <button onClick={() => setBrandFilter("All")} className="ml-1 hover:text-indigo-900 font-bold">✕</button>
+              <button onClick={() => { setBrandFilter("All"); setAssortmentFilter("All"); }} className="ml-1 hover:text-indigo-900 font-bold">✕</button>
             </span>
           )}
           {assortmentFilter !== "All" && (
@@ -227,6 +255,17 @@ export default function FossilReplenishment() {
           )}
         </div>
 
+        {/* Reset button — only shown when filters are active */}
+        {isFiltered && (
+          <button
+            onClick={resetFilters}
+            className="px-4 py-2 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50 transition"
+          >
+            ↺ Reset Filters
+          </button>
+        )}
+
+        {/* Export */}
         <div className="ml-auto">
           <button
             onClick={exportCSV}
@@ -238,9 +277,18 @@ export default function FossilReplenishment() {
 
       </div>
 
+      {/* SKU COUNT SUMMARY */}
+      {isFiltered && (
+        <div className="text-sm text-slate-500">
+          Showing <span className="font-semibold text-slate-700">{filteredData.length}</span> SKUs
+          {brandFilter !== "All" && <> for <span className="font-semibold text-indigo-700">{brandFilter}</span></>}
+          {assortmentFilter !== "All" && <> · <span className="font-semibold text-indigo-700">{assortmentFilter}</span></>}
+          {search && <> · matching <span className="font-semibold text-indigo-700">"{search}"</span></>}
+        </div>
+      )}
+
       {/* TABLE */}
       <div className="card p-0 overflow-hidden">
-
         <div className="overflow-auto max-h-[65vh]">
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
@@ -255,45 +303,33 @@ export default function FossilReplenishment() {
                 ))}
               </tr>
             </thead>
-
             <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-slate-400">Loading…</td>
-                </tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-400">Loading…</td></tr>
               ) : paginatedData.length === 0 ? (
-                <tr>
-                  <td colSpan={12} className="px-4 py-8 text-center text-slate-400">No results found.</td>
-                </tr>
+                <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-400">No results found.</td></tr>
               ) : paginatedData.map((row, i) => (
                 <tr key={i} className="hover:bg-slate-50 border-b border-slate-100">
                   <td className="px-4 py-3">{row.SKU}</td>
                   <td className="px-4 py-3">{row.ASIN}</td>
                   <td className="px-4 py-3 font-medium">{row["Item No"]}</td>
                   <td className="px-4 py-3">{row.Brand}</td>
-
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${assortBadgeColor(row["Assortment Type"])}`}>
                       {row["Assortment Type"] || "FP"}
                     </span>
                   </td>
-
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row["Weeks of Cover"])}`}>
                       {row["Weeks of Cover"]}w
                     </span>
                   </td>
-
                   <td className="px-4 py-3">{row["Cambium SOH"]}</td>
                   <td className="px-4 py-3">{row["Total Inventory"]}</td>
                   <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
-                  <td className="px-4 py-3 font-semibold text-indigo-700">
-                    {Math.round(row["Required Inventory"])}
-                  </td>
-                  <td className="px-4 py-3 text-red-600 font-semibold">
-                    {Math.round(row["Replenishment Qty"])}
-                  </td>
+                  <td className="px-4 py-3 font-semibold text-indigo-700">{Math.round(row["Required Inventory"])}</td>
+                  <td className="px-4 py-3 text-red-600 font-semibold">{Math.round(row["Replenishment Qty"])}</td>
                 </tr>
               ))}
             </tbody>
@@ -306,21 +342,14 @@ export default function FossilReplenishment() {
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(p => p - 1)}
             className="px-3 py-1 border rounded disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <div className="text-sm text-slate-500">
-            Page {currentPage} of {totalPages || 1}
-          </div>
+          >Previous</button>
+          <div className="text-sm text-slate-500">Page {currentPage} of {totalPages || 1}</div>
           <button
             disabled={currentPage === totalPages || totalPages === 0}
             onClick={() => setCurrentPage(p => p + 1)}
             className="px-3 py-1 border rounded disabled:opacity-40"
-          >
-            Next
-          </button>
+          >Next</button>
         </div>
-
       </div>
 
     </div>
