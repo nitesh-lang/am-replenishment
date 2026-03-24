@@ -172,7 +172,9 @@ function exportCSV() {
     "sku",
     "fulfillment_center",
     "weekly_velocity",
+    "total_units_sold",
     "fc_inventory",
+    "ampm_inventory",
     "transfer_in",
     "target_cover_units",
     "post_transfer_stock",
@@ -180,7 +182,8 @@ function exportCSV() {
     "send_qty",
     "expected_units",
     "fill_pct",
-    "velocity_flag"
+    "velocity_flag",
+    "hazmat_type"
   ];
 
   const rows = filteredData
