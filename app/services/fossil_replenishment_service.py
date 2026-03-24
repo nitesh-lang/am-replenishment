@@ -4,56 +4,55 @@ from app.services.file_cache import get
 
 DATA_PATH = Path("data/input/Fossil Replenishment")
 
-# =====================
+# =============================================
 # WEEKS OF COVER MATRIX
-# =====================
+# Brand x Assortment Type (FP / Discount / VD)
+# =============================================
 #
-# Assortment Type: FP (Full Price), Discount, VD
-#
-# FP:
-#   Fossil          → 9 weeks
-#   AX / MK         → 6 weeks
-#   EA / DZ / Skagen → 4 weeks
-#
-# Discount:
-#   Fossil          → 4 weeks
-#   AX / MK         → 4 weeks
-#   EA / DZ / Skagen → 4 weeks
-#
-# VD (all brands)   → 6 weeks
+#                   Discount   Full Price   VD
+#   Fossil             4           9         6
+#   Armani Exchange    4           6         6
+#   Michael Kors       4           6         6
+#   Emporio Armani     4           4         6
+#   Diesel             4           4         6
+#   Skagen             4           4         6
 
-FOSSIL_BRANDS    = {"fossil"}
-AX_MK_BRANDS     = {"armani exchange", "michael kors"}
-EA_DZ_SKG_BRANDS = {"emporio armani", "diesel", "skagen"}
+WEEKS_OF_COVER_MATRIX = {
+    #  brand (lowercase)       : { assortment_type : weeks }
+    "fossil"          : {"FP": 9, "Discount": 4, "VD": 6},
+    "armani exchange" : {"FP": 6, "Discount": 4, "VD": 6},
+    "michael kors"    : {"FP": 6, "Discount": 4, "VD": 6},
+    "emporio armani"  : {"FP": 4, "Discount": 4, "VD": 6},
+    "diesel"          : {"FP": 4, "Discount": 4, "VD": 6},
+    "skagen"          : {"FP": 4, "Discount": 4, "VD": 6},
+}
+
+DEFAULT_WEEKS = 8  # fallback for unknown brand/type
+
 
 def get_weeks_of_cover(brand: str, assortment_type: str) -> int:
     """
-    Return the correct weeks-of-cover for a given brand + assortment type.
-    Brand matching is case-insensitive.
-    Assortment type: 'FP', 'Discount', or 'VD'
+    Return weeks of cover for a given brand + assortment type.
+    - brand: e.g. 'Fossil', 'Armani Exchange' (case-insensitive)
+    - assortment_type: 'FP', 'Discount', or 'VD'
     """
     b = str(brand).strip().lower()
-    a = str(assortment_type).strip().upper()
+    a = str(assortment_type).strip()
 
-    # VD overrides brand
-    if a == "VD":
-        return 6
+    # Normalise common variants
+    a_upper = a.upper()
+    if a_upper in ("FULL PRICE", "FP"):
+        a = "FP"
+    elif a_upper in ("DISCOUNT", "DISCOUNTED"):
+        a = "Discount"
+    elif a_upper == "VD":
+        a = "VD"
 
-    if a == "FP":
-        if b in FOSSIL_BRANDS:
-            return 9
-        if b in AX_MK_BRANDS:
-            return 6
-        if b in EA_DZ_SKG_BRANDS:
-            return 4
-        return 8  # fallback for unknown brands
+    brand_row = WEEKS_OF_COVER_MATRIX.get(b)
+    if brand_row:
+        return brand_row.get(a, DEFAULT_WEEKS)
 
-    if a == "DISCOUNT":
-        # All brands → 4 weeks for Discount
-        return 4
-
-    # Fallback for any unrecognised assortment type
-    return 8
+    return DEFAULT_WEEKS
 
 
 def load_fossil_replenishment():
@@ -120,10 +119,10 @@ def load_fossil_replenishment():
     master_df["Fossil Weekly Sales"] = master_df["3 Months Gross Sales"] / 12
 
     # =====================
-    # WEEKS OF COVER (per row, brand + assortment type aware)
+    # WEEKS OF COVER (per row)
+    # Driven by Brand x Assortment Type matrix
     # =====================
 
-    # Master file must have columns: "Brand" and "Assortment Type"
     master_df["Weeks of Cover"] = master_df.apply(
         lambda row: get_weeks_of_cover(
             row.get("Brand", ""),

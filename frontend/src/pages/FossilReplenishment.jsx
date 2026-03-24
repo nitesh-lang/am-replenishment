@@ -10,10 +10,21 @@ const BRANDS = [
   "Skagen",
 ];
 
+// Weeks of cover reference matrix (mirrors the backend)
+const WOC_MATRIX = [
+  { brand: "Fossil",          fp: 9, discount: 4, vd: 6 },
+  { brand: "Armani Exchange", fp: 6, discount: 4, vd: 6 },
+  { brand: "Michael Kors",    fp: 6, discount: 4, vd: 6 },
+  { brand: "Emporio Armani",  fp: 4, discount: 4, vd: 6 },
+  { brand: "Diesel",          fp: 4, discount: 4, vd: 6 },
+  { brand: "Skagen",          fp: 4, discount: 4, vd: 6 },
+];
+
 export default function FossilReplenishment() {
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showMatrix, setShowMatrix] = useState(false);
 
   const [search, setSearch] = useState("");
   const [brandFilter, setBrandFilter] = useState("All");
@@ -85,7 +96,7 @@ export default function FossilReplenishment() {
 
   /* HELPERS */
 
-  function wcBadgeColor(weeks) {
+  function wocColor(weeks) {
     if (weeks >= 9) return "bg-purple-100 text-purple-700";
     if (weeks >= 6) return "bg-blue-100 text-blue-700";
     return "bg-green-100 text-green-700";
@@ -98,7 +109,7 @@ export default function FossilReplenishment() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
 
       {/* HEADER */}
       <div className="rounded-2xl p-8 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 text-white shadow-xl">
@@ -113,26 +124,57 @@ export default function FossilReplenishment() {
         <MetricCard title="Filtered SKUs"      value={kpis.skus} />
       </div>
 
-      {/* WEEKS OF COVER LEGEND */}
-      <div className="flex flex-wrap gap-3 text-xs items-center">
-        <span className="font-semibold text-slate-500">Weeks of Cover:</span>
-        {[
-          { label: "Fossil FP",           weeks: 9, color: "bg-purple-100 text-purple-700" },
-          { label: "AX / MK FP",          weeks: 6, color: "bg-blue-100 text-blue-700" },
-          { label: "EA / DZ / Skagen FP", weeks: 4, color: "bg-green-100 text-green-700" },
-          { label: "All Brands Discount", weeks: 4, color: "bg-green-100 text-green-700" },
-          { label: "VD (All Brands)",     weeks: 6, color: "bg-blue-100 text-blue-700" },
-        ].map(({ label, weeks, color }) => (
-          <span key={label} className={`px-3 py-1 rounded-full font-medium ${color}`}>
-            {label} — {weeks}w
-          </span>
-        ))}
+      {/* WEEKS OF COVER MATRIX TOGGLE */}
+      <div>
+        <button
+          onClick={() => setShowMatrix(v => !v)}
+          className="flex items-center gap-2 text-sm font-medium text-indigo-700 border border-indigo-200 px-4 py-2 rounded-lg hover:bg-indigo-50 transition"
+        >
+          <span>{showMatrix ? "▲" : "▼"}</span>
+          Weeks of Cover Reference Matrix
+        </button>
+
+        {showMatrix && (
+          <div className="mt-3 overflow-auto rounded-xl border shadow-sm">
+            <table className="text-sm w-full">
+              <thead className="bg-slate-100 text-xs uppercase">
+                <tr>
+                  <th className="px-5 py-3 text-left">Brand</th>
+                  <th className="px-5 py-3 text-center">Full Price (FP)</th>
+                  <th className="px-5 py-3 text-center">Discounted</th>
+                  <th className="px-5 py-3 text-center">VD</th>
+                </tr>
+              </thead>
+              <tbody>
+                {WOC_MATRIX.map(row => (
+                  <tr key={row.brand} className="border-t hover:bg-slate-50">
+                    <td className="px-5 py-2 font-medium">{row.brand}</td>
+                    <td className="px-5 py-2 text-center">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.fp)}`}>
+                        {row.fp}w
+                      </span>
+                    </td>
+                    <td className="px-5 py-2 text-center">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.discount)}`}>
+                        {row.discount}w
+                      </span>
+                    </td>
+                    <td className="px-5 py-2 text-center">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row.vd)}`}>
+                        {row.vd}w
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* FILTERS */}
       <div className="flex flex-wrap gap-4 items-end">
 
-        {/* Item No Search */}
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">Search</label>
           <input
@@ -143,7 +185,6 @@ export default function FossilReplenishment() {
           />
         </div>
 
-        {/* Brand Dropdown */}
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">Brand</label>
           <select
@@ -157,7 +198,6 @@ export default function FossilReplenishment() {
           </select>
         </div>
 
-        {/* Assortment Type Dropdown */}
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">Assortment Type</label>
           <select
@@ -187,7 +227,6 @@ export default function FossilReplenishment() {
           )}
         </div>
 
-        {/* Export pushed to right */}
         <div className="ml-auto">
           <button
             onClick={exportCSV}
@@ -204,7 +243,6 @@ export default function FossilReplenishment() {
 
         <div className="overflow-auto max-h-[65vh]">
           <table className="w-full text-sm">
-
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
                 {[
@@ -241,7 +279,7 @@ export default function FossilReplenishment() {
                   </td>
 
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wcBadgeColor(row["Weeks of Cover"])}`}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row["Weeks of Cover"])}`}>
                       {row["Weeks of Cover"]}w
                     </span>
                   </td>
@@ -259,7 +297,6 @@ export default function FossilReplenishment() {
                 </tr>
               ))}
             </tbody>
-
           </table>
         </div>
 
