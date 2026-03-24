@@ -213,18 +213,17 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         db_df = pd.read_sql("SELECT * FROM cb_inputs", conn)
 
+        # AFTER (fixed) — only remarks is persisted from DB, po_requirement always recalculated
         df = df.merge(
-            db_df[["model", "po_requirement", "remarks"]],
+            db_df[["model", "remarks"]],
             on="model",
             how="left",
             suffixes=("", "_db")
-        )
-
-        df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
+            )
+        
         df["remarks"] = df["remarks_db"].fillna("")
         df = df.drop(columns=["remarks_db"], errors="ignore")
-        df = df.drop(columns=["po_requirement_db"], errors="ignore")
-
+        
         conn.close()
 
         return df
