@@ -212,19 +212,17 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
 
         db_df = pd.read_sql("SELECT * FROM cb_inputs", conn)
-
-        # AFTER (fixed) — only remarks is persisted from DB, po_requirement always recalculated
-        df = df.merge(
-            db_df[["model", "remarks"]],
-            on="model",
-            how="left",
-            suffixes=("", "_db")
-            )
-        
-        df["remarks"] = df["remarks_db"].fillna("")
-        df = df.drop(columns=["remarks_db"], errors="ignore")
-        
         conn.close()
+
+        if "remarks" in db_df.columns and "model" in db_df.columns:
+            df = df.merge(
+                db_df[["model", "remarks"]],
+                on="model",
+                how="left",
+                suffixes=("", "_db")
+            )
+            df["remarks"] = df["remarks_db"].fillna("")
+            df = df.drop(columns=["remarks_db"], errors="ignore")
 
         return df
 
