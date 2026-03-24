@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const BRANDS = [
-  "All",
+const BRAND_ORDER = [
   "Fossil",
   "Armani Exchange",
   "Michael Kors",
@@ -26,8 +25,8 @@ export default function FossilReplenishment() {
   const [showMatrix, setShowMatrix] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [brandFilter, setBrandFilter] = useState("All");
   const [assortmentFilter, setAssortmentFilter] = useState("All");
+  const [brandFilter, setBrandFilter] = useState("All");
 
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 15;
@@ -41,56 +40,56 @@ export default function FossilReplenishment() {
       .finally(() => setLoading(false));
   }, []);
 
-  /* DYNAMIC BRAND OPTIONS
-     Only show brands that actually exist in the data */
-  const availableBrands = useMemo(() => {
-    const brandsInData = new Set(data.map(r => r["Brand"]).filter(Boolean));
-    return ["All", ...BRANDS.filter(b => b === "All" || brandsInData.has(b))];
+  /* STEP 1 — ASSORTMENT TYPE OPTIONS
+     Only show types that actually exist in the data */
+  const availableAssortmentTypes = useMemo(() => {
+    const types = new Set(data.map(r => r["Assortment Type"]).filter(Boolean));
+    return ["All", ...["FP", "Discount", "VD"].filter(t => types.has(t))];
   }, [data]);
 
-  /* DYNAMIC ASSORTMENT OPTIONS
-     Only show assortment types that exist for the currently selected brand */
-  const availableAssortmentTypes = useMemo(() => {
-    const subset = brandFilter === "All" ? data : data.filter(r => r["Brand"] === brandFilter);
-    const types = new Set(subset.map(r => r["Assortment Type"]).filter(Boolean));
-    // Preserve order: FP → Discount → VD
-    const ordered = ["FP", "Discount", "VD"].filter(t => types.has(t));
-    return ["All", ...ordered];
-  }, [data, brandFilter]);
+  /* STEP 2 — BRAND OPTIONS
+     Only show brands that exist for the selected assortment type */
+  const availableBrands = useMemo(() => {
+    const subset = assortmentFilter === "All"
+      ? data
+      : data.filter(r => r["Assortment Type"] === assortmentFilter);
+    const brandsInSubset = new Set(subset.map(r => r["Brand"]).filter(Boolean));
+    // Preserve defined brand order
+    return ["All", ...BRAND_ORDER.filter(b => brandsInSubset.has(b))];
+  }, [data, assortmentFilter]);
 
-  /* If current assortmentFilter no longer exists in available options, reset it */
+  /* If current brandFilter no longer valid after assortment change, reset it */
   useEffect(() => {
-    if (assortmentFilter !== "All" && !availableAssortmentTypes.includes(assortmentFilter)) {
-      setAssortmentFilter("All");
+    if (brandFilter !== "All" && !availableBrands.includes(brandFilter)) {
+      setBrandFilter("All");
     }
-  }, [availableAssortmentTypes]);
+  }, [availableBrands]);
 
-  /* FILTER */
+  /* RESET PAGE ON FILTER CHANGE */
+  useEffect(() => { setCurrentPage(1); }, [search, assortmentFilter, brandFilter]);
+
+  /* FILTER DATA */
   const filteredData = useMemo(() => {
     return data.filter(row => {
       const matchSearch = row["Item No"]?.toLowerCase().includes(search.toLowerCase());
-      const matchBrand  = brandFilter === "All" || row["Brand"] === brandFilter;
       const matchAssort = assortmentFilter === "All" || row["Assortment Type"] === assortmentFilter;
-      return matchSearch && matchBrand && matchAssort;
+      const matchBrand  = brandFilter === "All" || row["Brand"] === brandFilter;
+      return matchSearch && matchAssort && matchBrand;
     });
-  }, [data, search, brandFilter, assortmentFilter]);
+  }, [data, search, assortmentFilter, brandFilter]);
 
-  /* RESET PAGE ON FILTER CHANGE */
-  useEffect(() => { setCurrentPage(1); }, [search, brandFilter, assortmentFilter]);
-
-  /* RESET ALL FILTERS */
+  /* RESET ALL */
   function resetFilters() {
     setSearch("");
-    setBrandFilter("All");
     setAssortmentFilter("All");
+    setBrandFilter("All");
     setCurrentPage(1);
   }
 
-  const isFiltered = search !== "" || brandFilter !== "All" || assortmentFilter !== "All";
+  const isFiltered = search !== "" || assortmentFilter !== "All" || brandFilter !== "All";
 
   /* PAGINATION */
   const totalPages = Math.ceil(filteredData.length / rowsPerPage);
-
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
     return filteredData.slice(start, start + rowsPerPage);
@@ -190,7 +189,7 @@ export default function FossilReplenishment() {
         )}
       </div>
 
-      {/* FILTERS */}
+      {/* FILTERS — Assortment Type first, then Brand */}
       <div className="flex flex-wrap gap-4 items-end">
 
         {/* Search */}
@@ -204,33 +203,14 @@ export default function FossilReplenishment() {
           />
         </div>
 
-        {/* Brand Dropdown — only brands present in data */}
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">Brand</label>
-          <select
-            value={brandFilter}
-            onChange={(e) => { setBrandFilter(e.target.value); setAssortmentFilter("All"); }}
-            className="px-4 py-2 border rounded-lg min-w-[180px] bg-white"
-          >
-            {availableBrands.map(b => (
-              <option key={b} value={b}>{b === "All" ? "All Brands" : b}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Assortment Type — only types that exist for selected brand */}
+        {/* STEP 1: Assortment Type */}
         <div className="flex flex-col gap-1">
           <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">
-            Assortment Type
-            {brandFilter !== "All" && (
-              <span className="ml-1 text-indigo-500 normal-case font-normal">
-                ({brandFilter})
-              </span>
-            )}
+            Assortment Type <span className="text-indigo-400 normal-case font-normal">(select first)</span>
           </label>
           <select
             value={assortmentFilter}
-            onChange={(e) => setAssortmentFilter(e.target.value)}
+            onChange={(e) => { setAssortmentFilter(e.target.value); setBrandFilter("All"); }}
             className="px-4 py-2 border rounded-lg bg-white min-w-[160px]"
           >
             {availableAssortmentTypes.map(t => (
@@ -239,23 +219,44 @@ export default function FossilReplenishment() {
           </select>
         </div>
 
+        {/* STEP 2: Brand — filtered by assortment type */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-slate-400 font-medium uppercase tracking-wide pl-1">
+            Brand
+            {assortmentFilter !== "All" && (
+              <span className="ml-1 text-indigo-400 normal-case font-normal">
+                ({availableBrands.length - 1} available)
+              </span>
+            )}
+          </label>
+          <select
+            value={brandFilter}
+            onChange={(e) => setBrandFilter(e.target.value)}
+            className="px-4 py-2 border rounded-lg min-w-[180px] bg-white"
+          >
+            {availableBrands.map(b => (
+              <option key={b} value={b}>{b === "All" ? "All Brands" : b}</option>
+            ))}
+          </select>
+        </div>
+
         {/* Active filter pills */}
         <div className="flex gap-2 flex-wrap items-center">
-          {brandFilter !== "All" && (
-            <span className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">
-              {brandFilter}
-              <button onClick={() => { setBrandFilter("All"); setAssortmentFilter("All"); }} className="ml-1 hover:text-indigo-900 font-bold">✕</button>
-            </span>
-          )}
           {assortmentFilter !== "All" && (
             <span className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">
               {assortmentFilter}
-              <button onClick={() => setAssortmentFilter("All")} className="ml-1 hover:text-indigo-900 font-bold">✕</button>
+              <button onClick={() => { setAssortmentFilter("All"); setBrandFilter("All"); }} className="ml-1 hover:text-indigo-900 font-bold">✕</button>
+            </span>
+          )}
+          {brandFilter !== "All" && (
+            <span className="flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">
+              {brandFilter}
+              <button onClick={() => setBrandFilter("All")} className="ml-1 hover:text-indigo-900 font-bold">✕</button>
             </span>
           )}
         </div>
 
-        {/* Reset button — only shown when filters are active */}
+        {/* Reset */}
         {isFiltered && (
           <button
             onClick={resetFilters}
@@ -267,10 +268,7 @@ export default function FossilReplenishment() {
 
         {/* Export */}
         <div className="ml-auto">
-          <button
-            onClick={exportCSV}
-            className="px-4 py-2 bg-indigo-900 text-white rounded-lg"
-          >
+          <button onClick={exportCSV} className="px-4 py-2 bg-indigo-900 text-white rounded-lg">
             Export CSV
           </button>
         </div>
@@ -281,8 +279,8 @@ export default function FossilReplenishment() {
       {isFiltered && (
         <div className="text-sm text-slate-500">
           Showing <span className="font-semibold text-slate-700">{filteredData.length}</span> SKUs
-          {brandFilter !== "All" && <> for <span className="font-semibold text-indigo-700">{brandFilter}</span></>}
           {assortmentFilter !== "All" && <> · <span className="font-semibold text-indigo-700">{assortmentFilter}</span></>}
+          {brandFilter !== "All" && <> · <span className="font-semibold text-indigo-700">{brandFilter}</span></>}
           {search && <> · matching <span className="font-semibold text-indigo-700">"{search}"</span></>}
         </div>
       )}
