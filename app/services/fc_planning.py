@@ -277,6 +277,8 @@ def calculate_fc_plan(
         master_df = get("replenishment_master_viomi.xlsx")
     elif account.lower() == "white mulberry":
         master_df = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
+    elif account.lower() == "audio array":
+        master_df = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")
     else:
         master_df = get("replenishment_master_nexlev.xlsx")
 

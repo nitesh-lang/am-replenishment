@@ -173,6 +173,9 @@ def calculate_final_allocation(
     elif account.lower() == "viomi":
         repl_path = "data/input/replenishment_master_viomi.xlsx"
         sheet_to_load = "Viomi"
+    elif account.lower() == "audio array":
+        repl_path = "data/input/Audio Array & WM Replenishment/AA & WM Replenishment.xlsx"
+        sheet_to_load = "AA"
     else:
         repl_path = "data/input/Audio Array & WM Replenishment/AA & WM Replenishment.xlsx"
         sheet_to_load = "WM"
@@ -303,6 +306,8 @@ def calculate_final_allocation(
 
     if account.lower() == "white mulberry":
         ampm_file = "data/input/Inventory_snapshot_WM.xlsx"
+    elif account.lower() == "audio array":
+        ampm_file = "data/input/Inventory_snapshot_audio_array.xlsx"
     else:
         ampm_file = "data/input/inventory_snapshot_nexlev.xlsx"
 
