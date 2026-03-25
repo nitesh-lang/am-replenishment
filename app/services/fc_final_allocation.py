@@ -202,7 +202,7 @@ def calculate_final_allocation(
         else:
             repl_master = repl_master.rename(columns={
                 "SKU": "sku",
-                "Hazmat Type": "ixd_flag",
+                "Product Type": "ixd_flag",
                 "Model": "model",
                 "Category": "category",
                 "ASIN": "asin",

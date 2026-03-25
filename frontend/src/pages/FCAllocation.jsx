@@ -190,7 +190,10 @@ function exportCSV() {
 
   const rows = filteredData
     .map(row =>
-      headers.map(col => row[col]).join(",")
+      headers.map(col => {
+        const val = row[col] ?? "";
+        return `"${String(val).replace(/"/g, '""')}"`;
+      }).join(",")
     )
     .join("\n");
 
