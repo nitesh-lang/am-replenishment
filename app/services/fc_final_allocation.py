@@ -419,6 +419,22 @@ def calculate_final_allocation(
     .replace({"nan": None, "None": None, "<NA>": None, "": None})
     .fillna("-")
 )
+
+    final_df["asin"] = (
+    final_df["asin"]
+    .astype(str)
+    .str.strip()
+    .replace({"nan": None, "None": None, "<NA>": None, "": None})
+    .fillna("-")
+)
+
+    final_df["master_carton"] = (
+    final_df["master_carton"]
+    .astype(str)
+    .str.strip()
+    .replace({"nan": None, "None": None, "<NA>": None, "": None})
+    .fillna("-")
+)
     
     final_df[numeric_cleanup_cols] = (
     final_df[numeric_cleanup_cols]
