@@ -233,6 +233,9 @@ def calculate_final_allocation(
         print("📋 MASTER SHEET COLUMNS:", repl_master.columns.tolist())
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
+
+    df_plan["asin"] = df_plan["asin"].fillna("-") if "asin" in df_plan.columns else "-"
+    df_plan["master_carton"] = df_plan["master_carton"].fillna("-") if "master_carton" in df_plan.columns else "-"
      
     df_plan["ixd_flag"] = df_plan["ixd_flag"].astype(str)
     df_plan["ixd_flag"] = df_plan["ixd_flag"].replace("nan", None)
