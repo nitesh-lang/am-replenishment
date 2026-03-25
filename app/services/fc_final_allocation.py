@@ -187,6 +187,7 @@ def calculate_final_allocation(
         )
 
         repl_master.columns = repl_master.columns.str.strip()
+        print("📋 MASTER SHEET COLUMNS:", repl_master.columns.tolist())
 
         if account.lower() in ["nexlev", "viomi"]:
             repl_master = repl_master.rename(columns={
@@ -226,8 +227,10 @@ def calculate_final_allocation(
         print("⚠️ Excel load failed:", e)
 
         repl_master = pd.DataFrame(
-            columns=["sku", "model", "ixd_flag", "hazmat_type", "category"]
+            columns=["sku", "model", "ixd_flag", "hazmat_type", "category", "asin", "master_carton"]
         )
+
+        print("📋 MASTER SHEET COLUMNS:", repl_master.columns.tolist())
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
      
