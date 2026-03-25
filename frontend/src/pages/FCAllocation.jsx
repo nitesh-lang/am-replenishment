@@ -183,7 +183,9 @@ function exportCSV() {
     "expected_units",
     "fill_pct",
     "velocity_flag",
-    "hazmat_type"
+    "hazmat_type",
+    "asin",
+    "master_carton"
   ];
 
   const rows = filteredData
@@ -339,6 +341,10 @@ function exportCSV() {
       SKU {getSortArrow("sku")}
     </th>
 
+    <th className="px-4 py-3">
+      ASIN
+    </th>
+
     <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer">
       FC {getSortArrow("fulfillment_center")}
     </th>
@@ -380,8 +386,12 @@ function exportCSV() {
     </th>
 
     <th className="px-4 py-3">
-  Hazmat Type
-</th>
+      Hazmat Type
+    </th>
+
+    <th className="px-4 py-3">
+      Master Carton
+    </th>
   </tr>
 </thead>
 
@@ -407,6 +417,7 @@ function exportCSV() {
                         </td>
                         <td className="px-4 py-3">{row.model}</td>
                         <td className="px-4 py-3">{row.sku}</td>
+                        <td className="px-4 py-3">{row.asin || "-"}</td>
                         <td className="px-4 py-3">{row.fulfillment_center}</td>
                         <td className="px-4 py-3 font-semibold">
                           {row.send_qty}
@@ -453,6 +464,10 @@ function exportCSV() {
 
 <td className="px-4 py-3">
     {row.hazmat_type || "-"}
+</td>
+
+<td className="px-4 py-3">
+    {row.master_carton || "-"}
 </td>
                       </tr>
 

@@ -194,21 +194,25 @@ def calculate_final_allocation(
                 "Hazmat/non-Hazmat": "ixd_flag",
                 "Hazmat Type": "hazmat_type",
                 "Model": "model",
-                "Category": "category"
+                "Category": "category",
+                "ASIN": "asin",
+                "Master Carton": "master_carton"
             })
         else:
             repl_master = repl_master.rename(columns={
                 "SKU": "sku",
                 "Hazmat Type": "ixd_flag",
                 "Model": "model",
-                "Category": "category"
+                "Category": "category",
+                "ASIN": "asin",
+                "Master Carton": "master_carton"
             })
             repl_master["hazmat_type"] = repl_master["ixd_flag"]
 
         repl_master["category"] = repl_master.get("category", pd.Series(dtype=str)).fillna("-")
 
         repl_master = repl_master[
-            ["sku", "model", "ixd_flag", "hazmat_type", "category"]
+            ["sku", "model", "ixd_flag", "hazmat_type", "category", "asin", "master_carton"]
         ]
 
         repl_master["sku"] = (
@@ -344,6 +348,7 @@ def calculate_final_allocation(
     final_df = df_plan[[
         "model",
         "sku",
+        "asin",
         "category",
         "ampm_inventory",
         "fulfillment_center",
@@ -360,6 +365,7 @@ def calculate_final_allocation(
         "velocity_flag",
         "ixd_flag",
         "hazmat_type",
+        "master_carton",
         "allocation_logic"
     ]].copy()
 
