@@ -232,6 +232,9 @@ def calculate_replenishment(
     # ---------------------------------------------
     # MERGE WITH MASTER
     # ---------------------------------------------
+    if "Status" in master.columns:
+        master = master.rename(columns={"Status": "listing_status"})
+
     df = master.merge(
         velocity,
         left_on="Model",
@@ -320,6 +323,7 @@ def calculate_replenishment(
     # Explicit column order (optional but safer)
     preferred_order = [
         "Model",
+        "listing_status",
         "sales_velocity",
         "total_units_sold",
         "amazon_inventory",
@@ -330,7 +334,7 @@ def calculate_replenishment(
         "warehouse_shortfall",
         "is_risky",
         "is_overstock",
-        "Master Carton",   # 👈 ADD THIS
+        "Master Carton",
     ]
     
 

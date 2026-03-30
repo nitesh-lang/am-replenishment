@@ -101,6 +101,7 @@ useEffect(() => {
   "model",
   "asin",
   "sku",
+   "listing_status",   // ← ADD THIS
   "amazon_inventory",
   "inbound_inventory",
   ...baseColumns.filter(c => !["model","asin","sku","amazon_inventory","inbound_inventory","ixd_type","hazmat_type","master_carton","is_risky","is_overstock"].includes(c)),
@@ -236,6 +237,7 @@ function exportCSV() {
     warehouse_shortfall: "WAREHOUSE SHORTFALL",
     ixd_type: "IXD TYPE",
     hazmat_type: "HAZMAT TYPE",
+    listing_status: "LISTING STATUS",
     master_carton: "MASTER CARTON",
   };
 
@@ -461,7 +463,20 @@ function exportCSV() {
                             </td>
                           );
 
-                        if (col === "required_units" && row[col] > 0)
+                        if (col === "listing_status") {
+  const ls = row.listing_status ?? "-";
+  const badgeStyle =
+    ls === "Active" ? "bg-green-100 text-green-700" :
+    ls === "EOL"    ? "bg-red-100 text-red-700" :
+                     "bg-slate-100 text-slate-500";
+  return (
+    <td key={col} className="px-4 py-3">
+      <span className={`px-2 py-1 text-xs rounded ${badgeStyle}`}>{ls}</span>
+    </td>
+  );
+}
+
+if (col === "required_units" && row[col] > 0)
                           return (
                             <td className="px-4 py-3 font-bold text-red-600">
                               {row[col]}
