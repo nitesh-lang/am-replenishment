@@ -181,6 +181,7 @@ def calculate_replenishment(
     # NORMALIZE COLUMNS
     # ---------------------------------------------
     master.columns = master.columns.str.strip()
+    print("MASTER COLUMNS:", master.columns.tolist())
     sales.columns = sales.columns.str.strip()
     inventory.columns = inventory.columns.str.strip()
 
@@ -234,6 +235,9 @@ def calculate_replenishment(
     # ---------------------------------------------
     if "Status" in master.columns:
         master = master.rename(columns={"Status": "listing_status"})
+    else:
+        print("WARNING: 'Status' column NOT found in master. Available:", master.columns.tolist())
+        master["listing_status"] = "-"
 
     df = master.merge(
         velocity,
