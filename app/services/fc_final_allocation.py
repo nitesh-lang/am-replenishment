@@ -197,7 +197,8 @@ def calculate_final_allocation(
                 "Model": "model",
                 "Category": "category",
                 "ASIN": "asin",
-                "Master Carton": "master_carton"
+                "Master Carton": "master_carton",
+                "Status": "listing_status"
             })
         else:
             repl_master = repl_master.rename(columns={
@@ -212,8 +213,11 @@ def calculate_final_allocation(
 
         repl_master["category"] = repl_master.get("category", pd.Series(dtype=str)).fillna("-")
 
+        if "listing_status" not in repl_master.columns:
+            repl_master["listing_status"] = "-"
+
         repl_master = repl_master[
-            ["sku", "model", "ixd_flag", "hazmat_type", "category", "asin", "master_carton"]
+            ["sku", "model", "ixd_flag", "hazmat_type", "category", "asin", "master_carton", "listing_status"]
         ]
 
         repl_master["sku"] = (
@@ -356,6 +360,7 @@ def calculate_final_allocation(
         "sku",
         "asin",
         "category",
+        "listing_status",
         "ampm_inventory",
         "fulfillment_center",
         "weekly_velocity",

@@ -170,6 +170,8 @@ function exportCSV() {
   const headers = [
     "model",
     "sku",
+    "category",
+    "listing_status",
     "fulfillment_center",
     "weekly_velocity",
     "total_units_sold",
@@ -345,7 +347,15 @@ function exportCSV() {
     </th>
 
     <th className="px-4 py-3">
+      Category
+    </th>
+
+    <th className="px-4 py-3">
       ASIN
+    </th>
+
+    <th className="px-4 py-3">
+      Listing Status
     </th>
 
     <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer">
@@ -420,7 +430,18 @@ function exportCSV() {
                         </td>
                         <td className="px-4 py-3">{row.model}</td>
                         <td className="px-4 py-3">{row.sku}</td>
+                        <td className="px-4 py-3">{row.category || "-"}</td>
                         <td className="px-4 py-3">{row.asin || "-"}</td>
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const ls = row.listing_status ?? "-";
+                            const badgeStyle =
+                              ls === "Active" ? "bg-green-100 text-green-700" :
+                              ls === "EOL"    ? "bg-red-100 text-red-700" :
+                                               "bg-slate-100 text-slate-500";
+                            return <span className={`px-2 py-1 text-xs rounded ${badgeStyle}`}>{ls}</span>;
+                          })()}
+                        </td>
                         <td className="px-4 py-3">{row.fulfillment_center}</td>
                         <td className="px-4 py-3 font-semibold">
                           {row.send_qty}

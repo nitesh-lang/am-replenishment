@@ -101,12 +101,13 @@ useEffect(() => {
   "model",
   "asin",
   "sku",
-   "listing_status",   // ← ADD THIS
+  "category",
+  "listing_status",
   "amazon_inventory",
   "inbound_inventory",
-  ...baseColumns.filter(c => !["model","asin","sku","amazon_inventory","inbound_inventory","ixd_type","hazmat_type","master_carton","is_risky","is_overstock"].includes(c)),
+  ...baseColumns.filter(c => !["model","asin","sku","category","listing_status","amazon_inventory","inbound_inventory","ixd_type","hazmat_type","master_carton","is_risky","is_overstock"].includes(c)),
   "ixd_type",
-  "hazmat_type",   // 👈 ADD HERE
+  "hazmat_type",
   "master_carton"
 ];
 
@@ -220,7 +221,13 @@ useEffect(() => {
   ============================================================ */
 function exportCSV() {
 
-  const exportColumns = tableColumns.filter(c => c !== "status");
+  const exportColumns = tableColumns.filter(c => c !== "status" && c !== "listing_status").reduce((acc, c) => {
+  if (!acc.includes(c)) acc.push(c);
+  return acc;
+}, []);
+// Re-insert listing_status after category
+const catIdx = exportColumns.indexOf("category");
+exportColumns.splice(catIdx + 1, 0, "listing_status");
 
   const columnLabels = {
     model: "MODEL",
