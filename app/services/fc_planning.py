@@ -22,6 +22,8 @@ def load_fc_data(account: str):
 
     engine = create_engine(os.getenv("DATABASE_URL"))
 
+    print("🔍 LOADING FC DATA FOR ACCOUNT:", account.lower())
+
     shipments = pd.read_sql(
         "SELECT * FROM shipments WHERE LOWER(account) = %s",
     engine,
@@ -33,6 +35,10 @@ def load_fc_data(account: str):
     engine,
     params=(account.lower(),)
 )
+
+    print("✅ SHIPMENTS LOADED:", len(shipments), "rows")
+    print("✅ LEDGER LOADED:", len(ledger), "rows")
+    print("✅ UNIQUE ACCOUNTS IN SHIPMENTS:", shipments["account"].unique() if "account" in shipments.columns else "NO ACCOUNT COLUMN")
 
     shipments.columns = shipments.columns.str.strip()
     ledger.columns = ledger.columns.str.strip()
