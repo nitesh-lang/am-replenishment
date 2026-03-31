@@ -231,7 +231,7 @@ def calculate_final_allocation(
         print("⚠️ Excel load failed:", e)
 
         repl_master = pd.DataFrame(
-            columns=["sku", "model", "ixd_flag", "hazmat_type", "category", "asin", "master_carton"]
+            columns=["sku", "model", "ixd_flag", "hazmat_type", "category", "asin", "master_carton", "listing_status"]
         )
 
         print("📋 MASTER SHEET COLUMNS:", repl_master.columns.tolist())
@@ -351,6 +351,9 @@ def calculate_final_allocation(
         df_plan["category"] = df_plan["category"].fillna("-").astype(str).str.strip().replace("nan", "-")
     else:
         df_plan["category"] = "-"
+
+    if "listing_status" not in df_plan.columns:
+        df_plan["listing_status"] = "-"
     # ==========================================================
     # FINAL DATASET
     # ==========================================================
