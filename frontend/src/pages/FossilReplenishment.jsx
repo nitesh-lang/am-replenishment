@@ -28,17 +28,35 @@ export default function FossilReplenishment() {
   const [assortmentFilter, setAssortmentFilter] = useState("All");
   const [brandFilter, setBrandFilter] = useState("All");
 
+  const [fromWeek, setFromWeek] = useState(null);
+  const [toWeek, setToWeek] = useState(null);
+  const [coverWeeks, setCoverWeeks] = useState(6);
+  const [availableWeeks, setAvailableWeeks] = useState([]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 15;
 
   /* LOAD DATA */
   useEffect(() => {
     setLoading(true);
-    fetch(`https://am-replenishment.onrender.com/api/fossil-replenishment`)
+
+    const params = new URLSearchParams({ cover_weeks: coverWeeks });
+    if (fromWeek) params.append("from_week", fromWeek);
+    if (toWeek) params.append("to_week", toWeek);
+
+    fetch(`https://am-replenishment.onrender.com/api/fossil-replenishment?${params}`)
       .then(res => res.json())
-      .then(res => setData(res.data || []))
+      .then(res => {
+        setData(res.data || []);
+        if (res.available_weeks?.length) {
+          const weeks = res.available_weeks;
+          setAvailableWeeks(weeks);
+          if (!fromWeek) setFromWeek(weeks[0]);
+          if (!toWeek) setToWeek(weeks[weeks.length - 1]);
+        }
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [fromWeek, toWeek, coverWeeks]);
 
   /* STEP 1 — ASSORTMENT TYPE OPTIONS
      Only show types that actually exist in the data */
@@ -145,6 +163,74 @@ export default function FossilReplenishment() {
         <MetricCard title="Units To Replenish" value={Math.round(kpis.totalRequired)} />
         <MetricCard title="Avg Weekly Sales"   value={kpis.avgWeekly?.toFixed(2)} />
         <MetricCard title="Filtered SKUs"      value={kpis.skus} />
+      </div>
+
+      {/* SALES WINDOW + COVER WEEKS */}
+      <div className="card grid grid-cols-1 md:grid-cols-2 gap-3 py-3">
+
+        {/* Sales Window */}
+        <div>
+          <label className="text-xs uppercase text-slate-400">
+            Sales Window (Range)
+          </label>
+          <div className="grid grid-cols-2 gap-3 mt-2">
+            <div>
+              <div className="text-xs text-slate-400 mb-1">From</div>
+              <select
+                value={fromWeek ?? ""}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setFromWeek(Number(e.target.value));
+                }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {availableWeeks.map((w) => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-1">To</div>
+              <select
+                value={toWeek ?? ""}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setToWeek(Number(e.target.value));
+                }}
+                className="w-full px-4 py-2 border rounded-lg"
+              >
+                {availableWeeks.map((w) => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Cover Weeks */}
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-400">
+            Cover Weeks
+          </label>
+          <div className="grid grid-cols-1 mt-2">
+            <div>
+              <div className="text-xs text-slate-400 mb-1">&nbsp;</div>
+              <select
+                value={coverWeeks}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setCoverWeeks(Number(e.target.value));
+                }}
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+              >
+                {[4, 6, 8, 10, 12].map(w => (
+                  <option key={w} value={w}>{w} Weeks</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* WEEKS OF COVER MATRIX */}
@@ -293,7 +379,7 @@ export default function FossilReplenishment() {
               <tr>
                 {[
                   "SKU", "ASIN", "Item No", "Brand", "Assortment Type",
-                  "Weeks of Cover", "Cambium SOH", "Total Inventory",
+                  "Weeks of Cover", "Fossil SOH", "Total Inventory",
                   "3 Months Gross Sales", "Fossil Weekly Sales",
                   "Required Inventory", "Replenishment Qty"
                 ].map(col => (

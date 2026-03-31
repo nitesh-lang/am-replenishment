@@ -55,7 +55,7 @@ def get_weeks_of_cover(brand: str, assortment_type: str) -> int:
     return DEFAULT_WEEKS
 
 
-def load_fossil_replenishment():
+def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_weeks: int = None):
 
     # LOAD DATA
     master_df = get("Fossil Replenishment/Fossil Replenishment.xlsx")
@@ -98,8 +98,39 @@ def load_fossil_replenishment():
         r"^(FBK|FBO|FBA)", "FBA", regex=True
     )
 
+    # =====================
+    # AVAILABLE WEEKS
+    # =====================
+
+    if "Week" in sales_df.columns:
+        sales_df["Week"] = pd.to_numeric(sales_df["Week"], errors="coerce")
+        available_weeks = sorted(sales_df["Week"].dropna().unique().astype(int).tolist())
+    else:
+        available_weeks = []
+
+    # =====================
+    # FILTER BY SALES WINDOW
+    # =====================
+
+    filtered_sales = sales_df.copy()
+    if from_week and "Week" in sales_df.columns:
+        filtered_sales = filtered_sales[filtered_sales["Week"] >= from_week]
+    if to_week and "Week" in sales_df.columns:
+        filtered_sales = filtered_sales[filtered_sales["Week"] <= to_week]
+
+    # =====================
+    # CALCULATE WEEK COUNT FOR AVG
+    # =====================
+
+    if available_weeks:
+        eff_from = from_week if from_week else available_weeks[0]
+        eff_to   = to_week   if to_week   else available_weeks[-1]
+        week_count = max(len([w for w in available_weeks if eff_from <= w <= eff_to]), 1)
+    else:
+        week_count = 12
+
     sales_3m = (
-        sales_df.groupby("Merchant SKU")["Shipped Quantity"]
+        filtered_sales.groupby("Merchant SKU")["Shipped Quantity"]
         .sum()
         .reset_index()
     )
@@ -116,7 +147,7 @@ def load_fossil_replenishment():
     # WEEKLY SALES
     # =====================
 
-    master_df["Fossil Weekly Sales"] = master_df["3 Months Gross Sales"] / 12
+    master_df["Fossil Weekly Sales"] = master_df["3 Months Gross Sales"] / week_count
 
     # =====================
     # WEEKS OF COVER (per row)
@@ -124,7 +155,7 @@ def load_fossil_replenishment():
     # =====================
 
     master_df["Weeks of Cover"] = master_df.apply(
-        lambda row: get_weeks_of_cover(
+        lambda row: cover_weeks if cover_weeks else get_weeks_of_cover(
             row.get("Brand", ""),
             row.get("Assortment Type", "FP")
         ),
@@ -149,4 +180,4 @@ def load_fossil_replenishment():
 
     master_df = master_df.fillna(0)
 
-    return master_df
+    return master_df, available_weeks
