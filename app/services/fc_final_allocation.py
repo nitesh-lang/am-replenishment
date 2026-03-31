@@ -201,6 +201,8 @@ def calculate_final_allocation(
                 "Status": "listing_status"
             })
         else:
+            print("WM RAW COLUMNS:", repl_master.columns.tolist())
+            print("WM SAMPLE SKUs:", repl_master.iloc[:, 0].head(5).tolist())
             repl_master = repl_master.rename(columns={
                 "SKU": "sku",
                 "Product Type": "ixd_flag",
@@ -237,6 +239,10 @@ def calculate_final_allocation(
         print("📋 MASTER SHEET COLUMNS:", repl_master.columns.tolist())
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
+
+    print("POST MERGE NULL ASIN COUNT:", df_plan["asin"].isna().sum())
+    print("REPL MASTER SKU SAMPLE:", repl_master["sku"].head(5).tolist())
+    print("DF_PLAN SKU SAMPLE:", df_plan["sku"].head(5).tolist())
 
     df_plan["asin"] = df_plan["asin"].fillna("-") if "asin" in df_plan.columns else "-"
     df_plan["master_carton"] = df_plan["master_carton"].fillna("-") if "master_carton" in df_plan.columns else "-"
