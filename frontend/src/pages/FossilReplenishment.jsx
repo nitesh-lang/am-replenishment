@@ -34,7 +34,7 @@ export default function FossilReplenishment() {
   const [availableWeeks, setAvailableWeeks] = useState([]);
 
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 15;
+  const rowsPerPage = 50;
 
   /* LOAD DATA */
   useEffect(() => {
