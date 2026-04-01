@@ -200,17 +200,21 @@ def calculate_final_allocation(
                 "Master Carton": "master_carton",
                 "Status": "listing_status"
             })
+            print("VIOMI/NEXLEV COLUMNS AFTER RENAME:", repl_master.columns.tolist())
+            print("VIOMI/NEXLEV SKU SAMPLE:", repl_master["sku"].head(5).tolist() if "sku" in repl_master.columns else "NO SKU COL")
         else:
             print("WM RAW COLUMNS:", repl_master.columns.tolist())
             print("WM SAMPLE SKUs:", repl_master.iloc[:, 0].head(5).tolist())
             repl_master = repl_master.rename(columns={
                 "SKU": "sku",
-                "Product Type": "ixd_flag",
+                "Hazmat Type": "ixd_flag",
                 "Model": "model",
                 "Category": "category",
                 "ASIN": "asin",
                 "Master Carton": "master_carton"
             })
+            if "ixd_flag" not in repl_master.columns:
+                repl_master["ixd_flag"] = "IXD"
             repl_master["hazmat_type"] = repl_master["ixd_flag"]
 
         repl_master["category"] = repl_master.get("category", pd.Series(dtype=str)).fillna("-")
