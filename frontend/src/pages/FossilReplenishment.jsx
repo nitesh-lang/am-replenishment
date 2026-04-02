@@ -30,7 +30,7 @@ export default function FossilReplenishment() {
 
   const [fromWeek, setFromWeek] = useState(null);
   const [toWeek, setToWeek] = useState(null);
-  const [coverWeeks, setCoverWeeks] = useState(6);
+  const [coverWeeks, setCoverWeeks] = useState(null);
   const [availableWeeks, setAvailableWeeks] = useState([]);
 
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
@@ -232,19 +232,20 @@ export default function FossilReplenishment() {
         {/* Cover Weeks */}
         <div>
           <label className="text-xs uppercase tracking-wider text-slate-400">
-            Cover Weeks
+            Cover Weeks <span className="normal-case font-normal text-indigo-400">(override matrix)</span>
           </label>
           <div className="grid grid-cols-1 mt-2">
             <div>
               <div className="text-xs text-slate-400 mb-1">&nbsp;</div>
               <select
-                value={coverWeeks}
+                value={coverWeeks ?? ""}
                 onChange={(e) => {
                   setCurrentPage(1);
-                  setCoverWeeks(Number(e.target.value));
+                  setCoverWeeks(e.target.value === "" ? null : Number(e.target.value));
                 }}
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg"
               >
+                <option value="">Use Matrix (default)</option>
                 {[4, 6, 8, 10, 12].map(w => (
                   <option key={w} value={w}>{w} Weeks</option>
                 ))}

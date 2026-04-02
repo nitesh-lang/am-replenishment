@@ -184,12 +184,17 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     # =====================
 
     master_df["Weeks of Cover"] = master_df.apply(
-        lambda row: cover_weeks if cover_weeks else get_weeks_of_cover(
+        lambda row: get_weeks_of_cover(
             row.get("Brand", ""),
             row.get("Assortment Type", "FP")
         ),
         axis=1
     )
+
+    if cover_weeks:
+        master_df["Weeks of Cover"] = master_df["Weeks of Cover"].apply(
+            lambda woc: cover_weeks if cover_weeks != woc else woc
+        )
 
     # =====================
     # REQUIRED INVENTORY
