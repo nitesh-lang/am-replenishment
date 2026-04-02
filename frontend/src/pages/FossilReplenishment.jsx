@@ -379,8 +379,9 @@ export default function FossilReplenishment() {
               <tr>
                 {[
                   "SKU", "ASIN", "Item No", "Brand", "Assortment Type",
-                  "Weeks of Cover", "Fossil SOH", "Total Inventory",
-                  "3 Months Gross Sales", "Fossil Weekly Sales",
+                  "Weeks of Cover", "Fossil SOH", "Amazon Inventory",
+                  "Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO",
+                  "Total Inventory", "3 Months Gross Sales", "Fossil Weekly Sales",
                   "Required Inventory", "Replenishment Qty"
                 ].map(col => (
                   <th key={col} className="px-4 py-3 text-left whitespace-nowrap">{col}</th>
@@ -389,9 +390,9 @@ export default function FossilReplenishment() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={16} className="px-4 py-8 text-center text-slate-400">Loading…</td></tr>
               ) : paginatedData.length === 0 ? (
-                <tr><td colSpan={12} className="px-4 py-8 text-center text-slate-400">No results found.</td></tr>
+                <tr><td colSpan={16} className="px-4 py-8 text-center text-slate-400">No results found.</td></tr>
               ) : paginatedData.map((row, i) => (
                 <tr key={i} className="hover:bg-slate-50 border-b border-slate-100">
                   <td className="px-4 py-3">{row.SKU}</td>
@@ -409,6 +410,10 @@ export default function FossilReplenishment() {
                     </span>
                   </td>
                   <td className="px-4 py-3">{row["Fossil SOH"]}</td>
+                  <td className="px-4 py-3">{row["Amazon Inventory"]}</td>
+                  <td className="px-4 py-3">{row["Andheri/Goregaon sellable Stock"]}</td>
+                  <td className="px-4 py-3">{row["In Transit PO"]}</td>
+                  <td className="px-4 py-3">{row["Open PO"]}</td>
                   <td className="px-4 py-3">{row["Total Inventory"]}</td>
                   <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
