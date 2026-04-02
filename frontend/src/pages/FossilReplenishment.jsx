@@ -91,7 +91,10 @@ export default function FossilReplenishment() {
   /* FILTER DATA */
   const filteredData = useMemo(() => {
     return data.filter(row => {
-      const matchSearch = row["Item No"]?.toLowerCase().includes(search.toLowerCase());
+      const matchSearch =
+        row["Item No"]?.toLowerCase().includes(search.toLowerCase()) ||
+        row["SKU"]?.toLowerCase().includes(search.toLowerCase()) ||
+        row["ASIN"]?.toLowerCase().includes(search.toLowerCase());
       const matchAssort = assortmentFilter === "All" || row["Assortment Type"] === assortmentFilter;
       const matchBrand  = brandFilter === "All" || row["Brand"] === brandFilter;
       return matchSearch && matchAssort && matchBrand;
@@ -148,10 +151,35 @@ export default function FossilReplenishment() {
   /* EXPORT */
   function exportCSV() {
     if (!filteredData.length) return;
-    const headers = Object.keys(filteredData[0]).join(",");
-    const rows = filteredData
-      .map(row => Object.values(row).map(val => `"${val}"`).join(","))
-      .join("\n");
+
+    const columns = [
+      { label: "SKU",                             key: "SKU" },
+      { label: "ASIN",                            key: "ASIN" },
+      { label: "Item No",                         key: "Item No" },
+      { label: "Brand",                           key: "Brand" },
+      { label: "Assortment Type",                 key: "Assortment Type" },
+      { label: "Total Units Sold",                key: "3 Months Gross Sales" },
+      { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
+      { label: "Fossil SOH",                      key: "Fossil SOH" },
+      { label: "Amazon Inventory",                key: "Amazon Inventory" },
+      { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
+      { label: "In Transit PO",                   key: "In Transit PO" },
+      { label: "Open PO",                         key: "Open PO" },
+      { label: "Total Inventory",                 key: "Total Inventory" },
+      { label: "Required Inventory",              key: "Required Inventory" },
+      { label: "Replenishment Qty",               key: "Replenishment Qty" },
+    ];
+
+    const headers = columns.map(c => `"${c.label}"`).join(",");
+    const rows = filteredData.map(row =>
+      columns.map(({ key }) => {
+        const val = row[key];
+        if (key === "Fossil Weekly Sales") return `"${Number(val).toFixed(2)}"`;
+        if (["Required Inventory", "Replenishment Qty"].includes(key)) return `"${Math.round(val)}"`;
+        return `"${val ?? ""}"`;
+      }).join(",")
+    ).join("\n");
+
     const blob = new Blob([headers + "\n" + rows], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -173,7 +201,7 @@ export default function FossilReplenishment() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
 
       {/* HEADER */}
       <div className="rounded-2xl p-8 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 text-white shadow-xl">
@@ -182,7 +210,7 @@ export default function FossilReplenishment() {
       </div>
 
       {/* KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <MetricCard title="Units To Replenish" value={Math.round(kpis.totalRequired)} />
         <MetricCard title="Avg Weekly Sales"   value={kpis.avgWeekly?.toFixed(2)} />
         <MetricCard title="Filtered SKUs"      value={kpis.skus} />
@@ -308,7 +336,7 @@ export default function FossilReplenishment() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search Item No..."
+            placeholder="Search Item No, SKU, ASIN..."
             className="px-4 py-2 border rounded-lg w-52"
           />
         </div>
@@ -407,14 +435,14 @@ export default function FossilReplenishment() {
                   { label: "Item No",                         key: "Item No" },
                   { label: "Brand",                           key: "Brand" },
                   { label: "Assortment Type",                 key: "Assortment Type" },
-                  { label: "Units Sold",                      key: "3 Months Gross Sales" },
+                  { label: "Total Units Sold",                key: "3 Months Gross Sales" },
+                  { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
                   { label: "Fossil SOH",                      key: "Fossil SOH" },
                   { label: "Amazon Inventory",                key: "Amazon Inventory" },
                   { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
                   { label: "In Transit PO",                   key: "In Transit PO" },
                   { label: "Open PO",                         key: "Open PO" },
                   { label: "Total Inventory",                 key: "Total Inventory" },
-                  { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
                   { label: "Required Inventory",              key: "Required Inventory" },
                   { label: "Replenishment Qty",               key: "Replenishment Qty" },
                 ].map(({ label, key }) => (
@@ -445,13 +473,13 @@ export default function FossilReplenishment() {
                     </span>
                   </td>
                   <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
+                  <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
                   <td className="px-4 py-3">{row["Fossil SOH"]}</td>
                   <td className="px-4 py-3">{row["Amazon Inventory"]}</td>
                   <td className="px-4 py-3">{row["Andheri/Goregaon sellable Stock"]}</td>
                   <td className="px-4 py-3">{row["In Transit PO"]}</td>
                   <td className="px-4 py-3">{row["Open PO"]}</td>
                   <td className="px-4 py-3">{row["Total Inventory"]}</td>
-                  <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
                   <td className="px-4 py-3 font-semibold text-indigo-700">{Math.round(row["Required Inventory"])}</td>
                   <td className="px-4 py-3 text-red-600 font-semibold">{Math.round(row["Replenishment Qty"])}</td>
                 </tr>
@@ -482,9 +510,9 @@ export default function FossilReplenishment() {
 
 function MetricCard({ title, value }) {
   return (
-    <div className="p-6 bg-white rounded-xl shadow-sm border">
+    <div className="p-4 bg-white rounded-xl shadow-sm border">
       <div className="text-xs uppercase text-slate-400">{title}</div>
-      <div className="text-3xl font-semibold mt-3">{value}</div>
+      <div className="text-2xl font-semibold mt-1">{value}</div>
     </div>
   );
 }
