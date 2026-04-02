@@ -408,7 +408,7 @@ export default function FossilReplenishment() {
                       {row["Weeks of Cover"]}w
                     </span>
                   </td>
-                  <td className="px-4 py-3">{row["Cambium SOH"]}</td>
+                  <td className="px-4 py-3">{row["Fossil SOH"]}</td>
                   <td className="px-4 py-3">{row["Total Inventory"]}</td>
                   <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>

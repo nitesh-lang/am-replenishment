@@ -18,7 +18,6 @@ DATA_PATH = Path("data/input/Fossil Replenishment")
 #   Skagen             4           4         6
 
 WEEKS_OF_COVER_MATRIX = {
-    #  brand (lowercase)       : { assortment_type : weeks }
     "fossil"          : {"FP": 9, "Discount": 4, "VD": 6},
     "armani exchange" : {"FP": 6, "Discount": 4, "VD": 6},
     "michael kors"    : {"FP": 6, "Discount": 4, "VD": 6},
@@ -27,19 +26,13 @@ WEEKS_OF_COVER_MATRIX = {
     "skagen"          : {"FP": 4, "Discount": 4, "VD": 6},
 }
 
-DEFAULT_WEEKS = 8  # fallback for unknown brand/type
+DEFAULT_WEEKS = 8
 
 
 def get_weeks_of_cover(brand: str, assortment_type: str) -> int:
-    """
-    Return weeks of cover for a given brand + assortment type.
-    - brand: e.g. 'Fossil', 'Armani Exchange' (case-insensitive)
-    - assortment_type: 'FP', 'Discount', or 'VD'
-    """
     b = str(brand).strip().lower()
     a = str(assortment_type).strip()
 
-    # Normalise common variants
     a_upper = a.upper()
     if a_upper in ("FULL PRICE", "FP"):
         a = "FP"
@@ -57,91 +50,121 @@ def get_weeks_of_cover(brand: str, assortment_type: str) -> int:
 
 def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_weeks: int = None):
 
+    # =====================
     # LOAD DATA
-    master_df = get("Fossil Replenishment/Fossil Replenishment.xlsx")
-    cambium_df = get("Fossil Replenishment/Cambium - SOH.xlsx")
-    sales_df   = get("Fossil Replenishment/fba_shipments_fossil.csv")
-
-    # =====================
-    # CAMBIUM SOH LOOKUP
     # =====================
 
-    cambium_map = cambium_df.set_index("Item No")["Available Qty"]
-    master_df["Cambium SOH"] = master_df["Item No"].map(cambium_map).fillna(0)
+    master_df     = get("Fossil Replenishment/Fossil Replenishment.xlsx")
+    fossil_soh_df = get("Fossil Replenishment/Fossil - SOH.xlsx")
+    amazon_df     = get("inventory_amazon_fossil.xlsx")
+    sales_df      = get("weekly_sales_snapshot.csv")
 
     # =====================
-    # OTHER STOCK (TEMP)
+    # FOSSIL SOH LOOKUP (inhouse / AMPM)
+    # Source: Fossil - SOH.xlsx
+    # Key: Item No → Available Qty
     # =====================
 
-    master_df["Andheri/Goregaon sellable Stock"] = 0
-    master_df["In Transit PO"] = 0
-    master_df["Open PO"] = 0
+    fossil_soh_map = fossil_soh_df.set_index("Item No")["Available Qty"]
+    master_df["Fossil SOH"] = master_df["Item No"].map(fossil_soh_map).fillna(0)
+
+    # =====================
+    # AMAZON INVENTORY LOOKUP (ledger)
+    # Source: inventory_amazon_fossil.xlsx
+    # Key: SKU → Qty, filtered by Channel=Amazon
+    # =====================
+
+    amazon_df.columns = amazon_df.columns.str.strip()
+    amazon_filtered = amazon_df[
+        amazon_df["Channel"].str.strip().str.lower() == "amazon"
+    ]
+    amazon_map = amazon_filtered.groupby("SKU")["Qty"].sum()
+    master_df["Amazon Inventory"] = master_df["SKU"].map(amazon_map).fillna(0)
+
+    # =====================
+    # OTHER STOCK (from Fossil Replenishment.xlsx)
+    # =====================
+
+    for col in ["Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO"]:
+        if col not in master_df.columns:
+            master_df[col] = 0
 
     # =====================
     # TOTAL INVENTORY
     # =====================
 
     master_df["Total Inventory"] = (
-        master_df["Cambium SOH"]
+        master_df["Fossil SOH"]
+        + master_df["Amazon Inventory"]
         + master_df["Andheri/Goregaon sellable Stock"]
         + master_df["In Transit PO"]
         + master_df["Open PO"]
     )
 
     # =====================
-    # SALES
+    # SALES — weekly_sales_snapshot.csv
+    # Filter: brand=Fossil, channel=Amazon
     # =====================
 
     sales_df.columns = sales_df.columns.str.strip()
+    sales_df["brand"]   = sales_df["brand"].str.strip()
+    sales_df["channel"] = sales_df["channel"].str.strip().str.lower()
 
-    sales_df["Merchant SKU"] = sales_df["Merchant SKU"].str.replace(
-        r"^(FBK|FBO|FBA)", "FBA", regex=True
-    )
+    fossil_sales = sales_df[
+        (sales_df["brand"].str.lower() == "fossil") &
+        (sales_df["channel"] == "amazon")
+    ].copy()
 
     # =====================
     # AVAILABLE WEEKS
+    # Parse "Week 13" → 13
     # =====================
 
-    if "Week" in sales_df.columns:
-        sales_df["Week"] = pd.to_numeric(sales_df["Week"], errors="coerce")
-        available_weeks = sorted(sales_df["Week"].dropna().unique().astype(int).tolist())
-    else:
-        available_weeks = []
+    fossil_sales["week_num"] = (
+        fossil_sales["week"].str.extract(r"(\d+)").astype(float)
+    )
+    available_weeks = sorted(
+        fossil_sales["week_num"].dropna().unique().astype(int).tolist()
+    )
 
     # =====================
     # FILTER BY SALES WINDOW
     # =====================
 
-    filtered_sales = sales_df.copy()
-    if from_week and "Week" in sales_df.columns:
-        filtered_sales = filtered_sales[filtered_sales["Week"] >= from_week]
-    if to_week and "Week" in sales_df.columns:
-        filtered_sales = filtered_sales[filtered_sales["Week"] <= to_week]
+    filtered_sales = fossil_sales.copy()
+    if from_week:
+        filtered_sales = filtered_sales[filtered_sales["week_num"] >= from_week]
+    if to_week:
+        filtered_sales = filtered_sales[filtered_sales["week_num"] <= to_week]
 
     # =====================
     # CALCULATE WEEK COUNT FOR AVG
     # =====================
 
     if available_weeks:
-        eff_from = from_week if from_week else available_weeks[0]
-        eff_to   = to_week   if to_week   else available_weeks[-1]
+        eff_from   = from_week if from_week else available_weeks[0]
+        eff_to     = to_week   if to_week   else available_weeks[-1]
         week_count = max(len([w for w in available_weeks if eff_from <= w <= eff_to]), 1)
     else:
         week_count = 12
 
-    sales_3m = (
-        filtered_sales.groupby("Merchant SKU")["Shipped Quantity"]
+    # =====================
+    # AGGREGATE SALES BY SKU
+    # =====================
+
+    sales_agg = (
+        filtered_sales.groupby("sku")["units_sold"]
         .sum()
         .reset_index()
     )
 
     master_df = master_df.merge(
-        sales_3m.rename(columns={"Merchant SKU": "SKU"}),
+        sales_agg.rename(columns={"sku": "SKU", "units_sold": "units_sold_window"}),
         on="SKU",
         how="left"
     )
 
-    master_df["3 Months Gross Sales"] = master_df["Shipped Quantity"].fillna(0)
+    master_df["3 Months Gross Sales"] = master_df["units_sold_window"].fillna(0)
 
     # =====================
     # WEEKLY SALES
@@ -152,6 +175,7 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     # =====================
     # WEEKS OF COVER (per row)
     # Driven by Brand x Assortment Type matrix
+    # Unless cover_weeks override is passed
     # =====================
 
     master_df["Weeks of Cover"] = master_df.apply(
