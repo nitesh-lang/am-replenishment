@@ -33,6 +33,7 @@ export default function FossilReplenishment() {
   const [coverWeeks, setCoverWeeks] = useState(6);
   const [availableWeeks, setAvailableWeeks] = useState([]);
 
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 50;
 
@@ -106,12 +107,33 @@ export default function FossilReplenishment() {
 
   const isFiltered = search !== "" || assortmentFilter !== "All" || brandFilter !== "All";
 
+  /* SORT */
+  function toggleSort(col) {
+    setSortConfig(prev => ({
+      key: col,
+      direction: prev.key === col && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  }
+
+  const sortedData = useMemo(() => {
+    if (!sortConfig.key) return filteredData;
+    const dir = sortConfig.direction === "asc" ? 1 : -1;
+    return [...filteredData].sort((a, b) => {
+      const aVal = a[sortConfig.key];
+      const bVal = b[sortConfig.key];
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+      if (typeof aVal === "number" && typeof bVal === "number") return (aVal - bVal) * dir;
+      return aVal.toString().localeCompare(bVal.toString()) * dir;
+    });
+  }, [filteredData, sortConfig]);
+
   /* PAGINATION */
-  const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+  const totalPages = Math.ceil(sortedData.length / rowsPerPage);
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
-    return filteredData.slice(start, start + rowsPerPage);
-  }, [filteredData, currentPage]);
+    return sortedData.slice(start, start + rowsPerPage);
+  }, [sortedData, currentPage]);
 
   /* KPI */
   const kpis = useMemo(() => {
@@ -378,13 +400,29 @@ export default function FossilReplenishment() {
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
                 {[
-                  "SKU", "ASIN", "Item No", "Brand", "Assortment Type",
-                  "Fossil SOH", "Amazon Inventory",
-                  "Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO",
-                  "Total Inventory", "Units Sold", "Fossil Weekly Sales",
-                  "Required Inventory", "Replenishment Qty"
-                ].map(col => (
-                  <th key={col} className="px-4 py-3 text-left whitespace-nowrap">{col}</th>
+                  { label: "SKU",                             key: "SKU" },
+                  { label: "ASIN",                            key: "ASIN" },
+                  { label: "Item No",                         key: "Item No" },
+                  { label: "Brand",                           key: "Brand" },
+                  { label: "Assortment Type",                 key: "Assortment Type" },
+                  { label: "Units Sold",                      key: "3 Months Gross Sales" },
+                  { label: "Fossil SOH",                      key: "Fossil SOH" },
+                  { label: "Amazon Inventory",                key: "Amazon Inventory" },
+                  { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
+                  { label: "In Transit PO",                   key: "In Transit PO" },
+                  { label: "Open PO",                         key: "Open PO" },
+                  { label: "Total Inventory",                 key: "Total Inventory" },
+                  { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
+                  { label: "Required Inventory",              key: "Required Inventory" },
+                  { label: "Replenishment Qty",               key: "Replenishment Qty" },
+                ].map(({ label, key }) => (
+                  <th
+                    key={key}
+                    onClick={() => toggleSort(key)}
+                    className="px-4 py-3 text-left whitespace-nowrap cursor-pointer hover:bg-slate-200 select-none"
+                  >
+                    {label}{sortConfig.key === key ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : " ↕"}
+                  </th>
                 ))}
               </tr>
             </thead>
