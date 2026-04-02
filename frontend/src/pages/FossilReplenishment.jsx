@@ -404,13 +404,13 @@ export default function FossilReplenishment() {
                       {row["Assortment Type"] || "FP"}
                     </span>
                   </td>
+                  <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil SOH"]}</td>
                   <td className="px-4 py-3">{row["Amazon Inventory"]}</td>
                   <td className="px-4 py-3">{row["Andheri/Goregaon sellable Stock"]}</td>
                   <td className="px-4 py-3">{row["In Transit PO"]}</td>
                   <td className="px-4 py-3">{row["Open PO"]}</td>
                   <td className="px-4 py-3">{row["Total Inventory"]}</td>
-                  <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
                   <td className="px-4 py-3 font-semibold text-indigo-700">{Math.round(row["Required Inventory"])}</td>
                   <td className="px-4 py-3 text-red-600 font-semibold">{Math.round(row["Replenishment Qty"])}</td>

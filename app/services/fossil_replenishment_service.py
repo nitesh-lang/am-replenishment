@@ -101,7 +101,6 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
 
     master_df["Total Inventory"] = (
         master_df["Fossil SOH"]
-        + master_df["Amazon Inventory"]
         + master_df["Andheri/Goregaon sellable Stock"]
         + master_df["In Transit PO"]
         + master_df["Open PO"]
