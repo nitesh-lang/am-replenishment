@@ -379,9 +379,9 @@ export default function FossilReplenishment() {
               <tr>
                 {[
                   "SKU", "ASIN", "Item No", "Brand", "Assortment Type",
-                  "Weeks of Cover", "Fossil SOH", "Amazon Inventory",
+                  "Fossil SOH", "Amazon Inventory",
                   "Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO",
-                  "Total Inventory", "3 Months Gross Sales", "Fossil Weekly Sales",
+                  "Total Inventory", "Units Sold", "Fossil Weekly Sales",
                   "Required Inventory", "Replenishment Qty"
                 ].map(col => (
                   <th key={col} className="px-4 py-3 text-left whitespace-nowrap">{col}</th>
@@ -402,11 +402,6 @@ export default function FossilReplenishment() {
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded text-xs font-semibold ${assortBadgeColor(row["Assortment Type"])}`}>
                       {row["Assortment Type"] || "FP"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${wocColor(row["Weeks of Cover"])}`}>
-                      {row["Weeks of Cover"]}w
                     </span>
                   </td>
                   <td className="px-4 py-3">{row["Fossil SOH"]}</td>
