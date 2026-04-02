@@ -41,7 +41,8 @@ export default function FossilReplenishment() {
   useEffect(() => {
     setLoading(true);
 
-    const params = new URLSearchParams({ cover_weeks: coverWeeks });
+    const params = new URLSearchParams();
+    if (coverWeeks) params.append("cover_weeks", coverWeeks);
     if (fromWeek) params.append("from_week", fromWeek);
     if (toWeek) params.append("to_week", toWeek);
 
