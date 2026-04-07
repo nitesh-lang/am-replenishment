@@ -160,13 +160,12 @@ export default function FossilReplenishment() {
       { label: "Assortment Type",                 key: "Assortment Type" },
       { label: "Total Units Sold",                key: "3 Months Gross Sales" },
       { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
-      { label: "Fossil SOH",                      key: "Fossil SOH" },
       { label: "Cambium SOH",                     key: "Cambium SOH" },
-      { label: "Cambium SOH",                      key: "Amazon Inventory" },
       { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
       { label: "In Transit PO",                   key: "In Transit PO" },
       { label: "Open PO",                         key: "Open PO" },
       { label: "Total Inventory",                 key: "Total Inventory" },
+      { label: "Fossil SOH",                      key: "Fossil SOH" },
       { label: "Required Inventory",              key: "Required Inventory" },
       { label: "Replenishment Qty",               key: "Replenishment Qty" },
     ];
@@ -438,13 +437,12 @@ export default function FossilReplenishment() {
                   { label: "Assortment Type",                 key: "Assortment Type" },
                   { label: "Total Units Sold",                key: "3 Months Gross Sales" },
                   { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
-                  { label: "Fossil SOH",                      key: "Fossil SOH" },
                   { label: "Cambium SOH",                     key: "Cambium SOH" },
-                  { label: "Amazon Inventory",                key: "Amazon Inventory" },
                   { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
                   { label: "In Transit PO",                   key: "In Transit PO" },
                   { label: "Open PO",                         key: "Open PO" },
                   { label: "Total Inventory",                 key: "Total Inventory" },
+                  { label: "Fossil SOH",                      key: "Fossil SOH" },
                   { label: "Required Inventory",              key: "Required Inventory" },
                   { label: "Replenishment Qty",               key: "Replenishment Qty" },
                 ].map(({ label, key }) => (
@@ -476,13 +474,12 @@ export default function FossilReplenishment() {
                   </td>
                   <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
-                  <td className="px-4 py-3">{row["Fossil SOH"]}</td>
                   <td className="px-4 py-3">{row["Cambium SOH"]}</td>
-                  <td className="px-4 py-3">{row["Amazon Inventory"]}</td>
                   <td className="px-4 py-3">{row["Andheri/Goregaon sellable Stock"]}</td>
                   <td className="px-4 py-3">{row["In Transit PO"]}</td>
                   <td className="px-4 py-3">{row["Open PO"]}</td>
                   <td className="px-4 py-3">{row["Total Inventory"]}</td>
+                  <td className="px-4 py-3 text-red-600 font-semibold">{row["Fossil SOH"]}</td>
                   <td className="px-4 py-3 font-semibold text-indigo-700">{Math.round(row["Required Inventory"])}</td>
                   <td className="px-4 py-3 text-red-600 font-semibold">{Math.round(row["Replenishment Qty"])}</td>
                 </tr>
