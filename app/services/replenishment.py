@@ -275,7 +275,7 @@ def calculate_replenishment(
     .reset_index()
 )
 
-    inventory_summary["ampm_inventory"] = inventory_summary.get("AMPM", 0).fillna(0)
+    inventory_summary["ampm_inventory"] = inventory_summary["AMPM"].fillna(0) if "AMPM" in inventory_summary.columns else 0
 
     df = df.merge(
     inventory_summary[["Model","ampm_inventory"]],
