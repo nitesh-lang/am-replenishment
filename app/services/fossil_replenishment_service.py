@@ -56,7 +56,6 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
 
     master_df     = get("Fossil Replenishment/Fossil Replenishment.xlsx")
     master_df.columns = master_df.columns.str.strip()
-    fossil_soh_df = get("Fossil Replenishment/Fossil - SOH.xlsx")
     amazon_df     = get("inventory_amazon_fossil.xlsx")
     sales_df      = get("weekly_sales_snapshot.csv")
 
@@ -66,8 +65,10 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     # Key: Item No → Available Qty
     # =====================
 
-    fossil_soh_map = fossil_soh_df.set_index("Item No")["Available Qty"]
-    master_df["Fossil SOH"] = master_df["Item No"].map(fossil_soh_map).fillna(0)
+    # Fossil SOH comes directly from master file (column already present)
+    if "Fossil SOH" not in master_df.columns:
+        master_df["Fossil SOH"] = 0
+    master_df["Fossil SOH"] = pd.to_numeric(master_df["Fossil SOH"], errors="coerce").fillna(0)
 
     # =====================
     # AMAZON INVENTORY LOOKUP (ledger)
