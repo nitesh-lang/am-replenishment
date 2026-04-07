@@ -96,11 +96,11 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     # TOTAL INVENTORY
     # =====================
 
-    for col in ["Fossil SOH", "Amazon Inventory", "Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO"]:
+    for col in ["Cambium SOH", "Amazon Inventory", "Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO"]:
         master_df[col] = pd.to_numeric(master_df[col], errors="coerce").fillna(0)
 
     master_df["Total Inventory"] = (
-        master_df["Fossil SOH"]
+        master_df["Cambium SOH"]
         + master_df["Andheri/Goregaon sellable Stock"]
         + master_df["In Transit PO"]
         + master_df["Open PO"]

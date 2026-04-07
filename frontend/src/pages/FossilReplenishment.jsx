@@ -161,7 +161,8 @@ export default function FossilReplenishment() {
       { label: "Total Units Sold",                key: "3 Months Gross Sales" },
       { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
       { label: "Fossil SOH",                      key: "Fossil SOH" },
-      { label: "Amazon Inventory",                key: "Amazon Inventory" },
+      { label: "Cambium SOH",                     key: "Cambium SOH" },
+      { label: "Cambium SOH",                      key: "Amazon Inventory" },
       { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
       { label: "In Transit PO",                   key: "In Transit PO" },
       { label: "Open PO",                         key: "Open PO" },
@@ -438,6 +439,7 @@ export default function FossilReplenishment() {
                   { label: "Total Units Sold",                key: "3 Months Gross Sales" },
                   { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
                   { label: "Fossil SOH",                      key: "Fossil SOH" },
+                  { label: "Cambium SOH",                     key: "Cambium SOH" },
                   { label: "Amazon Inventory",                key: "Amazon Inventory" },
                   { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
                   { label: "In Transit PO",                   key: "In Transit PO" },
@@ -458,9 +460,9 @@ export default function FossilReplenishment() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={16} className="px-4 py-8 text-center text-slate-400">Loading…</td></tr>
+                <tr><td colSpan={17} className="px-4 py-8 text-center text-slate-400">Loading…</td></tr>
               ) : paginatedData.length === 0 ? (
-                <tr><td colSpan={16} className="px-4 py-8 text-center text-slate-400">No results found.</td></tr>
+                <tr><td colSpan={17} className="px-4 py-8 text-center text-slate-400">No results found.</td></tr>
               ) : paginatedData.map((row, i) => (
                 <tr key={i} className="hover:bg-slate-50 border-b border-slate-100">
                   <td className="px-4 py-3">{row.SKU}</td>
@@ -475,6 +477,7 @@ export default function FossilReplenishment() {
                   <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
                   <td className="px-4 py-3">{row["Fossil SOH"]}</td>
+                  <td className="px-4 py-3">{row["Cambium SOH"]}</td>
                   <td className="px-4 py-3">{row["Amazon Inventory"]}</td>
                   <td className="px-4 py-3">{row["Andheri/Goregaon sellable Stock"]}</td>
                   <td className="px-4 py-3">{row["In Transit PO"]}</td>
