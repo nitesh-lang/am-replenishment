@@ -587,7 +587,7 @@ function FilterSelect({ label, value, onChange }) {
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-2 w-full px-4 py-2 border rounded-lg"
       >
-        {[1,2,3,4,5,6,7,8].map((w) => (
+        {[1,2,3,4,5,6,7,8,9,10,11,12].map((w) => (
           <option key={w} value={w}>
             {w} Week{w > 1 ? "s" : ""}
           </option>
