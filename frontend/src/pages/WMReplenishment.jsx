@@ -202,6 +202,7 @@ export default function WMReplenishment() {
                       "remarks": "Remarks",
                       "model": "Model"
                     }[col] || col}
+                    {sortConfig.key === col ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : " ↕"}
                   </th>
                 ))}
               </tr>

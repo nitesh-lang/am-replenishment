@@ -407,19 +407,19 @@ function exportCSV() {
     <th onClick={() => toggleSort("model")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Model {getSortArrow("model")}
     </th>
-    <th className="px-4 py-3 whitespace-nowrap">Category</th>
+    <th onClick={() => toggleSort("category")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Category {getSortArrow("category")}</th>
     <th onClick={() => toggleSort("sku")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       SKU {getSortArrow("sku")}
     </th>
-    <th className="px-4 py-3 whitespace-nowrap">ASIN</th>
+    <th onClick={() => toggleSort("asin")} className="px-4 py-3 cursor-pointer whitespace-nowrap">ASIN {getSortArrow("asin")}</th>
     <th onClick={() => toggleSort("weekly_velocity")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Avg Weekly Sales {getSortArrow("weekly_velocity")}
     </th>
-    <th className="px-4 py-3 whitespace-nowrap">Total Sold</th>
+    <th onClick={() => toggleSort("total_units_sold")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Total Sold {getSortArrow("total_units_sold")}</th>
     <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Ledger Stock {getSortArrow("fc_inventory")}
     </th>
-    <th className="px-4 py-3 whitespace-nowrap">AMPM Inventory</th>
+    <th onClick={() => toggleSort("ampm_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">AMPM Inventory {getSortArrow("ampm_inventory")}</th>
     <th onClick={() => toggleSort("target_cover_units")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Target Cover Units {getSortArrow("target_cover_units")}
     </th>
@@ -430,14 +430,14 @@ function exportCSV() {
       Send Qty {getSortArrow("send_qty")}
     </th>
     <th onClick={() => toggleSort("fill_pct")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
-      Fill %
+      Fill % {getSortArrow("fill_pct")}
     </th>
-    <th className="px-4 py-3 whitespace-nowrap">Velocity Flag</th>
+    <th onClick={() => toggleSort("velocity_flag")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Velocity Flag {getSortArrow("velocity_flag")}</th>
     <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       FC {getSortArrow("fulfillment_center")}
     </th>
-    <th className="px-4 py-3 whitespace-nowrap">Hazmat Type</th>
-    <th className="px-4 py-3 whitespace-nowrap">Master Carton</th>
+    <th onClick={() => toggleSort("hazmat_type")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Hazmat Type {getSortArrow("hazmat_type")}</th>
+    <th onClick={() => toggleSort("master_carton")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Master Carton {getSortArrow("master_carton")}</th>
   </tr>
 </thead>
 

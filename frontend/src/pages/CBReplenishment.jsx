@@ -355,6 +355,7 @@ const validToWeeks = availableWeeks;
                     className="px-4 py-3 cursor-pointer"
                   >
                     {col === "hazmat_type" ? "ASIN Sort Details" : col}
+                    {sortConfig.key === col ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : " ↕"}
                   </th>
                 ))}
               </tr>
