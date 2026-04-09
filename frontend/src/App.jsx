@@ -10,6 +10,7 @@ import ChinaReorderWorking from "./pages/ChinaReorderWorking";
 import CBReplenishment from "./pages/CBReplenishment";
 import WMReplenishment from "./pages/WMReplenishment";
 import FossilReplenishment from "./pages/FossilReplenishment";
+import Dashboard from "./pages/Dashboard";
 
 function App() {
   return (
@@ -18,9 +19,10 @@ function App() {
         <Routes>
 
           {/* Default Redirect */}
-          <Route path="/" element={<Navigate to="/replenishment" replace />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
           {/* Main Pages */}
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/replenishment" element={<Replenishment />} />
           <Route path="/fc-allocation" element={<FCAllocation />} />
           <Route path="/sales-analytics" element={<SalesAnalytics />} />
@@ -32,7 +34,7 @@ function App() {
           <Route path="/fossil-replenishment" element={<FossilReplenishment />} />
 
           {/* Catch All Route */}
-          <Route path="*" element={<Navigate to="/replenishment" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
         </Routes>
       </Layout>

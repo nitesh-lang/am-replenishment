@@ -15,6 +15,7 @@ export default function Layout({ children }) {
   const [collapsed, setCollapsed] = useState(false);
 
   const navItems = [
+    { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Replenishment", path: "/replenishment", icon: LayoutDashboard },
     { name: "FC Allocation", path: "/fc-allocation", icon: Boxes },
     { name: "China Reorder", path: "/china-reorder", icon: Boxes },   // ✅ ADD THIS
