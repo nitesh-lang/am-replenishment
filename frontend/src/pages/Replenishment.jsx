@@ -105,10 +105,18 @@ useEffect(() => {
   "listing_status",
   "amazon_inventory",
   "inbound_inventory",
-  ...baseColumns.filter(c => !["model","asin","sku","category","listing_status","amazon_inventory","inbound_inventory","ixd_type","hazmat_type","master_carton","is_risky","is_overstock"].includes(c)),
+  ...baseColumns.filter(c => ![
+    "model","asin","sku","category","listing_status",
+    "amazon_inventory","inbound_inventory",
+    "ixd_type","hazmat_type",
+    "master_carton","recommended_qty",
+    "carton_break_flag","cartons_needed","excess_units",
+    "is_risky","is_overstock"
+  ].includes(c)),
   "ixd_type",
   "hazmat_type",
-  "master_carton"
+  "master_carton",
+  "recommended_qty",   // ← NEW: rounded replenishment qty
 ];
 
   /* ============================================================
@@ -246,6 +254,9 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
     hazmat_type: "HAZMAT TYPE",
     listing_status: "LISTING STATUS",
     master_carton: "MASTER CARTON",
+    recommended_qty: "RECOMMENDED QTY",
+    cartons_needed: "CARTONS NEEDED",            // ← NEW
+    excess_units: "EXCESS UNITS",               // ← NEW
   };
 
   const headers = exportColumns.map(c => columnLabels[c] || c.toUpperCase()).join(",");
@@ -442,9 +453,18 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
                   <th
                     key={col}
                     onClick={() => toggleSort(col)}
-                    className="px-4 py-3 cursor-pointer"
+                    className="px-4 py-3 cursor-pointer whitespace-nowrap"
                   >
-                    {col} {getSortArrow(col)}
+                    {col === "recommended_qty"
+                      ? <span className="flex items-center gap-1">
+                          RECOMMENDED QTY
+                          <span
+                            className="text-slate-400 cursor-help"
+                            title="Replenishment qty rounded UP to nearest master carton. IXD = mandatory full cartons. ⚠ = carton break recommended (excess > 50% of carton)."
+                          >ⓘ</span>
+                        </span>
+                      : col}{" "}
+                    {getSortArrow(col)}
                   </th>
                 ))}
               </tr>
@@ -463,7 +483,7 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
                       {tableColumns.map((col) => {
                         if (col === "status")
                           return (
-                            <td className="px-4 py-3">
+                            <td key={col} className="px-4 py-3">
                               <span className={`px-2 py-1 text-xs rounded ${getStatusBadge(status)}`}>
                                 {status}
                               </span>
@@ -471,60 +491,144 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
                           );
 
                         if (col === "listing_status") {
-  const ls = row.listing_status ?? "-";
-  const badgeStyle =
-    ls === "Active" ? "bg-green-100 text-green-700" :
-    ls === "EOL"    ? "bg-red-100 text-red-700" :
-                     "bg-slate-100 text-slate-500";
-  return (
-    <td key={col} className="px-4 py-3">
-      <span className={`px-2 py-1 text-xs rounded ${badgeStyle}`}>{ls}</span>
-    </td>
-  );
-}
-
-if (col === "required_units" && row[col] > 0)
+                          const ls = row.listing_status ?? "-";
+                          const badgeStyle =
+                            ls === "Active" ? "bg-green-100 text-green-700" :
+                            ls === "EOL"    ? "bg-red-100 text-red-700" :
+                                             "bg-slate-100 text-slate-500";
                           return (
-                            <td className="px-4 py-3 font-bold text-red-600">
+                            <td key={col} className="px-4 py-3">
+                              <span className={`px-2 py-1 text-xs rounded ${badgeStyle}`}>{ls}</span>
+                            </td>
+                          );
+                        }
+
+                        if (col === "required_units" && row[col] > 0)
+                          return (
+                            <td key={col} className="px-4 py-3 font-bold text-red-600">
                               {row[col]}
                             </td>
                           );
-                          if (col === "ixd_type")
-  return <td className="px-4 py-3">{row.ixd_type}</td>;
 
-if (col === "hazmat_type")
-  return <td className="px-4 py-3">{row.hazmat_type}</td>;
-                          if (col === "master_carton")
-  return (
-    <td className="px-4 py-3">
-      <input
-        type="text"
-        value={masterCartons[row.model] ?? row.master_carton ?? ""}
-        onChange={async (e) => {
-  const value = e.target.value;
+                        if (col === "ixd_type")
+                          return <td key={col} className="px-4 py-3">{row.ixd_type}</td>;
 
-  setMasterCartons(prev => ({
-     ...prev,
-     [row.model]: value
-     }));
+                        if (col === "hazmat_type")
+                          return <td key={col} className="px-4 py-3">{row.hazmat_type}</td>;
 
-  await fetch("https://am-replenishment.onrender.com/save-master-carton", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: row.model,
-      master_carton: value
-    })
-  });
-}}
-        className="border px-2 py-1 rounded w-20"
-      />
-    </td>
-  );
+                        if (col === "master_carton")
+                          return (
+                            <td key={col} className="px-4 py-3">
+                              <input
+                                type="text"
+                                value={masterCartons[row.model] ?? row.master_carton ?? ""}
+                                onChange={async (e) => {
+                                  const value = e.target.value;
+                                  setMasterCartons(prev => ({ ...prev, [row.model]: value }));
+                                  await fetch("https://am-replenishment.onrender.com/save-master-carton", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ model: row.model, master_carton: value })
+                                  });
+                                }}
+                                onClick={e => e.stopPropagation()}
+                                className="border px-2 py-1 rounded w-20"
+                              />
+                            </td>
+                          );
 
-                        return <td className="px-4 py-3">{row[col]}</td>;
+                        /* ── MASTER CARTON QTY (NEW) ─────────────────────── */
+                        if (col === "recommended_qty") {
+                          const mcQty = row.recommended_qty ?? row.replenishment_qty ?? 0;
+                          const rawQty = row.replenishment_qty ?? 0;
+                          const breakFlag = row.carton_break_flag ?? false;
+                          const cartons = row.cartons_needed ?? 0;
+                          const excess = row.excess_units ?? 0;
+                          const isIXD = row.ixd_type === "IXD";
+                          const noCarton = !row.master_carton || row.master_carton === 0;
+                          const noReplenishment = rawQty === 0;
+
+                          if (noReplenishment) {
+                            return (
+                              <td key={col} className="px-4 py-3 text-slate-300">—</td>
+                            );
+                          }
+
+                          if (noCarton) {
+                            return (
+                              <td key={col} className="px-4 py-3">
+                                <span
+                                  className="text-slate-400 text-xs italic"
+                                  title="Set master carton size to enable rounding"
+                                >
+                                  No carton set
+                                </span>
+                              </td>
+                            );
+                          }
+
+                          // Carton break exception: excess > 50% of carton size
+                          if (breakFlag) {
+                            return (
+                              <td key={col} className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-semibold text-orange-600">
+                                    {mcQty}
+                                  </span>
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700 cursor-help w-fit"
+                                    title={`Raw qty: ${rawQty} | Rounded: ${mcQty} | Excess: ${excess} units (>${Math.round(excess / (row.master_carton || 1) * 100)}% of carton) — Consider breaking carton`}
+                                  >
+                                    ⚠ Break Carton
+                                  </span>
+                                  <span className="text-xs text-slate-400">
+                                    {cartons} carton{cartons !== 1 ? "s" : ""}
+                                    {isIXD ? "" : " (advisory)"}
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          }
+
+                          // Normal IXD full-carton rounding
+                          if (isIXD) {
+                            return (
+                              <td key={col} className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-semibold text-blue-700">
+                                    {mcQty}
+                                  </span>
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600 w-fit cursor-help"
+                                    title={`IXD: Must ship full cartons. Raw: ${rawQty} → Rounded up to ${mcQty} (${cartons} carton${cartons !== 1 ? "s" : ""}). Excess: ${excess} units.`}
+                                  >
+                                    📦 {cartons} carton{cartons !== 1 ? "s" : ""}
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          }
+
+                          // Non-IXD advisory rounding
+                          return (
+                            <td key={col} className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                              <div className="flex flex-col gap-1">
+                                <span className="font-semibold text-slate-700">
+                                  {mcQty}
+                                </span>
+                                <span
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-500 w-fit cursor-help"
+                                  title={`Non-IXD: Carton breaking allowed. Raw: ${rawQty} → Advisory: ${mcQty} (${cartons} carton${cartons !== 1 ? "s" : ""}). Excess: ${excess} units.`}
+                                >
+                                  {cartons} carton{cartons !== 1 ? "s" : ""} (flex)
+                                </span>
+                              </div>
+                            </td>
+                          );
+                        }
+                        /* ── END MASTER CARTON QTY ───────────────────────── */
+
+                        return <td key={col} className="px-4 py-3">{row[col]}</td>;
                       })}
                     </tr>
 
@@ -542,6 +646,28 @@ if (col === "hazmat_type")
                             <div>
                               <strong>Amazon Inventory:</strong> {row.amazon_inventory}
                             </div>
+                            {/* ── Carton Intelligence Detail (NEW) ── */}
+                            {row.master_carton > 0 && row.replenishment_qty > 0 && (
+                              <>
+                                <div>
+                                  <strong>MC Rounded Qty:</strong>{" "}
+                                  {row.recommended_qty}
+                                  {row.ixd_type === "IXD"
+                                    ? " (IXD — full cartons mandatory)"
+                                    : " (Non-IXD — carton break allowed)"}
+                                </div>
+                                <div>
+                                  <strong>Cartons Needed:</strong> {row.cartons_needed}
+                                </div>
+                                <div>
+                                  <strong>Excess Units:</strong>{" "}
+                                  <span className={row.carton_break_flag ? "text-orange-600 font-semibold" : ""}>
+                                    {row.excess_units}
+                                    {row.carton_break_flag ? " ⚠ Break recommended" : ""}
+                                  </span>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

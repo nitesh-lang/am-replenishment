@@ -47,7 +47,7 @@ def get_replenishment(
             "sales_velocity": int(row["sales_velocity"]),
             "total_units_sold": int(row["total_units_sold"]),
             "amazon_inventory": int(row["amazon_inventory"]),
-            "inbound_inventory": int(row["inbound_inventory"]),   # ADD THIS
+            "inbound_inventory": int(row["inbound_inventory"]),
             "ampm_inventory": int(row["ampm_inventory"]),
             "required_units": int(row["required_units"]),
             "replenishment_qty": int(row["replenishment_qty"]),
@@ -56,6 +56,17 @@ def get_replenishment(
             "is_overstock": bool(row["is_overstock"]),
             "ixd_type": ixd_type,
             "hazmat_type": str(row["Hazmat Type"]) if row.get("Hazmat Type") else "",
+            # ── Master Carton Intelligence (NEW) ──────────────────────────
+            # recommended_qty : replenishment_qty rounded up to nearest
+            #                     full carton (IXD = mandatory, Non-IXD = advisory)
+            # carton_break_flag : True when excess > 50 % of one carton
+            #                     → breaking the carton is the smarter move
+            # cartons_needed    : how many full cartons that equals
+            # excess_units      : units above raw requirement in full-carton scenario
+            "recommended_qty": int(row.get("recommended_qty", row["replenishment_qty"])),
+            "carton_break_flag": bool(row.get("carton_break_flag", False)),
+            "cartons_needed": int(row.get("cartons_needed", 0)),
+            "excess_units": int(row.get("excess_units", 0)),
         })
 
     return response
@@ -88,17 +99,14 @@ def fc_validation(
     channel: str = Query(default="All"),
     account: str = Query(default="NEXLEV"),
 ):
-    # Load raw data
     shipments, ledger = load_fc_data(account)
 
-    # Run planning logic
     fc_plan_df = calculate_fc_plan(
         replenish_weeks=replenish_weeks,
         channel=channel,
         account=account
     )
 
-    # Run validation engine
     validation_report = run_full_validation(
         shipments,
         ledger,

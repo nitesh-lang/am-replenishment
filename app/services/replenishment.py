@@ -77,7 +77,6 @@ def load_data(account: str):
 
     else:
         inventory = get("inventory_snapshot_nexlev.xlsx")
-    
 
     return master, sales, inventory, amazon_inventory
 
@@ -86,16 +85,7 @@ def load_data(account: str):
 # SALES WINDOW HELPERS
 # =================================================
 def normalize_week_column(sales_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Normalizes week column.
-    Expected formats:
-      - 'Week 4'
-      - 'week 4'
-      - '4'
-    """
-
     df = sales_df.copy()
-
     df["week_num"] = (
         df["week"]
         .astype(str)
@@ -104,18 +94,13 @@ def normalize_week_column(sales_df: pd.DataFrame) -> pd.DataFrame:
         .fillna(0)
         .astype(int)
     )
-
     return df
 
 
 def get_last_n_weeks_sales(sales_df: pd.DataFrame, weeks: int) -> pd.DataFrame:
-
     df = normalize_week_column(sales_df)
-
     df = df.sort_values("week_num", ascending=False)
-
     latest_weeks = df["week_num"].drop_duplicates().head(min(weeks, 12))
-
     return df[df["week_num"].isin(latest_weeks)]
 
 
@@ -123,15 +108,62 @@ def get_last_n_weeks_sales(sales_df: pd.DataFrame, weeks: int) -> pd.DataFrame:
 # VALIDATION
 # =================================================
 def validate_columns(df: pd.DataFrame, required_cols: list, file_label: str):
-    """
-    Ensure required columns exist.
-    """
-
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
-        raise ValueError(
-            f"Missing columns in {file_label}: {', '.join(missing)}"
-        )
+        raise ValueError(f"Missing columns in {file_label}: {', '.join(missing)}")
+
+
+# =================================================
+# MASTER CARTON INTELLIGENCE
+# =================================================
+def compute_recommended_qty(replenishment_qty: int, master_carton: int, ixd_type: str) -> dict:
+    """
+    Computes the master-carton-rounded replenishment quantity.
+
+    Rules:
+    - IXD SKUs: Must ship in full master cartons → always round UP to nearest carton.
+    - Non-IXD SKUs: Rounding is advisory; carton breaking is always allowed.
+    - Carton break exception: if the gap between raw qty and rounded qty
+      is > 50% of the carton size, flag as "carton_break_allowed = True"
+      (i.e. it is more efficient to break a carton than send excess units).
+
+    Returns a dict with:
+      - recommended_qty  : int  — the final recommended send qty
+      - carton_break_flag  : bool — True if breaking a carton is the better call
+      - cartons_needed     : int  — number of full cartons
+      - excess_units       : int  — units above the raw requirement in a full-carton scenario
+    """
+    if not master_carton or master_carton <= 0 or replenishment_qty <= 0:
+        return {
+            "recommended_qty": replenishment_qty,
+            "carton_break_flag": False,
+            "cartons_needed": 0,
+            "excess_units": 0,
+        }
+
+    import math
+    cartons_needed = math.ceil(replenishment_qty / master_carton)
+    rounded_up_qty = cartons_needed * master_carton
+    excess_units = rounded_up_qty - replenishment_qty
+
+    # Gap threshold: if excess > 50% of one carton, breaking is justified
+    carton_break_threshold = master_carton * 0.5
+    carton_break_flag = excess_units > carton_break_threshold
+
+    # For IXD: always round up (no breaking unless flagged as exception)
+    # For Non-IXD: breaking is always fine, use raw qty
+    if ixd_type == "IXD":
+        final_qty = rounded_up_qty
+    else:
+        # Non-IXD: still round up as advisory, but flag allows flexibility
+        final_qty = rounded_up_qty
+
+    return {
+        "recommended_qty": int(final_qty),
+        "carton_break_flag": bool(carton_break_flag),
+        "cartons_needed": int(cartons_needed),
+        "excess_units": int(excess_units),
+    }
 
 
 # =================================================
@@ -144,10 +176,6 @@ def calculate_replenishment(
 ) -> pd.DataFrame:
     """
     Core replenishment calculation.
-
-    weeks:
-      - number of weeks used from sales snapshot
-      - SAME number of weeks used for coverage planning
     """
 
     # ---------------------------------------------
@@ -155,27 +183,26 @@ def calculate_replenishment(
     # ---------------------------------------------
     master, sales, inventory, amazon_inventory = load_data(account)
 
-    print(sales["brand"].unique())  # 👈 ADD HERE
+    print(sales["brand"].unique())
 
     amazon_inventory["amazon_inventory"] = (
-    amazon_inventory["afn-total-quantity"]
-    - amazon_inventory["afn-unsellable-quantity"]
-)
+        amazon_inventory["afn-total-quantity"]
+        - amazon_inventory["afn-unsellable-quantity"]
+    )
 
     amazon_inventory["inbound_inventory"] = (
-    amazon_inventory["afn-inbound-working-quantity"]
-    + amazon_inventory["afn-inbound-shipped-quantity"]
-)
+        amazon_inventory["afn-inbound-working-quantity"]
+        + amazon_inventory["afn-inbound-shipped-quantity"]
+    )
 
     amazon_inventory = (
-    amazon_inventory
-    .groupby("asin", as_index=False)
-    .agg(
-        amazon_inventory=("amazon_inventory", "sum"),
-        inbound_inventory=("inbound_inventory", "sum")
+        amazon_inventory
+        .groupby("asin", as_index=False)
+        .agg(
+            amazon_inventory=("amazon_inventory", "sum"),
+            inbound_inventory=("inbound_inventory", "sum")
+        )
     )
-)
-
 
     # ---------------------------------------------
     # NORMALIZE COLUMNS
@@ -184,33 +211,21 @@ def calculate_replenishment(
     print("MASTER COLUMNS:", master.columns.tolist())
     sales.columns = sales.columns.str.strip()
     inventory.columns = inventory.columns.str.strip()
-
     amazon_inventory.columns = amazon_inventory.columns.str.strip()
 
     master["ASIN"] = master["ASIN"].astype(str).str.strip()
     amazon_inventory["asin"] = amazon_inventory["asin"].astype(str).str.strip()
 
-    validate_columns(
-        inventory,
-        ["Model", "Channel", "Qty"],
-        "inventory snapshot"
-        )
-
-
-    validate_columns(
-        sales,
-        ["model", "units_sold", "week"],
-        "sales snapshot"
-    )
+    validate_columns(inventory, ["Model", "Channel", "Qty"], "inventory snapshot")
+    validate_columns(sales, ["model", "units_sold", "week"], "sales snapshot")
 
     # ---------------------------------------------
     # SALES WINDOW
     # ---------------------------------------------
-    # filter brand FIRST
     sales_n = get_last_n_weeks_sales(sales, sales_window)
 
     if account.upper() == "AUDIO ARRAY":
-       sales_n = sales_n[sales_n["channel"] == "Amazon"]
+        sales_n = sales_n[sales_n["channel"] == "Amazon"]
 
     # ---------------------------------------------
     # AGGREGATE SALES
@@ -218,16 +233,13 @@ def calculate_replenishment(
     velocity = (
         sales_n
         .groupby("model", as_index=False)
-        .agg(
-            total_units_sold=("units_sold", "sum")
-        )
+        .agg(total_units_sold=("units_sold", "sum"))
     )
 
-    # Average weekly velocity
     actual_weeks = sales_n["week"].nunique()
 
     velocity["sales_velocity"] = (
-    velocity["total_units_sold"] / max(actual_weeks, 1)
+        velocity["total_units_sold"] / max(actual_weeks, 1)
     ).round(0)
 
     # ---------------------------------------------
@@ -239,22 +251,11 @@ def calculate_replenishment(
         print("WARNING: 'Status' column NOT found in master. Available:", master.columns.tolist())
         master["listing_status"] = "-"
 
-    df = master.merge(
-        velocity,
-        left_on="Model",
-        right_on="model",
-        how="left",
-    )
-    
-    df = df.merge(
-        amazon_inventory,
-        left_on="ASIN",
-        right_on="asin",
-        how="left"
-        )
-    
-    df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
+    df = master.merge(velocity, left_on="Model", right_on="model", how="left")
 
+    df = df.merge(amazon_inventory, left_on="ASIN", right_on="asin", how="left")
+
+    df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
     df["inbound_inventory"] = df["inbound_inventory"].fillna(0)
 
     # ---------------------------------------------
@@ -264,67 +265,86 @@ def calculate_replenishment(
     df["total_units_sold"] = df["total_units_sold"].fillna(0)
 
     # ---------------------------------------------
-    # UI-SAFE COLUMN ALIASES
-    # (frontend depends on these exact keys)
+    # INVENTORY SUMMARY
     # ---------------------------------------------
     inventory_summary = (
-    inventory
-    .groupby(["Model", "Channel"])["Qty"]
-    .sum()
-    .unstack(fill_value=0)
-    .reset_index()
-)
+        inventory
+        .groupby(["Model", "Channel"])["Qty"]
+        .sum()
+        .unstack(fill_value=0)
+        .reset_index()
+    )
 
-    inventory_summary["ampm_inventory"] = inventory_summary["AMPM"].fillna(0) if "AMPM" in inventory_summary.columns else 0
+    inventory_summary["ampm_inventory"] = (
+        inventory_summary["AMPM"].fillna(0)
+        if "AMPM" in inventory_summary.columns
+        else 0
+    )
 
-    df = df.merge(
-    inventory_summary[["Model","ampm_inventory"]],
-    on="Model",
-    how="left"
-)
+    df = df.merge(inventory_summary[["Model", "ampm_inventory"]], on="Model", how="left")
 
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
     df["ampm_inventory"] = df["ampm_inventory"].fillna(0)
+
     # ---------------------------------------------
     # REQUIREMENT CALCULATION
     # ---------------------------------------------
-    # Requirement = avg weekly velocity × coverage weeks
-    df["required_units"] = (
-    df["sales_velocity"] * replenish_weeks
-).round(0)
+    df["required_units"] = (df["sales_velocity"] * replenish_weeks).round(0)
 
     # ---------------------------------------------
     # FBA REPLENISHMENT
     # ---------------------------------------------
-    # How much needs to be SENT to Amazon
     df["replenishment_qty"] = (
         df["required_units"] - df["amazon_inventory"]
     ).clip(lower=0)
 
     # ---------------------------------------------
-    # WAREHOUSE SHORTFALL (REORDER SIGNAL)
+    # WAREHOUSE SHORTFALL
     # ---------------------------------------------
-    # If AMPM < required FBA replenishment
     df["warehouse_shortfall"] = (
         df["replenishment_qty"] - df["ampm_inventory"]
     ).clip(lower=0)
 
     # ---------------------------------------------
-    # FLAGS FOR DASHBOARD
+    # FLAGS
     # ---------------------------------------------
-    # Risky = < 1 week cover
     df["is_risky"] = df["amazon_inventory"] < df["sales_velocity"]
-
-    # Overstock = > 8 weeks cover
     df["is_overstock"] = df["amazon_inventory"] > (df["sales_velocity"] * 8)
+
+    # ---------------------------------------------
+    # MASTER CARTON INTELLIGENCE (NEW)
+    # Compute IXD type first, then apply rounding logic
+    # ---------------------------------------------
+    def get_ixd_type(row):
+        haz = str(row.get("Hazmat/non-Hazmat", "")).strip()
+        return "Non-IXD" if haz == "Non-IXD Non Hazmat" else "IXD"
+
+    df["_ixd_type"] = df.apply(get_ixd_type, axis=1)
+
+    def apply_carton_intelligence(row):
+        mc = row.get("Master Carton", 0)
+        try:
+            mc = int(mc)
+        except (ValueError, TypeError):
+            mc = 0
+        result = compute_recommended_qty(
+            replenishment_qty=int(row["replenishment_qty"]),
+            master_carton=mc,
+            ixd_type=row["_ixd_type"],
+        )
+        return pd.Series(result)
+
+    carton_cols = df.apply(apply_carton_intelligence, axis=1)
+    df["recommended_qty"] = carton_cols["recommended_qty"]
+    df["carton_break_flag"] = carton_cols["carton_break_flag"]
+    df["cartons_needed"] = carton_cols["cartons_needed"]
+    df["excess_units"] = carton_cols["excess_units"]
 
     # ---------------------------------------------
     # FINAL SHAPING FOR API
     # ---------------------------------------------
-    df = df.drop(columns=["model"], errors="ignore")
-    df["inbound_inventory"] = df["inbound_inventory"].fillna(0)
+    df = df.drop(columns=["model", "_ixd_type"], errors="ignore")
 
-    # Explicit column order (optional but safer)
     preferred_order = [
         "Model",
         "listing_status",
@@ -339,8 +359,11 @@ def calculate_replenishment(
         "is_risky",
         "is_overstock",
         "Master Carton",
+        "recommended_qty",
+        "carton_break_flag",
+        "cartons_needed",
+        "excess_units",
     ]
-    
 
     existing_cols = [c for c in preferred_order if c in df.columns]
     remaining_cols = [c for c in df.columns if c not in existing_cols]
