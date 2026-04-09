@@ -19,6 +19,7 @@ export default function FCAllocation() {
 
   const [search, setSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedListingStatuses, setSelectedListingStatuses] = useState([]);
 
   const [sortConfig, setSortConfig] = useState({
     key: null,
@@ -58,11 +59,18 @@ const categories = useMemo(() => {
   return cats.sort();
 }, [data]);
 
+const listingStatuses = useMemo(() => {
+  const statuses = [...new Set(data.map(r => r.listing_status).filter(Boolean))];
+  return statuses.sort();
+}, [data]);
+
 const filteredData = useMemo(() => {
+  const q = search.toLowerCase();
   return data
     .filter((row) => selectedCategories.length === 0 || selectedCategories.includes(row.category))
-    .filter((row) => !search || row.sku?.toLowerCase().includes(search.toLowerCase()) || row.model?.toLowerCase().includes(search.toLowerCase()));
-}, [data, search, selectedCategories]);
+    .filter((row) => selectedListingStatuses.length === 0 || selectedListingStatuses.includes(row.listing_status))
+    .filter((row) => !q || row.sku?.toLowerCase().includes(q) || row.model?.toLowerCase().includes(q) || row.asin?.toLowerCase().includes(q));
+}, [data, search, selectedCategories, selectedListingStatuses]);
 
   /* ============================================================
      SORT
@@ -169,28 +177,53 @@ const filteredData = useMemo(() => {
 function exportCSV() {
   const headers = [
     "model",
-    "sku",
     "category",
+    "sku",
+    "asin",
     "listing_status",
-    "fulfillment_center",
     "weekly_velocity",
     "total_units_sold",
     "fc_inventory",
     "ampm_inventory",
-    "transfer_in",
     "target_cover_units",
-    "post_transfer_stock",
-    "coverage_gap_units",
-    "send_qty",
     "expected_units",
+    "send_qty",
     "fill_pct",
     "velocity_flag",
+    "fulfillment_center",
     "hazmat_type",
-    "asin",
-    "master_carton"
+    "master_carton",
+    "post_transfer_stock",
+    "coverage_gap_units",
+    "transfer_in",
   ];
 
-  const rows = filteredData
+  const columnLabels = {
+    model: "MODEL",
+    category: "CATEGORY",
+    sku: "SKU",
+    asin: "ASIN",
+    listing_status: "LISTING STATUS",
+    weekly_velocity: "AVG WEEKLY SALES",
+    total_units_sold: "TOTAL SOLD",
+    fc_inventory: "LEDGER STOCK",
+    ampm_inventory: "AMPM INVENTORY",
+    target_cover_units: "TARGET COVER UNITS",
+    expected_units: "ORIGINAL REQUIRED",
+    send_qty: "SEND QTY",
+    fill_pct: "FILL %",
+    velocity_flag: "VELOCITY FLAG",
+    fulfillment_center: "FC",
+    hazmat_type: "HAZMAT TYPE",
+    master_carton: "MASTER CARTON",
+    post_transfer_stock: "POST TRANSFER STOCK",
+    coverage_gap_units: "COVERAGE GAP UNITS",
+    transfer_in: "TRANSFER IN",
+  };
+
+  const headerRow = headers.map(c => columnLabels[c] || c.toUpperCase()).join(",");
+
+  const rows = sortedData
     .map(row =>
       headers.map(col => {
         const val = row[col] ?? "";
@@ -200,7 +233,7 @@ function exportCSV() {
     .join("\n");
 
   const blob = new Blob(
-    [headers.join(",") + "\n" + rows],
+    [headerRow + "\n" + rows],
     { type: "text/csv;charset=utf-8;" }
   );
 
@@ -290,7 +323,7 @@ function exportCSV() {
 </div>
 </div>
 
-{/* CATEGORY FILTER */}
+{/* CATEGORY + STATUS FILTER */}
 <div className="flex flex-wrap gap-2 items-center px-1">
   <span className="text-xs text-slate-400 uppercase">Category:</span>
   {categories.map(cat => (
@@ -316,6 +349,41 @@ function exportCSV() {
       Clear
     </button>
   )}
+
+  <span className="text-xs text-slate-300 mx-1">|</span>
+
+  <span className="text-xs text-slate-400 uppercase">Status:</span>
+  {listingStatuses.map(ls => {
+    const activeStyle =
+      ls === "Active" ? "bg-green-600 text-white border-green-600" :
+      ls === "EOL"    ? "bg-red-600 text-white border-red-600" :
+                       "bg-slate-900 text-white border-slate-900";
+    const inactiveStyle =
+      ls === "Active" ? "bg-white text-green-700 border-green-300 hover:border-green-600" :
+      ls === "EOL"    ? "bg-white text-red-600 border-red-300 hover:border-red-500" :
+                       "bg-white text-slate-600 border-slate-300 hover:border-slate-600";
+    return (
+      <button
+        key={ls}
+        onClick={() => setSelectedListingStatuses(prev =>
+          prev.includes(ls) ? prev.filter(s => s !== ls) : [...prev, ls]
+        )}
+        className={`px-3 py-1 text-xs rounded-full border transition ${
+          selectedListingStatuses.includes(ls) ? activeStyle : inactiveStyle
+        }`}
+      >
+        {ls}
+      </button>
+    );
+  })}
+  {selectedListingStatuses.length > 0 && (
+    <button
+      onClick={() => setSelectedListingStatuses([])}
+      className="px-3 py-1 text-xs rounded-full border border-red-300 text-red-500 hover:bg-red-50"
+    >
+      Clear
+    </button>
+  )}
 </div>
 
       {/* KPI STRIP */}
@@ -336,163 +404,94 @@ function exportCSV() {
             <table className="w-full text-sm">
               <thead className="bg-slate-100 sticky top-0 z-20">
   <tr>
-    <th className="px-4 py-3">Load</th>
-
-    <th onClick={() => toggleSort("model")} className="px-4 py-3 cursor-pointer">
-  Model {getSortArrow("model")}
-</th>
-
-    <th onClick={() => toggleSort("sku")} className="px-4 py-3 cursor-pointer">
+    <th onClick={() => toggleSort("model")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      Model {getSortArrow("model")}
+    </th>
+    <th className="px-4 py-3 whitespace-nowrap">Category</th>
+    <th onClick={() => toggleSort("sku")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       SKU {getSortArrow("sku")}
     </th>
-
-    <th className="px-4 py-3">
-      Category
-    </th>
-
-    <th className="px-4 py-3">
-      ASIN
-    </th>
-
-    <th className="px-4 py-3">
-      Listing Status
-    </th>
-
-    <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer">
-      FC {getSortArrow("fulfillment_center")}
-    </th>
-
-    <th onClick={() => toggleSort("send_qty")} className="px-4 py-3 cursor-pointer">
-      Send Qty {getSortArrow("send_qty")}
-    </th>
-
-    <th onClick={() => toggleSort("weekly_velocity")} className="px-4 py-3 cursor-pointer">
+    <th className="px-4 py-3 whitespace-nowrap">ASIN</th>
+    <th onClick={() => toggleSort("weekly_velocity")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Avg Weekly Sales {getSortArrow("weekly_velocity")}
     </th>
-
-    <th className="px-4 py-3">
-  Total Units Sold
-</th>
-
-    <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer">
-  Ledger Stock {getSortArrow("fc_inventory")}
-</th>
-
-<th className="px-4 py-3">
-  AMPM Inventory
-</th>
-
-    <th onClick={() => toggleSort("target_cover_units")} className="px-4 py-3 cursor-pointer">
+    <th className="px-4 py-3 whitespace-nowrap">Total Sold</th>
+    <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      Ledger Stock {getSortArrow("fc_inventory")}
+    </th>
+    <th className="px-4 py-3 whitespace-nowrap">AMPM Inventory</th>
+    <th onClick={() => toggleSort("target_cover_units")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Target Cover Units {getSortArrow("target_cover_units")}
     </th>
-
-    <th onClick={() => toggleSort("expected_units")} className="px-4 py-3 cursor-pointer">
-    Original Required {getSortArrow("expected_units")}
+    <th onClick={() => toggleSort("expected_units")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      Original Required {getSortArrow("expected_units")}
     </th>
-    
-    <th onClick={() => toggleSort("fill_pct")} className="px-4 py-3 cursor-pointer">
-    Fill %
+    <th onClick={() => toggleSort("send_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      Send Qty {getSortArrow("send_qty")}
     </th>
-
-    <th className="px-4 py-3">
-      Velocity Flag
+    <th onClick={() => toggleSort("fill_pct")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      Fill %
     </th>
-
-    <th className="px-4 py-3">
-      Hazmat Type
+    <th className="px-4 py-3 whitespace-nowrap">Velocity Flag</th>
+    <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      FC {getSortArrow("fulfillment_center")}
     </th>
-
-    <th className="px-4 py-3">
-      Master Carton
-    </th>
+    <th className="px-4 py-3 whitespace-nowrap">Hazmat Type</th>
+    <th className="px-4 py-3 whitespace-nowrap">Master Carton</th>
   </tr>
 </thead>
 
               <tbody>
                 {paginatedData.map((row, i) => {
-                  const status = getLoadStatus(row);
-
                   return (
                     <React.Fragment key={`${row.sku}-${row.fulfillment_center}-${i}`}>
                       <tr
                         key={i}
-                        className={`border-b hover:bg-slate-50 transition cursor-pointer ${loadRowColor(status)}`}
-                        onClick={() =>
-                          setExpandedRow(i === expandedRow ? null : i)
-                        }
+                        className={`border-b hover:bg-slate-50 transition cursor-pointer ${loadRowColor(getLoadStatus(row))}`}
+                        onClick={() => setExpandedRow(i === expandedRow ? null : i)}
                       >
+                        {/* Model */}
+                        <td className="px-4 py-3">{row.model}</td>
+                        {/* Category */}
+                        <td className="px-4 py-3">{row.category || "-"}</td>
+                        {/* SKU */}
+                        <td className="px-4 py-3">{row.sku}</td>
+                        {/* ASIN */}
+                        <td className="px-4 py-3">{row.asin || "-"}</td>
+                        {/* Avg Weekly Sales */}
+                        <td className="px-4 py-3">{row.weekly_velocity ?? 0}</td>
+                        {/* Total Sold */}
+                        <td className="px-4 py-3">{row.total_units_sold ?? 0}</td>
+                        {/* Ledger Stock */}
+                        <td className="px-4 py-3">{row.fc_inventory ?? 0}</td>
+                        {/* AMPM Inventory */}
+                        <td className="px-4 py-3">{row.ampm_inventory ?? 0}</td>
+                        {/* Target Cover Units */}
+                        <td className="px-4 py-3">{row.target_cover_units ?? 0}</td>
+                        {/* Original Required */}
+                        <td className="px-4 py-3">{row.expected_units ?? 0}</td>
+                        {/* Send Qty */}
+                        <td className="px-4 py-3 font-semibold">{row.send_qty}</td>
+                        {/* Fill % */}
+                        <td className="px-4 py-3">{row.fill_pct ?? 0}%</td>
+                        {/* Velocity Flag */}
                         <td className="px-4 py-3">
-                          <span
-                            className={`px-2 py-1 text-xs rounded ${loadBadge(status)}`}
-                          >
-                            {status}
+                          <span className={
+                            row.velocity_flag === "SHORT_30%+"
+                              ? "text-red-600 font-semibold"
+                              : row.velocity_flag === "NO_REQUIREMENT"
+                              ? "text-gray-500 font-semibold"
+                              : "text-green-600"
+                          }>
+                            {row.velocity_flag || "NO_FLAG"}
                           </span>
                         </td>
-                        <td className="px-4 py-3">{row.model}</td>
-                        <td className="px-4 py-3">{row.sku}</td>
-                        <td className="px-4 py-3">{row.category || "-"}</td>
-                        <td className="px-4 py-3">{row.asin || "-"}</td>
-                        <td className="px-4 py-3">
-                          {(() => {
-                            const ls = row.listing_status ?? "-";
-                            const badgeStyle =
-                              ls === "Active" ? "bg-green-100 text-green-700" :
-                              ls === "EOL"    ? "bg-red-100 text-red-700" :
-                                               "bg-slate-100 text-slate-500";
-                            return <span className={`px-2 py-1 text-xs rounded ${badgeStyle}`}>{ls}</span>;
-                          })()}
-                        </td>
+                        {/* FC */}
                         <td className="px-4 py-3">{row.fulfillment_center}</td>
-                        <td className="px-4 py-3 font-semibold">
-                          {row.send_qty}
-                        </td>
-                        <td className="px-4 py-3">
-  {row.weekly_velocity ?? 0}
-</td>
-
-<td className="px-4 py-3">
-  {row.total_units_sold ?? 0}
-</td>
-
-<td className="px-4 py-3">
-  {row.fc_inventory ?? 0}
-</td>
-
-<td className="px-4 py-3">
-  {row.ampm_inventory ?? 0}
-</td>
-
-<td className="px-4 py-3">
-  {row.target_cover_units ?? 0}
-</td>
-
-<td className="px-4 py-3">
-  {row.expected_units ?? 0}
-</td>
-
-<td className="px-4 py-3">
-  {row.fill_pct ?? 0}%
-</td>
-
-<td className="px-4 py-3">
-  <span className={
-  row.velocity_flag === "SHORT_30%+"
-    ? "text-red-600 font-semibold"
-    : row.velocity_flag === "NO_REQUIREMENT"
-    ? "text-gray-500 font-semibold"
-    : "text-green-600"
-}>
-  {row.velocity_flag || "NO_FLAG"}
-</span>
-</td>
-
-<td className="px-4 py-3">
-    {row.hazmat_type || "-"}
-</td>
-
-<td className="px-4 py-3">
-    {row.master_carton || "-"}
-</td>
+                        {/* Hazmat Type */}
+                        <td className="px-4 py-3">{row.hazmat_type || "-"}</td>
+                        {/* Master Carton */}
+                        <td className="px-4 py-3">{row.master_carton || "-"}</td>
                       </tr>
 
                       {expandedRow === i && (
