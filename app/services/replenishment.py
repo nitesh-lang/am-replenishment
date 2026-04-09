@@ -200,7 +200,6 @@ def calculate_replenishment(
     # ---------------------------------------------
     master, sales, inventory, amazon_inventory = load_data(account)
 
-    print(sales["brand"].unique())
 
     amazon_inventory["amazon_inventory"] = (
         amazon_inventory["afn-total-quantity"]
@@ -225,7 +224,6 @@ def calculate_replenishment(
     # NORMALIZE COLUMNS
     # ---------------------------------------------
     master.columns = master.columns.str.strip()
-    print("MASTER COLUMNS:", master.columns.tolist())
     sales.columns = sales.columns.str.strip()
     inventory.columns = inventory.columns.str.strip()
     amazon_inventory.columns = amazon_inventory.columns.str.strip()

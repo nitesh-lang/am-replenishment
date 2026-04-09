@@ -1,6 +1,3 @@
-print("########## NEW FC FINAL VERSION LOADED ##########")
-print("RUNNING FILE:", __file__)
-
 import pandas as pd
 from app.services.fc_planning import calculate_fc_plan
 from app.services.fc_transfer import calculate_fc_transfers
@@ -18,8 +15,6 @@ def calculate_final_allocation(
 ) -> pd.DataFrame:
 
 
-    print("🔥 FC FINAL LIVE CHECK 🔥")
-    print("🚀 VELOCITY FLAG VERSION ACTIVE 🚀")
 
     # ==========================================================
     # STEP 1 — LOAD FC PLANNING DATA
@@ -71,9 +66,6 @@ def calculate_final_allocation(
         .str.strip()
         .str.upper()
     )
-    print("FINAL ALLOCATION ACCOUNT:", account)
-    print("PLAN ROWS:", len(df_plan))
-    print("PLAN TOTAL REQUIRED:", df_plan["required_units"].sum())
     # ==========================================================
     # STEP 2 — LOAD TRANSFER DATA
     # ==========================================================
@@ -151,15 +143,6 @@ def calculate_final_allocation(
     df_plan["original_required_units"] = df_plan["adjusted_shortfall"]
     
 
-    print(
-    df_plan[[
-        "sku",
-        "target_cover_units",
-        "post_transfer_stock",
-        "adjusted_shortfall"
-    ]].head(20)
-)
-    
     # NOW create expected_units
     df_plan["expected_units"] = df_plan["original_required_units"]
 
@@ -187,7 +170,6 @@ def calculate_final_allocation(
         )
 
         repl_master.columns = repl_master.columns.str.strip()
-        print("📋 MASTER SHEET COLUMNS:", repl_master.columns.tolist())
 
         if account.lower() in ["nexlev", "viomi"]:
             repl_master = repl_master.rename(columns={
@@ -200,11 +182,7 @@ def calculate_final_allocation(
                 "Master Carton": "master_carton",
                 "Status": "listing_status"
             })
-            print("VIOMI/NEXLEV COLUMNS AFTER RENAME:", repl_master.columns.tolist())
-            print("VIOMI/NEXLEV SKU SAMPLE:", repl_master["sku"].head(5).tolist() if "sku" in repl_master.columns else "NO SKU COL")
         else:
-            print("WM RAW COLUMNS:", repl_master.columns.tolist())
-            print("WM SAMPLE SKUs:", repl_master.iloc[:, 0].head(5).tolist())
             repl_master = repl_master.rename(columns={
                 "SKU": "sku",
                 "Hazmat Type": "ixd_flag",
@@ -240,13 +218,9 @@ def calculate_final_allocation(
             columns=["sku", "model", "ixd_flag", "hazmat_type", "category", "asin", "master_carton", "listing_status"]
         )
 
-        print("📋 MASTER SHEET COLUMNS:", repl_master.columns.tolist())
 
     df_plan = df_plan.merge(repl_master, on="sku", how="left", suffixes=("", "_y"))
 
-    print("POST MERGE NULL ASIN COUNT:", df_plan["asin"].isna().sum())
-    print("REPL MASTER SKU SAMPLE:", repl_master["sku"].head(5).tolist())
-    print("DF_PLAN SKU SAMPLE:", df_plan["sku"].head(5).tolist())
 
     df_plan["asin"] = df_plan["asin"].fillna("-") if "asin" in df_plan.columns else "-"
     df_plan["master_carton"] = df_plan["master_carton"].fillna("-") if "master_carton" in df_plan.columns else "-"
@@ -412,10 +386,6 @@ def calculate_final_allocation(
             errors="coerce"
         ).fillna(0)
 
-    print("FINAL DF COLUMNS:", final_df.columns.tolist())
-    print("COLUMNS INSIDE SERVICE:", final_df.columns.tolist())
-    print("COLUMNS BEING RETURNED:", final_df.columns.tolist())
-    print("SAMPLE ROW RETURNED:", final_df.head(1).to_dict(orient="records"))
     
     final_df["ixd_flag"] = (
     final_df["ixd_flag"]
