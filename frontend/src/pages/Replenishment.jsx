@@ -23,6 +23,7 @@ export default function Replenishment() {
 
   const [search, setSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedListingStatuses, setSelectedListingStatuses] = useState([]);
   const [expandedRow, setExpandedRow] = useState(null);
   const [masterCartons, setMasterCartons] = useState({});
 
@@ -91,18 +92,21 @@ useEffect(() => {
     return cats.sort();
   }, [replenishment]);
 
+  const listingStatuses = useMemo(() => {
+    const statuses = [...new Set(replenishment.map(r => r.listing_status).filter(Boolean))];
+    return statuses.sort();
+  }, [replenishment]);
+
   const baseColumns = useMemo(() => {
     if (!replenishment.length) return [];
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
    const tableColumns = [
-  "status",
   "model",
   "asin",
   "sku",
   "category",
-  "listing_status",
   "amazon_inventory",
   "inbound_inventory",
   ...baseColumns.filter(c => ![
@@ -116,7 +120,8 @@ useEffect(() => {
   "ixd_type",
   "hazmat_type",
   "master_carton",
-  "recommended_qty",   // ← NEW: rounded replenishment qty
+  "recommended_qty",
+  "cartons_needed",
 ];
 
   /* ============================================================
@@ -126,8 +131,9 @@ useEffect(() => {
   const filteredData = useMemo(() => {
     return replenishment
       .filter((row) => selectedCategories.length === 0 || selectedCategories.includes(row.category))
+      .filter((row) => selectedListingStatuses.length === 0 || selectedListingStatuses.includes(row.listing_status))
       .filter((row) => row.model?.toLowerCase().includes(search.toLowerCase()));
-  }, [replenishment, search, selectedCategories]);
+  }, [replenishment, search, selectedCategories, selectedListingStatuses]);
 
   /* ============================================================
      SORT
@@ -154,7 +160,6 @@ useEffect(() => {
   }, [filteredData, sortConfig]);
 
   function toggleSort(column) {
-    if (column === "status") return;
 
     setSortConfig((prev) => ({
       key: column,
@@ -229,7 +234,7 @@ useEffect(() => {
   ============================================================ */
 function exportCSV() {
 
-  const exportColumns = tableColumns.filter(c => c !== "status" && c !== "listing_status").reduce((acc, c) => {
+  const exportColumns = tableColumns.filter(c => c !== "listing_status").reduce((acc, c) => {
   if (!acc.includes(c)) acc.push(c);
   return acc;
 }, []);
@@ -255,6 +260,7 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
     listing_status: "LISTING STATUS",
     master_carton: "MASTER CARTON",
     recommended_qty: "RECOMMENDED QTY",
+    cartons_needed: "CARTONS NEEDED",
     cartons_needed: "CARTONS NEEDED",            // ← NEW
     excess_units: "EXCESS UNITS",               // ← NEW
   };
@@ -434,6 +440,41 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
               Clear
             </button>
           )}
+
+          <span className="text-xs text-slate-300 mx-1">|</span>
+
+          <span className="text-xs text-slate-400 uppercase">Status:</span>
+          {listingStatuses.map(ls => {
+            const activeStyle =
+              ls === "Active" ? "bg-green-600 text-white border-green-600" :
+              ls === "EOL"    ? "bg-red-600 text-white border-red-600" :
+                               "bg-slate-900 text-white border-slate-900";
+            const inactiveStyle =
+              ls === "Active" ? "bg-white text-green-700 border-green-300 hover:border-green-600" :
+              ls === "EOL"    ? "bg-white text-red-600 border-red-300 hover:border-red-500" :
+                               "bg-white text-slate-600 border-slate-300 hover:border-slate-600";
+            return (
+              <button
+                key={ls}
+                onClick={() => setSelectedListingStatuses(prev =>
+                  prev.includes(ls) ? prev.filter(s => s !== ls) : [...prev, ls]
+                )}
+                className={`px-3 py-1 text-xs rounded-full border transition ${
+                  selectedListingStatuses.includes(ls) ? activeStyle : inactiveStyle
+                }`}
+              >
+                {ls}
+              </button>
+            );
+          })}
+          {selectedListingStatuses.length > 0 && (
+            <button
+              onClick={() => setSelectedListingStatuses([])}
+              className="px-3 py-1 text-xs rounded-full border border-red-300 text-red-500 hover:bg-red-50"
+            >
+              Clear
+            </button>
+          )}
         </div>
         <button
           onClick={exportCSV}
@@ -460,9 +501,11 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
                           RECOMMENDED QTY
                           <span
                             className="text-slate-400 cursor-help"
-                            title="Replenishment qty rounded UP to nearest master carton. IXD = mandatory full cartons. ⚠ = carton break recommended (excess > 50% of carton)."
+                            title="Replenishment qty rounded UP to nearest master carton. IXD = mandatory. ⚠ = carton break recommended."
                           >ⓘ</span>
                         </span>
+                      : col === "cartons_needed"
+                      ? "CARTONS"
                       : col}{" "}
                     {getSortArrow(col)}
                   </th>
@@ -481,15 +524,6 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
                       onClick={() => setExpandedRow(i === expandedRow ? null : i)}
                     >
                       {tableColumns.map((col) => {
-                        if (col === "status")
-                          return (
-                            <td key={col} className="px-4 py-3">
-                              <span className={`px-2 py-1 text-xs rounded ${getStatusBadge(status)}`}>
-                                {status}
-                              </span>
-                            </td>
-                          );
-
                         if (col === "listing_status") {
                           const ls = row.listing_status ?? "-";
                           const badgeStyle =
@@ -537,96 +571,65 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
                             </td>
                           );
 
-                        /* ── MASTER CARTON QTY (NEW) ─────────────────────── */
+                        /* ── RECOMMENDED QTY ────────────────────────────── */
                         if (col === "recommended_qty") {
-                          const mcQty = row.recommended_qty ?? row.replenishment_qty ?? 0;
+                          const recQty = row.recommended_qty ?? row.replenishment_qty ?? 0;
                           const rawQty = row.replenishment_qty ?? 0;
                           const breakFlag = row.carton_break_flag ?? false;
-                          const cartons = row.cartons_needed ?? 0;
-                          const excess = row.excess_units ?? 0;
-                          const isIXD = row.ixd_type === "IXD";
                           const noCarton = !row.master_carton || row.master_carton === 0;
-                          const noReplenishment = rawQty === 0;
 
-                          if (noReplenishment) {
-                            return (
-                              <td key={col} className="px-4 py-3 text-slate-300">—</td>
-                            );
-                          }
+                          if (rawQty === 0)
+                            return <td key={col} className="px-4 py-3 text-slate-300">—</td>;
 
-                          if (noCarton) {
+                          if (noCarton)
                             return (
-                              <td key={col} className="px-4 py-3">
-                                <span
-                                  className="text-slate-400 text-xs italic"
-                                  title="Set master carton size to enable rounding"
-                                >
-                                  No carton set
-                                </span>
+                              <td key={col} className="px-4 py-3 text-slate-400 text-xs italic">
+                                No carton set
                               </td>
                             );
-                          }
 
-                          // Carton break exception: excess > 50% of carton size
-                          if (breakFlag) {
-                            return (
-                              <td key={col} className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                <div className="flex flex-col gap-1">
-                                  <span className="font-semibold text-orange-600">
-                                    {mcQty}
-                                  </span>
-                                  <span
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-orange-100 text-orange-700 cursor-help w-fit"
-                                    title={`Raw qty: ${rawQty} | Rounded: ${mcQty} | Excess: ${excess} units (>${Math.round(excess / (row.master_carton || 1) * 100)}% of carton) — Consider breaking carton`}
-                                  >
-                                    ⚠ Break Carton
-                                  </span>
-                                  <span className="text-xs text-slate-400">
-                                    {cartons} carton{cartons !== 1 ? "s" : ""}
-                                    {isIXD ? "" : " (advisory)"}
-                                  </span>
-                                </div>
-                              </td>
-                            );
-                          }
-
-                          // Normal IXD full-carton rounding
-                          if (isIXD) {
-                            return (
-                              <td key={col} className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                                <div className="flex flex-col gap-1">
-                                  <span className="font-semibold text-blue-700">
-                                    {mcQty}
-                                  </span>
-                                  <span
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600 w-fit cursor-help"
-                                    title={`IXD: Must ship full cartons. Raw: ${rawQty} → Rounded up to ${mcQty} (${cartons} carton${cartons !== 1 ? "s" : ""}). Excess: ${excess} units.`}
-                                  >
-                                    📦 {cartons} carton{cartons !== 1 ? "s" : ""}
-                                  </span>
-                                </div>
-                              </td>
-                            );
-                          }
-
-                          // Non-IXD advisory rounding
                           return (
-                            <td key={col} className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                              <div className="flex flex-col gap-1">
-                                <span className="font-semibold text-slate-700">
-                                  {mcQty}
-                                </span>
+                            <td key={col} className="px-4 py-3">
+                              <span
+                                className={`font-semibold ${breakFlag ? "text-orange-600" : row.ixd_type === "IXD" ? "text-blue-700" : "text-slate-700"}`}
+                                title={`Raw replenishment: ${rawQty} → Rounded up to ${recQty}`}
+                              >
+                                {recQty}
+                              </span>
+                              {breakFlag && (
                                 <span
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-500 w-fit cursor-help"
-                                  title={`Non-IXD: Carton breaking allowed. Raw: ${rawQty} → Advisory: ${mcQty} (${cartons} carton${cartons !== 1 ? "s" : ""}). Excess: ${excess} units.`}
-                                >
-                                  {cartons} carton{cartons !== 1 ? "s" : ""} (flex)
-                                </span>
-                              </div>
+                                  className="ml-1 text-orange-500 cursor-help"
+                                  title={`Excess ${row.excess_units} units (>${Math.round((row.excess_units / (row.master_carton || 1)) * 100)}% of carton) — consider breaking carton`}
+                                >⚠</span>
+                              )}
                             </td>
                           );
                         }
-                        /* ── END MASTER CARTON QTY ───────────────────────── */
+
+                        /* ── CARTONS NEEDED ──────────────────────────────── */
+                        if (col === "cartons_needed") {
+                          const cartons = row.cartons_needed ?? 0;
+                          const rawQty = row.replenishment_qty ?? 0;
+                          const noCarton = !row.master_carton || row.master_carton === 0;
+
+                          if (rawQty === 0)
+                            return <td key={col} className="px-4 py-3 text-slate-300">—</td>;
+
+                          if (noCarton)
+                            return <td key={col} className="px-4 py-3 text-slate-300">—</td>;
+
+                          return (
+                            <td key={col} className="px-4 py-3">
+                              <span
+                                className={`px-2 py-0.5 text-xs rounded-full ${row.ixd_type === "IXD" ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}
+                                title={row.ixd_type === "IXD" ? "IXD — full cartons mandatory" : "Non-IXD — carton break allowed"}
+                              >
+                                {cartons} carton{cartons !== 1 ? "s" : ""}
+                              </span>
+                            </td>
+                          );
+                        }
+                        /* ── END CARTON COLUMNS ──────────────────────────── */
 
                         return <td key={col} className="px-4 py-3">{row[col]}</td>;
                       })}
