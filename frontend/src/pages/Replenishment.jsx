@@ -102,16 +102,19 @@ useEffect(() => {
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
-   const tableColumns = [
+  const tableColumns = [
   "model",
   "asin",
   "sku",
   "category",
   "amazon_inventory",
   "inbound_inventory",
+  "total_units_sold",
+  "sales_velocity",
   ...baseColumns.filter(c => ![
     "model","asin","sku","category","listing_status",
     "amazon_inventory","inbound_inventory",
+    "total_units_sold","sales_velocity",
     "ixd_type","hazmat_type",
     "master_carton","recommended_qty",
     "carton_break_flag","cartons_needed","excess_units",
@@ -129,10 +132,16 @@ useEffect(() => {
   ============================================================ */
 
   const filteredData = useMemo(() => {
+    const q = search.toLowerCase();
     return replenishment
       .filter((row) => selectedCategories.length === 0 || selectedCategories.includes(row.category))
       .filter((row) => selectedListingStatuses.length === 0 || selectedListingStatuses.includes(row.listing_status))
-      .filter((row) => row.model?.toLowerCase().includes(search.toLowerCase()));
+      .filter((row) =>
+        !q ||
+        row.model?.toLowerCase().includes(q) ||
+        row.asin?.toLowerCase().includes(q) ||
+        row.sku?.toLowerCase().includes(q)
+      );
   }, [replenishment, search, selectedCategories, selectedListingStatuses]);
 
   /* ============================================================
@@ -234,35 +243,42 @@ useEffect(() => {
   ============================================================ */
 function exportCSV() {
 
+  // Start from tableColumns, remove listing_status temporarily
   const exportColumns = tableColumns.filter(c => c !== "listing_status").reduce((acc, c) => {
-  if (!acc.includes(c)) acc.push(c);
-  return acc;
-}, []);
-// Re-insert listing_status after category
-const catIdx = exportColumns.indexOf("category");
-exportColumns.splice(catIdx + 1, 0, "listing_status");
+    if (!acc.includes(c)) acc.push(c);
+    return acc;
+  }, []);
+
+  // Re-insert listing_status after category
+  const catIdx = exportColumns.indexOf("category");
+  exportColumns.splice(catIdx + 1, 0, "listing_status");
+
+  // Append carton intelligence columns not in tableColumns
+  ["excess_units", "carton_break_flag"].forEach(c => {
+    if (!exportColumns.includes(c)) exportColumns.push(c);
+  });
 
   const columnLabels = {
     model: "MODEL",
     category: "CATEGORY",
     asin: "ASIN",
     sku: "SKU",
+    listing_status: "LISTING STATUS",
     amazon_inventory: "AMAZON INVENTORY",
     inbound_inventory: "INBOUND INVENTORY",
-    sales_velocity: "SALES VELOCITY",
-    total_units_sold: "TOTAL UNITS SOLD",
+    total_units_sold: "TOTAL SOLD",
+    sales_velocity: "AVG WEEKLY SALES",
     ampm_inventory: "AMPM INVENTORY",
     required_units: "REQUIRED UNITS",
     replenishment_qty: "REPLENISHMENT QTY",
     warehouse_shortfall: "WAREHOUSE SHORTFALL",
     ixd_type: "IXD TYPE",
     hazmat_type: "HAZMAT TYPE",
-    listing_status: "LISTING STATUS",
     master_carton: "MASTER CARTON",
     recommended_qty: "RECOMMENDED QTY",
     cartons_needed: "CARTONS NEEDED",
-    cartons_needed: "CARTONS NEEDED",            // ← NEW
-    excess_units: "EXCESS UNITS",               // ← NEW
+    excess_units: "EXCESS UNITS",
+    carton_break_flag: "CARTON BREAK",
   };
 
   const headers = exportColumns.map(c => columnLabels[c] || c.toUpperCase()).join(",");
@@ -382,38 +398,13 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
     </select>
   </div>
 </div>
-      {/* KPI SECTION */}
-      {kpis && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <AnimatedMetric
-            title="Units to Replenish"
-            value={kpis.total_units_to_replenish}
-          />
-          <AnimatedMetric
-            title="Avg Weeks of Cover"
-            value={kpis.avg_weeks_of_cover?.toFixed(2)}
-          />
-          <AnimatedMetric
-            title="Filtered SKUs"
-            value={sortedData.length}
-          />
-        </div>
-      )}
-
-      {/* HEALTH SUMMARY STRIP */}
-      <div className="grid grid-cols-3 gap-3">
-        <HealthCard label="Critical" value={healthStats.critical} color="red" />
-        <HealthCard label="Low Cover" value={healthStats.low} color="yellow" />
-        <HealthCard label="Healthy" value={healthStats.healthy} color="emerald" />
-      </div>
-
       {/* EXPORT + SEARCH */}
       <div className="flex justify-between items-center gap-4 flex-wrap">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search model..."
-          className="px-4 py-2 border rounded-lg"
+          placeholder="Search model, ASIN or SKU..."
+          className="px-4 py-2 border rounded-lg min-w-[240px]"
         />
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-xs text-slate-400 uppercase">Category:</span>
@@ -501,11 +492,15 @@ exportColumns.splice(catIdx + 1, 0, "listing_status");
                           RECOMMENDED QTY
                           <span
                             className="text-slate-400 cursor-help"
-                            title="Replenishment qty rounded UP to nearest master carton. IXD = mandatory. ⚠ = carton break recommended."
+                            title="Replenishment qty rounded to nearest master carton. ⚠ = carton break recommended."
                           >ⓘ</span>
                         </span>
                       : col === "cartons_needed"
                       ? "CARTONS"
+                      : col === "sales_velocity"
+                      ? "AVG WEEKLY SALES"
+                      : col === "total_units_sold"
+                      ? "TOTAL SOLD"
                       : col}{" "}
                     {getSortArrow(col)}
                   </th>

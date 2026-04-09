@@ -121,17 +121,22 @@ def compute_recommended_qty(replenishment_qty: int, master_carton: int, ixd_type
     Computes the master-carton-rounded replenishment quantity.
 
     Rules:
-    - IXD SKUs: Must ship in full master cartons → always round UP to nearest carton.
-    - Non-IXD SKUs: Rounding is advisory; carton breaking is always allowed.
-    - Carton break exception: if the gap between raw qty and rounded qty
-      is > 50% of the carton size, flag as "carton_break_allowed = True"
-      (i.e. it is more efficient to break a carton than send excess units).
+    - Round to NEAREST carton, NOT always ceiling.
+    - Tolerance: if remainder above floor boundary is ≤ 10% of carton size,
+      round DOWN — 1 or 2 units adjustment is acceptable, no point sending
+      a full extra carton.
+    - Carton break flag: if rounding up adds > 50% of one carton in excess,
+      flag it — breaking is smarter than over-sending.
+    - IXD: full cartons mandatory.
+    - Non-IXD: advisory, carton break always allowed.
 
-    Returns a dict with:
-      - recommended_qty  : int  — the final recommended send qty
-      - carton_break_flag  : bool — True if breaking a carton is the better call
-      - cartons_needed     : int  — number of full cartons
-      - excess_units       : int  — units above the raw requirement in a full-carton scenario
+    Examples:
+      qty=41, carton=40 → remainder=1 (2.5% ≤ 10%) → round DOWN → 40, 1 carton
+      qty=69, carton=40 → remainder=29 → round UP → 80, 2 cartons, excess=11
+      qty=25, carton=40 → remainder=25 → round UP → 40, 1 carton, excess=15 (37%)
+      qty=22, carton=40 → remainder=22 → round UP → 40, 1 carton, excess=18 (45%)
+      qty=21, carton=40 → remainder=21 → round UP → 40, 1 carton, excess=19 (47%)
+      qty=61, carton=40 → remainder=21 → round UP → 80, 2 cartons, excess=19 (47%)
     """
     if not master_carton or master_carton <= 0 or replenishment_qty <= 0:
         return {
@@ -142,21 +147,33 @@ def compute_recommended_qty(replenishment_qty: int, master_carton: int, ixd_type
         }
 
     import math
-    cartons_needed = math.ceil(replenishment_qty / master_carton)
-    rounded_up_qty = cartons_needed * master_carton
-    excess_units = rounded_up_qty - replenishment_qty
 
-    # Gap threshold: if excess > 50% of one carton, breaking is justified
-    carton_break_threshold = master_carton * 0.5
-    carton_break_flag = excess_units > carton_break_threshold
+    floor_cartons = replenishment_qty // master_carton
+    ceil_cartons = math.ceil(replenishment_qty / master_carton)
+    floor_qty = floor_cartons * master_carton
+    ceil_qty = ceil_cartons * master_carton
+    remainder = replenishment_qty - floor_qty
 
-    # For IXD: always round up (no breaking unless flagged as exception)
-    # For Non-IXD: breaking is always fine, use raw qty
-    if ixd_type == "IXD":
-        final_qty = rounded_up_qty
+    # Tolerance: ≤ 10% of carton → round down, minor adjustment acceptable
+    tolerance = master_carton * 0.10
+
+    if remainder == 0:
+        cartons_needed = floor_cartons
+        final_qty = floor_qty
+        excess_units = 0
+        carton_break_flag = False
+    elif remainder <= tolerance:
+        # e.g. qty=41, carton=40 → round down to 40
+        cartons_needed = floor_cartons
+        final_qty = floor_qty
+        excess_units = 0
+        carton_break_flag = False
     else:
-        # Non-IXD: still round up as advisory, but flag allows flexibility
-        final_qty = rounded_up_qty
+        # Round up
+        cartons_needed = ceil_cartons
+        final_qty = ceil_qty
+        excess_units = ceil_qty - replenishment_qty
+        carton_break_flag = excess_units > (master_carton * 0.5)
 
     return {
         "recommended_qty": int(final_qty),
