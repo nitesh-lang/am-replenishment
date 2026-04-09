@@ -261,9 +261,9 @@ export default function WMReplenishment() {
 
         {/* PAGINATION */}
         <div className="flex justify-between items-center p-4 border-t">
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>Previous</button>
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)} className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Previous</button>
           <div>Page {currentPage} of {totalPages}</div>
-          <button disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>Next</button>
+          <button disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)} className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50">Next</button>
         </div>
       </div>
 
@@ -273,9 +273,9 @@ export default function WMReplenishment() {
 
 function MetricCard({ title, value }) {
   return (
-    <div className="p-6 bg-white rounded-xl shadow-sm border">
-      <div className="text-xs uppercase text-slate-400">{title}</div>
-      <div className="text-3xl font-semibold mt-3">{value ?? "-"}</div>
+    <div className="p-5 bg-white rounded-xl shadow-sm border border-slate-100">
+      <div className="text-xs uppercase tracking-wider text-slate-400">{title}</div>
+      <div className="text-2xl font-semibold mt-1 text-slate-800">{value ?? "-"}</div>
     </div>
   );
 }

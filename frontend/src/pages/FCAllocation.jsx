@@ -251,7 +251,7 @@ function exportCSV() {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-900 text-white shadow-xl">
+      <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
         <h1 className="text-3xl font-semibold">
           Nexlev FC Allocation Intelligence
         </h1>
@@ -274,6 +274,7 @@ function exportCSV() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search model, ASIN or SKU..."
             className="mt-2 w-full px-4 py-2 border rounded-lg"
           />
         </div>
@@ -536,6 +537,7 @@ function exportCSV() {
           <button
             disabled={currentPage === 1}
             onClick={() => setCurrentPage((p) => p - 1)}
+            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50"
           >
             Previous
           </button>
@@ -547,6 +549,7 @@ function exportCSV() {
           <button
             disabled={currentPage === totalPages}
             onClick={() => setCurrentPage((p) => p + 1)}
+            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50"
           >
             Next
           </button>
@@ -564,11 +567,11 @@ function exportCSV() {
 
 function MetricCard({ title, value }) {
   return (
-    <div className="p-6 bg-white border rounded-xl shadow-sm hover:shadow-md transition">
-      <div className="text-xs uppercase text-slate-400">
+    <div className="p-5 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
+      <div className="text-xs uppercase tracking-wider text-slate-400">
         {title}
       </div>
-      <div className="text-2xl font-semibold mt-3">
+      <div className="text-2xl font-semibold mt-1 text-slate-800">
         {value ?? "-"}
       </div>
     </div>

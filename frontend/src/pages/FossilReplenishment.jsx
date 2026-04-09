@@ -204,9 +204,9 @@ export default function FossilReplenishment() {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="rounded-2xl p-8 bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 text-white shadow-xl">
+      <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
         <h1 className="text-3xl font-semibold">Fossil Replenishment Intelligence</h1>
-        <p className="text-indigo-200 mt-2 text-sm">Fossil FCY Inventory Planning</p>
+        <p className="text-slate-300 mt-2 text-sm">Fossil FCY Inventory Planning</p>
       </div>
 
       {/* KPI */}
@@ -406,7 +406,7 @@ export default function FossilReplenishment() {
 
         {/* Export */}
         <div className="ml-auto">
-          <button onClick={exportCSV} className="px-4 py-2 bg-indigo-900 text-white rounded-lg">
+          <button onClick={exportCSV} className="px-4 py-2 bg-slate-900 text-white rounded-lg">
             Export CSV
           </button>
         </div>
@@ -493,13 +493,13 @@ export default function FossilReplenishment() {
           <button
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(p => p - 1)}
-            className="px-3 py-1 border rounded disabled:opacity-40"
+            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50"
           >Previous</button>
           <div className="text-sm text-slate-500">Page {currentPage} of {totalPages || 1}</div>
           <button
             disabled={currentPage === totalPages || totalPages === 0}
             onClick={() => setCurrentPage(p => p + 1)}
-            className="px-3 py-1 border rounded disabled:opacity-40"
+            className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50"
           >Next</button>
         </div>
       </div>
@@ -510,9 +510,9 @@ export default function FossilReplenishment() {
 
 function MetricCard({ title, value }) {
   return (
-    <div className="p-4 bg-white rounded-xl shadow-sm border">
-      <div className="text-xs uppercase text-slate-400">{title}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
+    <div className="p-5 bg-white rounded-xl shadow-sm border border-slate-100">
+      <div className="text-xs uppercase tracking-wider text-slate-400">{title}</div>
+      <div className="text-2xl font-semibold mt-1 text-slate-800">{value ?? "-"}</div>
     </div>
   );
 }
