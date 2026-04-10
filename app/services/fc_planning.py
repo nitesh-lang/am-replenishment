@@ -83,6 +83,10 @@ def calculate_fc_plan(
 )
     shipments["sku"] = shipments["sku"].astype(str).str.strip().str.upper()
 
+    # Fossil SKUs use FBS/FBO/FBK prefixes in shipments but FBA in master — normalize
+    if account.lower() == "fossil":
+        shipments["sku"] = shipments["sku"].str.replace(r"^FB[^A]", "FBA", regex=True)
+
     shipments["Shipment Date"] = pd.to_datetime(
         shipments["Shipment Date"], errors="coerce"
     )
@@ -117,6 +121,10 @@ def calculate_fc_plan(
     
 
     shipments_90["sku"] = shipments_90["sku"].astype(str).str.strip().str.upper()
+
+    # Fossil: normalize FBS/FBO/FBK → FBA to match master file
+    if account.lower() == "fossil":
+        shipments_90["sku"] = shipments_90["sku"].str.replace(r"^FB[^A]", "FBA", regex=True)
 
     # =================================================
     # FC VELOCITY CALCULATION
@@ -241,8 +249,8 @@ def calculate_fc_plan(
         master_df.columns = master_df.columns.str.strip()
         master_df = master_df.rename(columns={"SKU": "sku", "Item No": "model"})
         master_df["sku"] = master_df["sku"].astype(str).str.strip().str.upper()
-        # merge model into df FIRST before selecting columns
-        df = df.merge(master_df[["sku", "model"]], on="sku", how="left")
+        # inner join — only keep SKUs that exist in the input master file
+        df = df.merge(master_df[["sku", "model"]], on="sku", how="inner")
         if "model_y" in df.columns:
             df["model"] = df["model_y"].combine_first(df.get("model_x", pd.Series("-", index=df.index)))
             df.drop(columns=[c for c in ["model_x", "model_y"] if c in df.columns], inplace=True)
