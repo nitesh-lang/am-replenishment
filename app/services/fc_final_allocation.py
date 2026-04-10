@@ -195,17 +195,68 @@ def calculate_final_allocation(
         df_plan["allocation_logic"] = "send_qty = max(0, weekly_velocity * replenish_weeks - (fc_inventory + transfer_in))"
         df_plan["coverage_gap_units"] = df_plan["adjusted_shortfall"]
 
+        # ==========================================================
+        # FOSSIL IN-TRANSIT + OPEN PO
+        # ==========================================================
+        try:
+            po_df = get_excel_sheet("Fossil Replenishment/In-Transit_Open_PO_Fossil.xlsx", "Sheet1")
+            po_df.columns = po_df.columns.str.strip()
+
+            po_df["Item No"] = po_df["Item No"].astype(str).str.strip().str.upper()
+            po_df["FC"]      = po_df["FC"].astype(str).str.strip().str.upper()
+            po_df["remark"]  = po_df["PO fulfillment Remark"].astype(str).str.strip()
+
+            po_df["packing_list_qty"] = pd.to_numeric(po_df["Packing List Qty"], errors="coerce").fillna(0)
+            po_df["po_qty"]           = pd.to_numeric(po_df["PO Qty"], errors="coerce").fillna(0)
+
+            # In-Transit: use Packing List Qty
+            in_transit = (
+                po_df[po_df["remark"] == "In-Transit"]
+                .groupby(["Item No", "FC"], as_index=False)
+                .agg(in_transit_qty=("packing_list_qty", "sum"))
+            )
+
+            # Open PO: use PO Qty (non In-Transit rows)
+            open_po = (
+                po_df[po_df["remark"] != "In-Transit"]
+                .groupby(["Item No", "FC"], as_index=False)
+                .agg(open_po_qty=("po_qty", "sum"))
+            )
+
+            # df_plan uses "model" as Item No for Fossil (mapped from Item No column)
+            df_plan["item_no"] = df_plan["model"].astype(str).str.strip().str.upper()
+            df_plan["fc_upper"] = df_plan["fulfillment_center"].astype(str).str.strip().str.upper()
+
+            df_plan = df_plan.merge(
+                in_transit, left_on=["item_no", "fc_upper"], right_on=["Item No", "FC"], how="left"
+            ).drop(columns=["Item No", "FC"], errors="ignore")
+
+            df_plan = df_plan.merge(
+                open_po, left_on=["item_no", "fc_upper"], right_on=["Item No", "FC"], how="left"
+            ).drop(columns=["Item No", "FC"], errors="ignore")
+
+            df_plan["in_transit_qty"] = pd.to_numeric(df_plan["in_transit_qty"], errors="coerce").fillna(0).astype(int)
+            df_plan["open_po_qty"]    = pd.to_numeric(df_plan["open_po_qty"], errors="coerce").fillna(0).astype(int)
+            df_plan.drop(columns=["item_no", "fc_upper"], inplace=True)
+
+        except Exception as e:
+            print("⚠️ Fossil In-Transit/Open PO load error:", e)
+            df_plan["in_transit_qty"] = 0
+            df_plan["open_po_qty"]    = 0
+
         fossil_final = df_plan[[
             "model", "sku", "asin", "category", "assortment", "fossil_assortment", "listing_status", "ampm_inventory",
             "fulfillment_center", "weekly_velocity", "total_units_sold", "fc_inventory",
             "transfer_in", "target_cover_units", "post_transfer_stock", "coverage_gap_units",
             "send_qty", "expected_units", "fill_pct", "velocity_flag",
-            "ixd_flag", "hazmat_type", "master_carton", "remarks", "allocation_logic"
+            "ixd_flag", "hazmat_type", "master_carton", "remarks", "allocation_logic",
+            "in_transit_qty", "open_po_qty",
         ]].copy()
 
         numeric_cleanup_cols = [
             "weekly_velocity", "fc_inventory", "transfer_in", "target_cover_units",
             "post_transfer_stock", "coverage_gap_units", "send_qty", "expected_units",
+            "in_transit_qty", "open_po_qty",
         ]
         for col in numeric_cleanup_cols:
             fossil_final[col] = pd.to_numeric(fossil_final[col], errors="coerce").fillna(0)

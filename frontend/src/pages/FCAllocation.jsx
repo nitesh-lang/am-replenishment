@@ -259,7 +259,7 @@ function exportCSV() {
     "model", "assortment", "sku", "asin",
     "weekly_velocity", "total_units_sold", "fc_inventory", "ampm_inventory",
     "send_qty", "fulfillment_center", "master_carton",
-    "cluster", "cluster_po", "remarks",
+    "cluster", "cluster_po", "in_transit_qty", "open_po_qty", "remarks",
   ];
 
   const defaultHeaders = [
@@ -295,7 +295,8 @@ function exportCSV() {
     cluster: "CLUSTER",
     cluster_po: "CLUSTER PO",
     remarks: "REMARKS",
-    post_transfer_stock: "POST TRANSFER STOCK",
+    in_transit_qty: "IN-TRANSIT QTY",
+    open_po_qty: "OPEN PO QTY",
     coverage_gap_units: "COVERAGE GAP UNITS",
     transfer_in: "TRANSFER IN",
   };
@@ -545,6 +546,8 @@ function exportCSV() {
     {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Remarks</th>}
     {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Cluster</th>}
     {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Cluster PO</th>}
+    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap text-amber-700">In-Transit</th>}
+    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap text-blue-700">Open PO</th>}
   </tr>
 </thead>
 
@@ -658,6 +661,12 @@ function exportCSV() {
                                   }}
                                   className="w-20 px-2 py-1 border border-blue-300 rounded text-sm text-center bg-blue-50"
                                 />
+                              </td>
+                              <td className="px-4 py-3 text-amber-700 font-semibold text-center">
+                                {row.in_transit_qty ?? 0}
+                              </td>
+                              <td className="px-4 py-3 text-blue-700 font-semibold text-center">
+                                {row.open_po_qty ?? 0}
                               </td>
                             </>
                           );
