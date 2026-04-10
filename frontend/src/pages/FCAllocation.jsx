@@ -31,22 +31,68 @@ export default function FCAllocation() {
 
   const [expandedRow, setExpandedRow] = useState(null);
 
+  // Fossil editable fields: keyed by "sku|fc"
+  const [fossilEdits, setFossilEdits] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+
+  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+
+  function getFossilKey(row) { return `${row.sku}|${row.fulfillment_center}`; }
+
+  function getFossilField(row, field) {
+    const key = getFossilKey(row);
+    return fossilEdits[key]?.[field] ?? row[field];
+  }
+
+  function setFossilField(row, field, value) {
+    const key = getFossilKey(row);
+    setFossilEdits(prev => ({
+      ...prev,
+      [key]: { ...prev[key], [field]: value }
+    }));
+  }
+
+  async function saveFossilInputs() {
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const payload = sortedData.map(row => {
+        const key = getFossilKey(row);
+        const edits = fossilEdits[key] || {};
+        return {
+          sku: row.sku,
+          fulfillment_center: row.fulfillment_center,
+          po_requirement: parseInt(edits.send_qty ?? row.send_qty ?? 0) || 0,
+          master_carton: parseInt(edits.master_carton ?? row.master_carton ?? 24) || 24,
+          remarks: edits.remarks ?? row.remarks ?? "",
+        };
+      });
+      const res = await fetch(`${BASE}/fc-final-allocation/fossil-save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      setSaveMsg(json.status === "saved" ? `✅ Saved ${json.rows} rows` : `❌ ${json.error}`);
+    } catch (e) {
+      setSaveMsg("❌ Save failed");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(""), 3000);
+    }
+  }
+
   /* ============================================================
      DATA LOAD
   ============================================================ */
 
   useEffect(() => {
-    console.log("CALLING API WITH ACCOUNT:", account);  // 👈 ADD THIS
-
     setLoading(true);
-
+    setFossilEdits({});
     getFCFinal(replenishWeeks, channel, account)
       .then((res) => {
-        console.log("FC API RESPONSE:", res);
-        console.log("SAMPLE ROW:", res?.[0]);
-
         setData(Array.isArray(res) ? res : []);
-        
       })
       .finally(() => setLoading(false));
   }, [replenishWeeks, channel, account]);
@@ -315,13 +361,23 @@ function exportCSV() {
   </select>
 </div>
 
-<div className="flex items-end">
+<div className="flex items-end gap-2">
   <button
     onClick={exportCSV}
     className="px-4 py-2 bg-slate-900 text-white rounded-lg"
   >
     Export CSV
   </button>
+  {account === "Fossil" && (
+    <button
+      onClick={saveFossilInputs}
+      disabled={saving}
+      className="px-4 py-2 bg-emerald-700 text-white rounded-lg disabled:opacity-50 hover:bg-emerald-800 transition"
+    >
+      {saving ? "Saving..." : "Save"}
+    </button>
+  )}
+  {saveMsg && <span className="text-sm font-medium text-slate-600">{saveMsg}</span>}
 </div>
 </div>
 
@@ -409,7 +465,10 @@ function exportCSV() {
     <th onClick={() => toggleSort("model")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Model {getSortArrow("model")}
     </th>
-    <th onClick={() => toggleSort("category")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Category {getSortArrow("category")}</th>
+    {account === "Fossil"
+      ? <th onClick={() => toggleSort("assortment")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Assortment {getSortArrow("assortment")}</th>
+      : <th onClick={() => toggleSort("category")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Category {getSortArrow("category")}</th>
+    }
     <th onClick={() => toggleSort("sku")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       SKU {getSortArrow("sku")}
     </th>
@@ -429,7 +488,7 @@ function exportCSV() {
       Original Required {getSortArrow("expected_units")}
     </th>
     <th onClick={() => toggleSort("send_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
-      Send Qty {getSortArrow("send_qty")}
+      {account === "Fossil" ? "PO Requirement" : "Send Qty"} {getSortArrow("send_qty")}
     </th>
     <th onClick={() => toggleSort("fill_pct")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
       Fill % {getSortArrow("fill_pct")}
@@ -438,8 +497,9 @@ function exportCSV() {
     <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       FC {getSortArrow("fulfillment_center")}
     </th>
-    <th onClick={() => toggleSort("hazmat_type")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Hazmat Type {getSortArrow("hazmat_type")}</th>
+    {account !== "Fossil" && <th onClick={() => toggleSort("hazmat_type")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Hazmat Type {getSortArrow("hazmat_type")}</th>}
     <th onClick={() => toggleSort("master_carton")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Master Carton {getSortArrow("master_carton")}</th>
+    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Remarks</th>}
   </tr>
 </thead>
 
@@ -454,8 +514,11 @@ function exportCSV() {
                       >
                         {/* Model */}
                         <td className="px-4 py-3">{row.model}</td>
-                        {/* Category */}
-                        <td className="px-4 py-3">{row.category || "-"}</td>
+                        {/* Category or Assortment */}
+                        {account === "Fossil"
+                          ? <td className="px-4 py-3">{row.assortment || "-"}</td>
+                          : <td className="px-4 py-3">{row.category || "-"}</td>
+                        }
                         {/* SKU */}
                         <td className="px-4 py-3">{row.sku}</td>
                         {/* ASIN */}
@@ -466,14 +529,24 @@ function exportCSV() {
                         <td className="px-4 py-3">{row.total_units_sold ?? 0}</td>
                         {/* Ledger Stock */}
                         <td className="px-4 py-3">{row.fc_inventory ?? 0}</td>
-                        {/* AMPM Inventory */}
+                        {/* AMPM Inventory / Fossil SOH */}
                         <td className="px-4 py-3">{row.ampm_inventory ?? 0}</td>
                         {/* Target Cover Units */}
                         {account !== "Fossil" && <td className="px-4 py-3">{row.target_cover_units ?? 0}</td>}
                         {/* Original Required */}
                         {account !== "Fossil" && <td className="px-4 py-3">{row.expected_units ?? 0}</td>}
-                        {/* Send Qty */}
-                        <td className="px-4 py-3 font-semibold">{row.send_qty}</td>
+                        {/* Send Qty / PO Requirement */}
+                        <td className="px-4 py-3 font-semibold">
+                          {account === "Fossil"
+                            ? <input
+                                type="number"
+                                value={getFossilField(row, "send_qty")}
+                                onChange={e => setFossilField(row, "send_qty", e.target.value)}
+                                className="w-20 px-2 py-1 border border-slate-300 rounded text-sm text-center"
+                              />
+                            : row.send_qty
+                          }
+                        </td>
                         {/* Fill % */}
                         {account !== "Fossil" && <td className="px-4 py-3">{row.fill_pct ?? 0}%</td>}
                         {/* Velocity Flag */}
@@ -492,10 +565,32 @@ function exportCSV() {
                         )}
                         {/* FC */}
                         <td className="px-4 py-3">{row.fulfillment_center}</td>
-                        {/* Hazmat Type */}
-                        <td className="px-4 py-3">{row.hazmat_type || "-"}</td>
-                        {/* Master Carton */}
-                        <td className="px-4 py-3">{row.master_carton || "-"}</td>
+                        {/* Hazmat Type - hidden for Fossil */}
+                        {account !== "Fossil" && <td className="px-4 py-3">{row.hazmat_type || "-"}</td>}
+                        {/* Master Carton - editable for Fossil */}
+                        <td className="px-4 py-3">
+                          {account === "Fossil"
+                            ? <input
+                                type="number"
+                                value={getFossilField(row, "master_carton") ?? 24}
+                                onChange={e => setFossilField(row, "master_carton", e.target.value)}
+                                className="w-16 px-2 py-1 border border-slate-300 rounded text-sm text-center"
+                              />
+                            : row.master_carton
+                          }
+                        </td>
+                        {/* Remarks - Fossil only */}
+                        {account === "Fossil" && (
+                          <td className="px-4 py-3">
+                            <input
+                              type="text"
+                              value={getFossilField(row, "remarks") ?? ""}
+                              onChange={e => setFossilField(row, "remarks", e.target.value)}
+                              placeholder="Add remark..."
+                              className="w-36 px-2 py-1 border border-slate-300 rounded text-sm"
+                            />
+                          </td>
+                        )}
                       </tr>
 
                       {expandedRow === i && (
