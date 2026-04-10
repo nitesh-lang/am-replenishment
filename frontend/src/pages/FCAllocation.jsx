@@ -255,32 +255,28 @@ const filteredData = useMemo(() => {
      EXPORT CSV
   ============================================================ */
 function exportCSV() {
-  const headers = [
-    "model",
-    "category",
-    "sku",
-    "asin",
-    "listing_status",
-    "weekly_velocity",
-    "total_units_sold",
-    "fc_inventory",
-    "ampm_inventory",
-    "target_cover_units",
-    "expected_units",
-    "send_qty",
-    "fill_pct",
-    "velocity_flag",
-    "fulfillment_center",
-    "hazmat_type",
-    "master_carton",
-    "post_transfer_stock",
-    "coverage_gap_units",
-    "transfer_in",
+  const fossilHeaders = [
+    "model", "assortment", "sku", "asin",
+    "weekly_velocity", "total_units_sold", "fc_inventory", "ampm_inventory",
+    "send_qty", "fulfillment_center", "master_carton",
+    "cluster", "cluster_po", "remarks",
   ];
+
+  const defaultHeaders = [
+    "model", "category", "sku", "asin", "listing_status",
+    "weekly_velocity", "total_units_sold", "fc_inventory", "ampm_inventory",
+    "target_cover_units", "expected_units", "send_qty",
+    "fill_pct", "velocity_flag", "fulfillment_center",
+    "hazmat_type", "master_carton",
+    "post_transfer_stock", "coverage_gap_units", "transfer_in",
+  ];
+
+  const headers = account === "Fossil" ? fossilHeaders : defaultHeaders;
 
   const columnLabels = {
     model: "MODEL",
     category: "CATEGORY",
+    assortment: "ASSORTMENT",
     sku: "SKU",
     asin: "ASIN",
     listing_status: "LISTING STATUS",
@@ -290,12 +286,15 @@ function exportCSV() {
     ampm_inventory: account === "Fossil" ? "FOSSIL SOH" : "AMPM INVENTORY",
     target_cover_units: "TARGET COVER UNITS",
     expected_units: "ORIGINAL REQUIRED",
-    send_qty: "SEND QTY",
+    send_qty: account === "Fossil" ? "PO REQUIREMENT" : "SEND QTY",
     fill_pct: "FILL %",
     velocity_flag: "VELOCITY FLAG",
     fulfillment_center: "FC",
     hazmat_type: "HAZMAT TYPE",
     master_carton: "MASTER CARTON",
+    cluster: "CLUSTER",
+    cluster_po: "CLUSTER PO",
+    remarks: "REMARKS",
     post_transfer_stock: "POST TRANSFER STOCK",
     coverage_gap_units: "COVERAGE GAP UNITS",
     transfer_in: "TRANSFER IN",
@@ -304,12 +303,22 @@ function exportCSV() {
   const headerRow = headers.map(c => columnLabels[c] || c.toUpperCase()).join(",");
 
   const rows = sortedData
-    .map(row =>
-      headers.map(col => {
-        const val = row[col] ?? "";
-        return `"${String(val).replace(/"/g, '""')}"`;
-      }).join(",")
-    )
+    .map(row => {
+      // For Fossil, pick up edits if present
+      const getVal = (col) => {
+        if (account === "Fossil") {
+          const key = `${row.sku}|${row.fulfillment_center}`;
+          const clusterKey = `${row.sku}|${FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || "-"}`;
+          if (col === "send_qty")    return fossilEdits[key]?.send_qty     ?? row[col] ?? "";
+          if (col === "master_carton") return fossilEdits[key]?.master_carton ?? row[col] ?? 24;
+          if (col === "remarks")     return fossilEdits[key]?.remarks      ?? row[col] ?? "";
+          if (col === "cluster")     return FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || "-";
+          if (col === "cluster_po")  return fossilEdits[clusterKey]?.cluster_po ?? row[col] ?? 0;
+        }
+        return row[col] ?? "";
+      };
+      return headers.map(col => `"${String(getVal(col)).replace(/"/g, '""')}"`).join(",");
+    })
     .join("\n");
 
   const blob = new Blob(
@@ -319,7 +328,7 @@ function exportCSV() {
 
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "fc_allocation_full_export.csv";
+  link.download = account === "Fossil" ? "fossil_fc_allocation.csv" : "fc_allocation_full_export.csv";
   link.click();
 }
 
