@@ -173,6 +173,10 @@ def calculate_fc_plan(
     # =================================================
     ledger["MSKU"] = ledger["MSKU"].astype(str).str.strip().str.upper()
     ledger["Location"] = ledger["Location"].astype(str).str.strip().str.upper()
+
+    # Fossil: normalize FBS/FBO/FBK → FBA to match master file
+    if account.lower() == "fossil":
+        ledger["MSKU"] = ledger["MSKU"].str.replace(r"^FB[^A]", "FBA", regex=True)
     fc_inventory = (
         ledger
         .groupby(["MSKU", "Location"], as_index=False)

@@ -422,19 +422,19 @@ function exportCSV() {
       Ledger Stock {getSortArrow("fc_inventory")}
     </th>
     <th onClick={() => toggleSort("ampm_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">{account === "Fossil" ? "Fossil SOH" : "AMPM Inventory"} {getSortArrow("ampm_inventory")}</th>
-    <th onClick={() => toggleSort("target_cover_units")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+    <th onClick={() => toggleSort("target_cover_units")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
       Target Cover Units {getSortArrow("target_cover_units")}
     </th>
-    <th onClick={() => toggleSort("expected_units")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+    <th onClick={() => toggleSort("expected_units")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
       Original Required {getSortArrow("expected_units")}
     </th>
     <th onClick={() => toggleSort("send_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Send Qty {getSortArrow("send_qty")}
     </th>
-    <th onClick={() => toggleSort("fill_pct")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+    <th onClick={() => toggleSort("fill_pct")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
       Fill % {getSortArrow("fill_pct")}
     </th>
-    <th onClick={() => toggleSort("velocity_flag")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Velocity Flag {getSortArrow("velocity_flag")}</th>
+    <th onClick={() => toggleSort("velocity_flag")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>Velocity Flag {getSortArrow("velocity_flag")}</th>
     <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       FC {getSortArrow("fulfillment_center")}
     </th>
@@ -469,14 +469,15 @@ function exportCSV() {
                         {/* AMPM Inventory */}
                         <td className="px-4 py-3">{row.ampm_inventory ?? 0}</td>
                         {/* Target Cover Units */}
-                        <td className="px-4 py-3">{row.target_cover_units ?? 0}</td>
+                        {account !== "Fossil" && <td className="px-4 py-3">{row.target_cover_units ?? 0}</td>}
                         {/* Original Required */}
-                        <td className="px-4 py-3">{row.expected_units ?? 0}</td>
+                        {account !== "Fossil" && <td className="px-4 py-3">{row.expected_units ?? 0}</td>}
                         {/* Send Qty */}
                         <td className="px-4 py-3 font-semibold">{row.send_qty}</td>
                         {/* Fill % */}
-                        <td className="px-4 py-3">{row.fill_pct ?? 0}%</td>
+                        {account !== "Fossil" && <td className="px-4 py-3">{row.fill_pct ?? 0}%</td>}
                         {/* Velocity Flag */}
+                        {account !== "Fossil" && (
                         <td className="px-4 py-3">
                           <span className={
                             row.velocity_flag === "SHORT_30%+"
@@ -488,6 +489,7 @@ function exportCSV() {
                             {row.velocity_flag || "NO_FLAG"}
                           </span>
                         </td>
+                        )}
                         {/* FC */}
                         <td className="px-4 py-3">{row.fulfillment_center}</td>
                         {/* Hazmat Type */}
