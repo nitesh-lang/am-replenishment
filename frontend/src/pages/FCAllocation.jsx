@@ -207,7 +207,7 @@ function exportCSV() {
     weekly_velocity: "AVG WEEKLY SALES",
     total_units_sold: "TOTAL SOLD",
     fc_inventory: "LEDGER STOCK",
-    ampm_inventory: "AMPM INVENTORY",
+    ampm_inventory: account === "Fossil" ? "FOSSIL SOH" : "AMPM INVENTORY",
     target_cover_units: "TARGET COVER UNITS",
     expected_units: "ORIGINAL REQUIRED",
     send_qty: "SEND QTY",
@@ -421,7 +421,7 @@ function exportCSV() {
     <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Ledger Stock {getSortArrow("fc_inventory")}
     </th>
-    <th onClick={() => toggleSort("ampm_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">AMPM Inventory {getSortArrow("ampm_inventory")}</th>
+    <th onClick={() => toggleSort("ampm_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">{account === "Fossil" ? "Fossil SOH" : "AMPM Inventory"} {getSortArrow("ampm_inventory")}</th>
     <th onClick={() => toggleSort("target_cover_units")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Target Cover Units {getSortArrow("target_cover_units")}
     </th>

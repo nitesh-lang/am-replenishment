@@ -159,13 +159,12 @@ def calculate_final_allocation(
             "Item No": "model",
             "ASIN": "asin",
             "Category": "category",
-            "Brand": "hazmat_type",
             "Fossil SOH": "ampm_inventory",
         })
         fossil_master["sku"] = fossil_master["sku"].astype(str).str.strip().str.upper()
         fossil_master["ampm_inventory"] = pd.to_numeric(fossil_master["ampm_inventory"], errors="coerce").fillna(0)
 
-        keep_cols = [c for c in ["sku", "model", "asin", "category", "hazmat_type", "ampm_inventory"] if c in fossil_master.columns]
+        keep_cols = [c for c in ["sku", "model", "asin", "category", "ampm_inventory"] if c in fossil_master.columns]
         fossil_master = fossil_master[keep_cols]
 
         df_plan = df_plan.merge(fossil_master, on="sku", how="left", suffixes=("", "_fm"))
@@ -178,7 +177,7 @@ def calculate_final_allocation(
         df_plan["model"]         = df_plan.get("model", pd.Series("-")).fillna("-")
         df_plan["asin"]          = df_plan.get("asin", pd.Series("-")).fillna("-")
         df_plan["category"]      = df_plan.get("category", pd.Series("-")).fillna("-")
-        df_plan["hazmat_type"]   = df_plan.get("hazmat_type", pd.Series("-")).fillna("-")
+        df_plan["hazmat_type"]   = "-"   # no hazmat for Fossil
         df_plan["ampm_inventory"]= pd.to_numeric(df_plan.get("ampm_inventory", 0), errors="coerce").fillna(0)
 
         # No governance — send_qty = adjusted_shortfall as-is
