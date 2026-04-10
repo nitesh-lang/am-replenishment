@@ -114,13 +114,12 @@ def get_fc_final(
                 import pandas as pd
                 saved_df = pd.DataFrame(saved, columns=["sku", "fulfillment_center", "po_requirement_db", "master_carton_db", "remarks_db"])
                 df = df.merge(saved_df, on=["sku", "fulfillment_center"], how="left")
-                # Keep send_qty as system calculation — never overwrite it
-                df["po_requirement"]  = df["po_requirement_db"].fillna(0).astype(int)
-                df["master_carton"]   = df["master_carton_db"].fillna(24).astype(int).astype(str)
-                df["remarks"]         = df["remarks_db"].fillna("")
+                # Use saved po_requirement if exists, otherwise fall back to system calc (send_qty)
+                df["send_qty"]      = df["po_requirement_db"].fillna(df["send_qty"])
+                df["master_carton"] = df["master_carton_db"].fillna(24).astype(int).astype(str)
+                df["remarks"]       = df["remarks_db"].fillna("")
                 df.drop(columns=["po_requirement_db", "master_carton_db", "remarks_db"], inplace=True)
             else:
-                df["po_requirement"] = 0
                 df["remarks"] = ""
                 df["master_carton"] = "24"
 

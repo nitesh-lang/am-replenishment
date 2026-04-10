@@ -74,7 +74,7 @@ export default function FCAllocation() {
         return {
           sku: row.sku,
           fulfillment_center: row.fulfillment_center,
-          po_requirement: parseInt(edits.po_requirement ?? row.po_requirement ?? 0) || 0,
+          po_requirement: parseInt(edits.send_qty ?? row.send_qty ?? 0) || 0,
           master_carton: parseInt(edits.master_carton ?? row.master_carton ?? 24) || 24,
           remarks: edits.remarks ?? row.remarks ?? "",
         };
@@ -133,8 +133,7 @@ export default function FCAllocation() {
           rows.forEach(row => {
             const key = `${row.sku}|${row.fulfillment_center}`;
             preloaded[key] = {
-              send_qty:      row.send_qty ?? 0,       // system calc — read only
-              po_requirement: row.po_requirement ?? 0, // manual input from DB
+              send_qty:     row.send_qty ?? 0,
               master_carton: row.master_carton ?? 24,
               remarks:      row.remarks ?? "",
             };
@@ -286,7 +285,7 @@ function exportCSV() {
     "fc_inventory", "ampm_inventory",
     "weekly_velocity", "total_units_sold",
     "in_transit_qty", "open_po_qty",
-    "send_qty", "po_requirement", "cluster_po",
+    "send_qty", "cluster_po",
     "master_carton", "remarks",
   ];
 
@@ -314,8 +313,7 @@ function exportCSV() {
     ampm_inventory: account === "Fossil" ? "FOSSIL SOH" : "AMPM INVENTORY",
     target_cover_units: "TARGET COVER UNITS",
     expected_units: "ORIGINAL REQUIRED",
-    send_qty: account === "Fossil" ? "SYSTEM CALC" : "SEND QTY",
-    po_requirement: "PO REQUIREMENT",
+    send_qty: account === "Fossil" ? "PO REQUIREMENT" : "SEND QTY",
     fill_pct: "FILL %",
     velocity_flag: "VELOCITY FLAG",
     fulfillment_center: "FC",
@@ -339,8 +337,7 @@ function exportCSV() {
         if (account === "Fossil") {
           const key = `${row.sku}|${row.fulfillment_center}`;
           const clusterKey = `${row.sku}|${FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || "-"}`;
-          if (col === "po_requirement") return fossilEdits[key]?.po_requirement ?? row[col] ?? 0;
-          if (col === "send_qty")    return row.send_qty ?? 0;  // system calc, always from row
+          if (col === "send_qty")    return fossilEdits[key]?.send_qty     ?? row[col] ?? "";
           if (col === "master_carton") return fossilEdits[key]?.master_carton ?? row[col] ?? 24;
           if (col === "remarks")     return fossilEdits[key]?.remarks      ?? row[col] ?? "";
           if (col === "cluster")     return FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || "-";
@@ -565,9 +562,8 @@ function exportCSV() {
     <th onClick={() => toggleSort("expected_units")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
       Original Required {getSortArrow("expected_units")}
     </th>
-    {account === "Fossil" && <th onClick={() => toggleSort("send_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap text-slate-500">System Calc {getSortArrow("send_qty")}</th>}
-    <th onClick={() => toggleSort(account === "Fossil" ? "po_requirement" : "send_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
-      {account === "Fossil" ? "PO Requirement" : "Send Qty"} {getSortArrow(account === "Fossil" ? "po_requirement" : "send_qty")}
+    <th onClick={() => toggleSort("send_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      {account === "Fossil" ? "PO Requirement" : "Send Qty"} {getSortArrow("send_qty")}
     </th>
     {account === "Fossil" && <th onClick={() => toggleSort("cluster_po")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Cluster PO {getSortArrow("cluster_po")}</th>}
     <th onClick={() => toggleSort("fill_pct")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
@@ -630,25 +626,13 @@ function exportCSV() {
                         {account !== "Fossil" && <td className="px-4 py-3">{row.target_cover_units ?? 0}</td>}
                         {/* Original Required */}
                         {account !== "Fossil" && <td className="px-4 py-3">{row.expected_units ?? 0}</td>}
-                        {/* System Calc - Fossil only, read-only */}
-                        {account === "Fossil" && (
-                          <td className="px-4 py-3 text-slate-400 text-center font-mono text-sm">
-                            {row.send_qty ?? 0}
-                          </td>
-                        )}
-                        {/* PO Requirement (editable) / Send Qty (non-Fossil) */}
+                        {/* Send Qty / PO Requirement */}
                         <td className="px-4 py-3 font-semibold">
                           {account === "Fossil"
                             ? <input
                                 type="number"
-                                value={fossilEdits[getFossilKey(row)]?.po_requirement ?? row.po_requirement ?? 0}
-                                onChange={e => {
-                                  const key = getFossilKey(row);
-                                  setFossilEdits(prev => ({
-                                    ...prev,
-                                    [key]: { ...prev[key], po_requirement: e.target.value }
-                                  }));
-                                }}
+                                value={getFossilField(row, "send_qty")}
+                                onChange={e => setFossilField(row, "send_qty", e.target.value)}
                                 className="w-20 px-2 py-1 border border-slate-300 rounded text-sm text-center"
                               />
                             : row.send_qty
