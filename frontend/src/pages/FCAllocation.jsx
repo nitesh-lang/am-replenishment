@@ -38,6 +38,16 @@ export default function FCAllocation() {
 
   const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
+  // Fossil cluster mapping
+  const FC_CLUSTER = {
+    BLR5:"BLR", BLR7:"BLR", BLR8:"BLR",
+    BOM4:"BOM", BOM5:"BOM", BOM7:"BOM", AMD2:"BOM", PNQ3:"BOM", ISK3:"BOM",
+    MAA4:"TN",  CJB1:"TN",
+    DEL2:"DEL", DEL4:"DEL", DEL5:"DEL", DED4:"DEL", LKO1:"DEL",
+    HYD3:"TEL", HYD8:"TEL",
+    CCX1:"WB",
+  };
+
   function getFossilKey(row) { return `${row.sku}|${row.fulfillment_center}`; }
 
   function getFossilField(row, field) {
@@ -57,7 +67,8 @@ export default function FCAllocation() {
     setSaving(true);
     setSaveMsg("");
     try {
-      const payload = sortedData.map(row => {
+      // Save per-FC row data
+      const rowPayload = sortedData.map(row => {
         const key = getFossilKey(row);
         const edits = fossilEdits[key] || {};
         return {
@@ -68,13 +79,36 @@ export default function FCAllocation() {
           remarks: edits.remarks ?? row.remarks ?? "",
         };
       });
-      const res = await fetch(`${BASE}/fc-final-allocation/fossil-save`, {
+      await fetch(`${BASE}/fc-final-allocation/fossil-save`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(rowPayload),
       });
-      const json = await res.json();
-      setSaveMsg(json.status === "saved" ? `✅ Saved ${json.rows} rows` : `❌ ${json.error}`);
+
+      // Save cluster PO overrides — collect unique sku+cluster combos that were edited
+      const clusterEdits = {};
+      sortedData.forEach(row => {
+        const cluster = FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || "-";
+        if (cluster === "-") return;
+        const clusterKey = `${row.sku}|${cluster}`;
+        if (!clusterEdits[clusterKey]) {
+          const editedVal = fossilEdits[clusterKey]?.cluster_po;
+          if (editedVal !== undefined) {
+            clusterEdits[clusterKey] = { sku: row.sku, cluster, cluster_po: parseInt(editedVal) || 0 };
+          }
+        }
+      });
+
+      const clusterPayload = Object.values(clusterEdits);
+      if (clusterPayload.length > 0) {
+        await fetch(`${BASE}/fc-final-allocation/fossil-cluster-save`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(clusterPayload),
+        });
+      }
+
+      setSaveMsg(`✅ Saved`);
     } catch (e) {
       setSaveMsg("❌ Save failed");
     } finally {
@@ -500,6 +534,8 @@ function exportCSV() {
     {account !== "Fossil" && <th onClick={() => toggleSort("hazmat_type")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Hazmat Type {getSortArrow("hazmat_type")}</th>}
     <th onClick={() => toggleSort("master_carton")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Master Carton {getSortArrow("master_carton")}</th>
     {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Remarks</th>}
+    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Cluster</th>}
+    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Cluster PO</th>}
   </tr>
 </thead>
 
@@ -591,6 +627,32 @@ function exportCSV() {
                             />
                           </td>
                         )}
+                        {/* Cluster - Fossil only */}
+                        {account === "Fossil" && (() => {
+                          const cluster = FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || row.cluster || "-";
+                          const clusterKey = `${row.sku}|${cluster}`;
+                          const clusterPo = fossilEdits[clusterKey]?.cluster_po ?? row.cluster_po ?? 0;
+                          return (
+                            <>
+                              <td className="px-4 py-3">
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-bold">{cluster}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <input
+                                  type="number"
+                                  value={clusterPo}
+                                  onChange={e => {
+                                    setFossilEdits(prev => ({
+                                      ...prev,
+                                      [clusterKey]: { ...prev[clusterKey], cluster_po: e.target.value }
+                                    }));
+                                  }}
+                                  className="w-20 px-2 py-1 border border-blue-300 rounded text-sm text-center bg-blue-50"
+                                />
+                              </td>
+                            </>
+                          );
+                        })()}
                       </tr>
 
                       {expandedRow === i && (

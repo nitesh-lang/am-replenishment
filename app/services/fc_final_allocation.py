@@ -159,13 +159,14 @@ def calculate_final_allocation(
             "Item No": "model",
             "ASIN": "asin",
             "Category": "category",
-            "Fossil Assortment": "assortment",
+            "Fossil Assortment": "fossil_assortment",
+            "Assortment Type": "assortment",
             "Fossil SOH": "ampm_inventory",
         })
         fossil_master["sku"] = fossil_master["sku"].astype(str).str.strip().str.upper()
         fossil_master["ampm_inventory"] = pd.to_numeric(fossil_master["ampm_inventory"], errors="coerce").fillna(0)
 
-        keep_cols = [c for c in ["sku", "model", "asin", "category", "assortment", "ampm_inventory"] if c in fossil_master.columns]
+        keep_cols = [c for c in ["sku", "model", "asin", "category", "assortment", "fossil_assortment", "ampm_inventory"] if c in fossil_master.columns]
         fossil_master = fossil_master[keep_cols]
 
         df_plan = df_plan.merge(fossil_master, on="sku", how="left", suffixes=("", "_fm"))
@@ -175,10 +176,11 @@ def calculate_final_allocation(
             df_plan["model"] = df_plan["model_fm"].combine_first(df_plan["model"])
             df_plan.drop(columns=["model_fm"], inplace=True)
 
-        df_plan["model"]      = df_plan.get("model", pd.Series("-")).fillna("-")
-        df_plan["asin"]       = df_plan.get("asin", pd.Series("-")).fillna("-")
-        df_plan["category"]   = df_plan.get("category", pd.Series("-")).fillna("-")
-        df_plan["assortment"] = df_plan.get("assortment", pd.Series("-")).fillna("-")
+        df_plan["model"]          = df_plan.get("model", pd.Series("-")).fillna("-")
+        df_plan["asin"]           = df_plan.get("asin", pd.Series("-")).fillna("-")
+        df_plan["category"]       = df_plan.get("category", pd.Series("-")).fillna("-")
+        df_plan["assortment"]     = df_plan.get("assortment", pd.Series("-")).fillna("-")
+        df_plan["fossil_assortment"] = df_plan.get("fossil_assortment", pd.Series("-")).fillna("-")
         df_plan["hazmat_type"]   = "-"
         df_plan["master_carton"] = "24"   # default 24 for Fossil
         df_plan["remarks"]       = ""
@@ -194,7 +196,7 @@ def calculate_final_allocation(
         df_plan["coverage_gap_units"] = df_plan["adjusted_shortfall"]
 
         fossil_final = df_plan[[
-            "model", "sku", "asin", "category", "assortment", "listing_status", "ampm_inventory",
+            "model", "sku", "asin", "category", "assortment", "fossil_assortment", "listing_status", "ampm_inventory",
             "fulfillment_center", "weekly_velocity", "total_units_sold", "fc_inventory",
             "transfer_in", "target_cover_units", "post_transfer_stock", "coverage_gap_units",
             "send_qty", "expected_units", "fill_pct", "velocity_flag",

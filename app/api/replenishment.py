@@ -122,10 +122,61 @@ def get_fc_final(
                 df["remarks"] = ""
                 df["master_carton"] = "24"
 
+            # ── Cluster mapping ──
+            import pandas as pd
+            FC_CLUSTER = {
+                "BLR5": "BLR", "BLR7": "BLR", "BLR8": "BLR",
+                "BOM4": "BOM", "BOM5": "BOM", "BOM7": "BOM",
+                "AMD2": "BOM", "PNQ3": "BOM", "ISK3": "BOM",
+                "MAA4": "TN",  "CJB1": "TN",
+                "DEL2": "DEL", "DEL4": "DEL", "DEL5": "DEL",
+                "DED4": "DEL", "LKO1": "DEL",
+                "HYD3": "TEL", "HYD8": "TEL",
+                "CCX1": "WB",
+            }
+            df["cluster"] = df["fulfillment_center"].str.upper().map(FC_CLUSTER).fillna("-")
+
+            # cluster PO = sum of send_qty per cluster per SKU
+            cluster_po = (
+                df.groupby(["sku", "cluster"])["send_qty"]
+                .sum()
+                .reset_index()
+                .rename(columns={"send_qty": "cluster_po_calc"})
+            )
+            df = df.merge(cluster_po, on=["sku", "cluster"], how="left")
+
+            # load saved cluster PO overrides
+            cursor2 = conn if False else psycopg2.connect(os.environ["DATABASE_URL"]).cursor()
+            conn2 = psycopg2.connect(os.environ["DATABASE_URL"])
+            cursor2 = conn2.cursor()
+            cursor2.execute("""
+                CREATE TABLE IF NOT EXISTS fossil_cluster_po (
+                    sku TEXT,
+                    cluster TEXT,
+                    cluster_po INTEGER DEFAULT 0,
+                    PRIMARY KEY (sku, cluster)
+                )
+            """)
+            conn2.commit()
+            cursor2.execute("SELECT sku, cluster, cluster_po FROM fossil_cluster_po")
+            cluster_saved = cursor2.fetchall()
+            conn2.close()
+
+            if cluster_saved:
+                cluster_saved_df = pd.DataFrame(cluster_saved, columns=["sku", "cluster", "cluster_po_db"])
+                df = df.merge(cluster_saved_df, on=["sku", "cluster"], how="left")
+                df["cluster_po"] = df["cluster_po_db"].fillna(df["cluster_po_calc"]).astype(int)
+                df.drop(columns=["cluster_po_db", "cluster_po_calc"], inplace=True)
+            else:
+                df["cluster_po"] = df["cluster_po_calc"].fillna(0).astype(int)
+                df.drop(columns=["cluster_po_calc"], inplace=True)
+
         except Exception as e:
             print("⚠️ Fossil FC DB merge error:", e)
             df["remarks"] = ""
             df["master_carton"] = "24"
+            df["cluster"] = "-"
+            df["cluster_po"] = 0
 
     return df.to_dict(orient="records")
 
@@ -179,6 +230,51 @@ async def save_fossil_fc_inputs(request: Request):
 
     except Exception as e:
         print("⚠️ Fossil FC save error:", e)
+        return {"status": "error", "error": str(e)}
+
+
+# =================================================
+# FOSSIL CLUSTER PO SAVE ENDPOINT
+# =================================================
+@router.post("/fc-final-allocation/fossil-cluster-save")
+async def save_fossil_cluster_po(request: Request):
+    try:
+        data = await request.json()
+        if isinstance(data, str):
+            data = json.loads(data)
+        if isinstance(data, dict):
+            data = [data]
+
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fossil_cluster_po (
+                sku TEXT,
+                cluster TEXT,
+                cluster_po INTEGER DEFAULT 0,
+                PRIMARY KEY (sku, cluster)
+            )
+        """)
+
+        for row in data:
+            sku        = str(row.get("sku", "")).strip().upper()
+            cluster    = str(row.get("cluster", "")).strip().upper()
+            cluster_po = int(row.get("cluster_po", 0))
+
+            cursor.execute("""
+                INSERT INTO fossil_cluster_po (sku, cluster, cluster_po)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (sku, cluster)
+                DO UPDATE SET cluster_po = EXCLUDED.cluster_po;
+            """, (sku, cluster, cluster_po))
+
+        conn.commit()
+        conn.close()
+        return {"status": "saved", "rows": len(data)}
+
+    except Exception as e:
+        print("⚠️ Fossil cluster PO save error:", e)
         return {"status": "error", "error": str(e)}
 
 
