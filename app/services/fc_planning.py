@@ -241,17 +241,18 @@ def calculate_fc_plan(
         master_df.columns = master_df.columns.str.strip()
         master_df = master_df.rename(columns={"SKU": "sku", "Item No": "model"})
         master_df["sku"] = master_df["sku"].astype(str).str.strip().str.upper()
-        final_df = df[["model", "sku", "fulfillment_center", "total_units_90d", "weekly_velocity",
-                        "fc_inventory", "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"]].copy()
-        for col in ["total_units_90d", "weekly_velocity", "fc_inventory", "required_units",
-                    "fc_shortfall", "coverage_weeks", "excess_inventory"]:
-            final_df[col] = pd.to_numeric(final_df[col], errors="coerce").fillna(0)
+        # merge model into df FIRST before selecting columns
         df = df.merge(master_df[["sku", "model"]], on="sku", how="left")
-        df["model"] = df.get("model_y", df.get("model", "-")).fillna("-")
         if "model_y" in df.columns:
-            df.drop(columns=["model_y"], inplace=True)
-        final_df = df[["model", "sku", "fulfillment_center", "total_units_90d", "weekly_velocity",
-                        "fc_inventory", "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"]].copy()
+            df["model"] = df["model_y"].combine_first(df.get("model_x", pd.Series("-", index=df.index)))
+            df.drop(columns=[c for c in ["model_x", "model_y"] if c in df.columns], inplace=True)
+        elif "model" not in df.columns:
+            df["model"] = "-"
+        df["model"] = df["model"].fillna("-")
+        final_df = df[[
+            "model", "sku", "fulfillment_center", "total_units_90d", "weekly_velocity",
+            "fc_inventory", "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"
+        ]].copy()
         for col in ["total_units_90d", "weekly_velocity", "fc_inventory", "required_units",
                     "fc_shortfall", "coverage_weeks", "excess_inventory"]:
             final_df[col] = pd.to_numeric(final_df[col], errors="coerce").fillna(0)
