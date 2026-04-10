@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 
 export default function ChinaReorder() {
 
+  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+
   /* ============================================================
      STATE
   ============================================================ */
@@ -56,7 +58,7 @@ export default function ChinaReorder() {
     const params = new URLSearchParams({ brand: selectedBrand, months: selectedMonths });
     if (fromWeek) params.append("from_week", fromWeek);
     if (toWeek) params.append("to_week", toWeek);
-    fetch(`https://am-replenishment.onrender.com/china-reorder/?${params}`)
+    fetch(`${BASE}/china-reorder/?${params}`)
       .then((res) => res.json())
       .then((res) => {
         setData(Array.isArray(res.data) ? res.data : []);

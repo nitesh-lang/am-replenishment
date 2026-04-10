@@ -20,6 +20,8 @@ const WOC_MATRIX = [
 
 export default function FossilReplenishment() {
 
+  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showMatrix, setShowMatrix] = useState(false);
@@ -46,7 +48,7 @@ export default function FossilReplenishment() {
     if (fromWeek) params.append("from_week", fromWeek);
     if (toWeek) params.append("to_week", toWeek);
 
-    fetch(`https://am-replenishment.onrender.com/api/fossil-replenishment?${params}`)
+    fetch(`${BASE}/api/fossil-replenishment?${params}`)
       .then(res => res.json())
       .then(res => {
         setData(res.data || []);

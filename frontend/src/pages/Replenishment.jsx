@@ -8,6 +8,8 @@ import { getReplenishment, getKPIs } from "../api/replenishment";
 
 export default function Replenishment() {
 
+  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+
   /* ============================================================
      STATE
   ============================================================ */
@@ -64,7 +66,7 @@ export default function Replenishment() {
     // LOAD MASTER CARTONS
 
 useEffect(() => {
-  fetch("https://am-replenishment.onrender.com/get-master-cartons")
+  fetch(`${BASE}/get-master-cartons`)
     .then(res => res.json())
     .then(data => {
       const map = {};
@@ -549,7 +551,7 @@ function exportCSV() {
                                 onChange={async (e) => {
                                   const value = e.target.value;
                                   setMasterCartons(prev => ({ ...prev, [row.model]: value }));
-                                  await fetch("https://am-replenishment.onrender.com/save-master-carton", {
+                                  await fetch(`${BASE}/save-master-carton`, {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
                                     body: JSON.stringify({ model: row.model, master_carton: value })
