@@ -192,6 +192,7 @@ def calculate_final_allocation(
         df_plan["listing_status"] = "-"
         df_plan["fill_pct"]       = 100.0        # no governance reduction
         df_plan["velocity_flag"]  = "OK"         # no SHORT flagging for Fossil
+        df_plan["po_requirement"] = 0            # filled from DB in API layer
         df_plan["allocation_logic"] = "send_qty = max(0, weekly_velocity * replenish_weeks - (fc_inventory + transfer_in))"
         df_plan["coverage_gap_units"] = df_plan["adjusted_shortfall"]
 
@@ -249,7 +250,7 @@ def calculate_final_allocation(
             "fulfillment_center", "weekly_velocity", "total_units_sold", "fc_inventory",
             "transfer_in", "target_cover_units", "post_transfer_stock", "coverage_gap_units",
             "send_qty", "expected_units", "fill_pct", "velocity_flag",
-            "ixd_flag", "hazmat_type", "master_carton", "remarks", "allocation_logic",
+            "ixd_flag", "hazmat_type", "master_carton", "remarks", "po_requirement", "allocation_logic",
             "in_transit_qty", "open_po_qty",
         ]].copy()
 
