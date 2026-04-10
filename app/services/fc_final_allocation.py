@@ -239,6 +239,12 @@ def calculate_final_allocation(
             df_plan["open_po_qty"]    = pd.to_numeric(df_plan["open_po_qty"], errors="coerce").fillna(0).astype(int)
             df_plan.drop(columns=["item_no", "fc_upper"], inplace=True)
 
+            # Recalculate send_qty deducting In-Transit and Open PO
+            df_plan["send_qty"] = (
+                df_plan["send_qty"] - df_plan["in_transit_qty"] - df_plan["open_po_qty"]
+            ).clip(lower=0)
+            df_plan["allocation_logic"] = "send_qty = max(0, weekly_velocity * replenish_weeks - ledger_stock - in_transit - open_po)"
+
         except Exception as e:
             print("⚠️ Fossil In-Transit/Open PO load error:", e)
             df_plan["in_transit_qty"] = 0
