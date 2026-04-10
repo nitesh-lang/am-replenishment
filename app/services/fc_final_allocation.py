@@ -1,3 +1,4 @@
+
 import pandas as pd
 from app.services.fc_planning import calculate_fc_plan
 from app.services.fc_transfer import calculate_fc_transfers
@@ -147,7 +148,76 @@ def calculate_final_allocation(
     df_plan["expected_units"] = df_plan["original_required_units"]
 
     # ==========================================================
-    # STEP 5B — HAZMAT GOVERNANCE (35%)
+    # FOSSIL EXCEPTION — no governance, no velocity flags,
+    # AMPM stock from "Fossil SOH" column in master sheet
+    # ==========================================================
+    if account.lower() == "fossil":
+        fossil_master = get_excel_sheet("Fossil Replenishment/Fossil Replenishment.xlsx", "Sheet1")
+        fossil_master.columns = fossil_master.columns.str.strip()
+        fossil_master = fossil_master.rename(columns={
+            "SKU": "sku",
+            "Item No": "model",
+            "ASIN": "asin",
+            "Category": "category",
+            "Brand": "hazmat_type",
+            "Fossil SOH": "ampm_inventory",
+        })
+        fossil_master["sku"] = fossil_master["sku"].astype(str).str.strip().str.upper()
+        fossil_master["ampm_inventory"] = pd.to_numeric(fossil_master["ampm_inventory"], errors="coerce").fillna(0)
+
+        keep_cols = [c for c in ["sku", "model", "asin", "category", "hazmat_type", "ampm_inventory"] if c in fossil_master.columns]
+        fossil_master = fossil_master[keep_cols]
+
+        df_plan = df_plan.merge(fossil_master, on="sku", how="left", suffixes=("", "_fm"))
+
+        # model from master takes priority
+        if "model_fm" in df_plan.columns:
+            df_plan["model"] = df_plan["model_fm"].combine_first(df_plan["model"])
+            df_plan.drop(columns=["model_fm"], inplace=True)
+
+        df_plan["model"]         = df_plan.get("model", pd.Series("-")).fillna("-")
+        df_plan["asin"]          = df_plan.get("asin", pd.Series("-")).fillna("-")
+        df_plan["category"]      = df_plan.get("category", pd.Series("-")).fillna("-")
+        df_plan["hazmat_type"]   = df_plan.get("hazmat_type", pd.Series("-")).fillna("-")
+        df_plan["ampm_inventory"]= pd.to_numeric(df_plan.get("ampm_inventory", 0), errors="coerce").fillna(0)
+
+        # No governance — send_qty = adjusted_shortfall as-is
+        df_plan["ixd_flag"]       = "Non-IXD"   # treat all as non-IXD (no 35% cap)
+        df_plan["master_carton"]  = "-"
+        df_plan["listing_status"] = "-"
+        df_plan["fill_pct"]       = 100.0        # no governance reduction
+        df_plan["velocity_flag"]  = "OK"         # no SHORT flagging for Fossil
+        df_plan["allocation_logic"] = "send_qty = max(0, weekly_velocity * replenish_weeks - (fc_inventory + transfer_in))"
+        df_plan["coverage_gap_units"] = df_plan["adjusted_shortfall"]
+
+        fossil_final = df_plan[[
+            "model", "sku", "asin", "category", "listing_status", "ampm_inventory",
+            "fulfillment_center", "weekly_velocity", "total_units_sold", "fc_inventory",
+            "transfer_in", "target_cover_units", "post_transfer_stock", "coverage_gap_units",
+            "send_qty", "expected_units", "fill_pct", "velocity_flag",
+            "ixd_flag", "hazmat_type", "master_carton", "allocation_logic"
+        ]].copy()
+
+        numeric_cleanup_cols = [
+            "weekly_velocity", "fc_inventory", "transfer_in", "target_cover_units",
+            "post_transfer_stock", "coverage_gap_units", "send_qty", "expected_units",
+        ]
+        for col in numeric_cleanup_cols:
+            fossil_final[col] = pd.to_numeric(fossil_final[col], errors="coerce").fillna(0)
+
+        fossil_final[numeric_cleanup_cols] = fossil_final[numeric_cleanup_cols].round(0).astype(int)
+
+        for col in ["ixd_flag", "hazmat_type", "category", "asin", "master_carton", "listing_status"]:
+            fossil_final[col] = (
+                fossil_final[col].astype(str).str.strip()
+                .replace({"nan": None, "None": None, "<NA>": None, "": None})
+                .fillna("-")
+            )
+
+        return fossil_final
+
+    # ==========================================================
+    # STEP 5B — HAZMAT GOVERNANCE (35%)  [non-Fossil accounts]
     # ==========================================================
 
     if account.lower() == "nexlev":

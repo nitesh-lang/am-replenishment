@@ -20,28 +20,31 @@ DATA_DIR = BASE_DIR / "data" / "input"
 # =================================================
 def load_fc_data(account: str):
 
-    engine = create_engine(os.getenv("DATABASE_URL"))
+    # ── FOSSIL: load directly from CSV files, not DB ──
+    if account.lower() == "fossil":
+        fossil_dir = DATA_DIR / "Fossil Replenishment"
+        shipments = pd.read_csv(fossil_dir / "fba_shipments_fossil.csv", low_memory=False)
+        ledger    = pd.read_csv(fossil_dir / "inventory_ledger_fossil.csv", low_memory=False)
+        shipments.columns = shipments.columns.str.strip()
+        ledger.columns    = ledger.columns.str.strip()
+        return shipments, ledger
 
-    print("🔍 LOADING FC DATA FOR ACCOUNT:", account.lower())
+    engine = create_engine(os.getenv("DATABASE_URL"))
 
     shipments = pd.read_sql(
         "SELECT * FROM shipments WHERE LOWER(account) = %s",
-    engine,
-    params=(account.lower(),)
-)
+        engine,
+        params=(account.lower(),)
+    )
 
     ledger = pd.read_sql(
-    "SELECT * FROM inventory_ledger WHERE LOWER(account) = %s",
-    engine,
-    params=(account.lower(),)
-)
-
-    print("✅ SHIPMENTS LOADED:", len(shipments), "rows")
-    print("✅ LEDGER LOADED:", len(ledger), "rows")
-    print("✅ UNIQUE ACCOUNTS IN SHIPMENTS:", shipments["account"].unique() if "account" in shipments.columns else "NO ACCOUNT COLUMN")
+        "SELECT * FROM inventory_ledger WHERE LOWER(account) = %s",
+        engine,
+        params=(account.lower(),)
+    )
 
     shipments.columns = shipments.columns.str.strip()
-    ledger.columns = ledger.columns.str.strip()
+    ledger.columns    = ledger.columns.str.strip()
 
     return shipments, ledger
 
@@ -72,25 +75,6 @@ def calculate_fc_plan(
     """
 
     shipments, ledger = load_fc_data(account)
-
-    print("ACCOUNT IN PLANNING:", account)
-    print("SHIPMENTS TOTAL:", shipments["Shipped Quantity"].sum())
-    print("LEDGER TOTAL:", ledger["Ending Warehouse Balance"].sum())
-
-    print("ACCOUNT RECEIVED:", account)
-    print("UNIQUE SHIPMENT ACCOUNTS:", shipments["account"].unique())
-    print("UNIQUE LEDGER ACCOUNTS:", ledger["account"].unique())
-    print("TOTAL SHIPMENT UNITS:", shipments["Shipped Quantity"].sum())
-    
-    print("ACCOUNT:", account)
-    print("SHIPMENTS ROWS:", len(shipments))
-    print("LEDGER ROWS:", len(ledger))
-    print("SHIPMENT SKUS SAMPLE:",
-      shipments["Merchant SKU"].astype(str).str.upper().unique()[:5])
-    
-    print("ACCOUNT IN PLANNING:", account)
-    print("SHIPMENT SUM:", shipments["Shipped Quantity"].sum())
-    print("UNIQUE ACCOUNTS IN SHIPMENTS:", shipments["account"].unique())
 
     # =================================================
     # VALIDATE SHIPMENTS STRUCTURE
@@ -140,8 +124,6 @@ def calculate_fc_plan(
         shipments["Shipment Date"] >= cutoff_date
     ].copy()
     
-    print("SHIPMENTS LAST 90 DAYS:", len(shipments_90))
-    print("MAX DATE IN FILE:", last_date)
     # =================================================
     # SALES CHANNEL FILTER
     # =================================================
@@ -151,9 +133,6 @@ def calculate_fc_plan(
         shipments_90["Sales Channel"] == channel.strip().lower()
     ].copy()
     
-    print("AFTER CHANNEL FILTER:", len(shipments_90))
-    print("CHANNEL SELECTED:", channel)
-    print("UNIQUE CHANNELS:", shipments_90["Sales Channel"].unique())
 
     shipments_90["sku"] = shipments_90["sku"].astype(str).str.strip().str.upper()
 
@@ -167,8 +146,6 @@ def calculate_fc_plan(
         .agg(total_units_90d=("Shipped Quantity", "sum"))
     )
     
-    print("FC VELOCITY ROWS:", len(fc_velocity))
-    print("SAMPLE VELOCITY:", fc_velocity.head())
 
     fc_velocity["FC"] = fc_velocity["FC"].astype(str).str.strip().str.upper()
 
@@ -212,11 +189,7 @@ def calculate_fc_plan(
         .agg(fc_inventory=("Ending Warehouse Balance", "sum"))
     )
     
-    print("LEDGER ROWS:", len(fc_inventory))
-    print("SAMPLE LEDGER:", fc_inventory.head())
 
-    print("UNIQUE FC IN VELOCITY:", fc_velocity["FC"].unique()[:10])
-    print("UNIQUE LOCATION IN LEDGER:", fc_inventory["Location"].unique()[:10])
     # =================================================
     # MERGE VELOCITY + INVENTORY
     # =================================================
@@ -228,10 +201,6 @@ def calculate_fc_plan(
         how="left",
     )
      
-    print("AFTER LEDGER MERGE ROWS:", len(df))
-    print("NULL FC INVENTORY COUNT:", df["fc_inventory"].isna().sum())
-    print("ROWS WHERE INVENTORY NULL:")
-    print(df[df["fc_inventory"].isna()][["sku","FC"]].head(20))
 
     df["fc_inventory"] = df["fc_inventory"].fillna(0)
 
@@ -285,6 +254,27 @@ def calculate_fc_plan(
         master_df = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
     elif account.lower() == "audio array":
         master_df = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")
+    elif account.lower() == "fossil":
+        master_df = get_excel_sheet("Fossil Replenishment/Fossil Replenishment.xlsx", "Sheet1")
+        master_df.columns = master_df.columns.str.strip()
+        master_df = master_df.rename(columns={"SKU": "sku", "Item No": "model"})
+        master_df["sku"] = master_df["sku"].astype(str).str.strip().str.upper()
+        final_df = df[["model", "sku", "fulfillment_center", "total_units_90d", "weekly_velocity",
+                        "fc_inventory", "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"]].copy()
+        for col in ["total_units_90d", "weekly_velocity", "fc_inventory", "required_units",
+                    "fc_shortfall", "coverage_weeks", "excess_inventory"]:
+            final_df[col] = pd.to_numeric(final_df[col], errors="coerce").fillna(0)
+        df = df.merge(master_df[["sku", "model"]], on="sku", how="left")
+        df["model"] = df.get("model_y", df.get("model", "-")).fillna("-")
+        if "model_y" in df.columns:
+            df.drop(columns=["model_y"], inplace=True)
+        final_df = df[["model", "sku", "fulfillment_center", "total_units_90d", "weekly_velocity",
+                        "fc_inventory", "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"]].copy()
+        for col in ["total_units_90d", "weekly_velocity", "fc_inventory", "required_units",
+                    "fc_shortfall", "coverage_weeks", "excess_inventory"]:
+            final_df[col] = pd.to_numeric(final_df[col], errors="coerce").fillna(0)
+        validation_report = run_full_validation(shipments_90, ledger, final_df)
+        return final_df
     else:
         master_df = get("replenishment_master_nexlev.xlsx")
 
@@ -297,10 +287,7 @@ def calculate_fc_plan(
 
     master_df["sku"] = master_df["sku"].astype(str).str.strip().str.upper()
 
-    print("MASTER SKU SAMPLE:", master_df["sku"].head(5).tolist())
-    print("DF SKU SAMPLE:", df["sku"].head(5).tolist())
     df = df.merge(master_df[["sku", "model"]], on="sku", how="left")
-    print("MODEL NULL COUNT AFTER MERGE:", df["model"].isna().sum())
 
     final_df = df[[
         "model",
@@ -337,6 +324,5 @@ def calculate_fc_plan(
     final_df
 )
 
-    print("VALIDATION REPORT:", validation_report)
 
     return final_df
