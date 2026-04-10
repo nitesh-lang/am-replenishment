@@ -13,31 +13,32 @@ DATABASE_URL = os.getenv(
 engine = create_engine(DATABASE_URL)
 
 # ==========================================
-# SHIPMENTS (Nexlev + Viomi)
+# SHIPMENTS (all accounts)
 # ==========================================
 print("Uploading shipments...")
 
 ship_nexlev = pd.read_csv("data/input/fba_shipments_nexlev.csv")
-ship_viomi = pd.read_csv("data/input/fba_shipments_viomi.csv")
-ship_wm = pd.read_csv("data/input/fba_shipments_WM.csv")
-ship_aa = pd.read_csv("data/input/fba_shipments_Audio Array.csv")
+ship_viomi  = pd.read_csv("data/input/fba_shipments_viomi.csv")
+ship_wm     = pd.read_csv("data/input/fba_shipments_WM.csv")
+ship_aa     = pd.read_csv("data/input/fba_shipments_Audio Array.csv")
+ship_fossil = pd.read_csv("data/input/Fossil Replenishment/fba_shipments_fossil.csv")
 
-ship_nexlev.columns = ship_nexlev.columns.str.strip()
-ship_viomi.columns = ship_viomi.columns.str.strip()
-ship_wm.columns = ship_wm.columns.str.strip()
-ship_aa.columns = ship_aa.columns.str.strip()
+for df in [ship_nexlev, ship_viomi, ship_wm, ship_aa, ship_fossil]:
+    df.columns = df.columns.str.strip()
 
 ship_nexlev["account"] = "nexlev"
-ship_viomi["account"] = "viomi"
-ship_wm["account"] = "white mulberry"
-ship_aa["account"] = "audio array"
+ship_viomi["account"]  = "viomi"
+ship_wm["account"]     = "white mulberry"
+ship_aa["account"]     = "audio array"
+ship_fossil["account"] = "fossil"
 
-shipments = pd.concat([ship_nexlev, ship_viomi, ship_wm, ship_aa], ignore_index=True)
+shipments = pd.concat(
+    [ship_nexlev, ship_viomi, ship_wm, ship_aa, ship_fossil],
+    ignore_index=True
+)
 
-# Normalize account column
 shipments["account"] = shipments["account"].str.lower().str.strip()
 
-# Upload
 shipments.to_sql(
     "shipments",
     engine,
@@ -49,26 +50,29 @@ print("✅ Shipments uploaded")
 print(shipments["account"].value_counts())
 
 # ==========================================
-# INVENTORY LEDGER (Nexlev + Viomi)
+# INVENTORY LEDGER (all accounts)
 # ==========================================
 print("Uploading inventory ledger...")
 
 ledger_nexlev = pd.read_csv("data/input/inventory_ledger_nexlev.csv")
-ledger_viomi = pd.read_csv("data/input/inventory_ledger_viomi.csv")
-ledger_wm = pd.read_csv("data/input/inventory_ledger_WM.csv")
-ledger_aa = pd.read_csv("data/input/inventory_ledger_Audio Array.csv")
+ledger_viomi  = pd.read_csv("data/input/inventory_ledger_viomi.csv")
+ledger_wm     = pd.read_csv("data/input/inventory_ledger_WM.csv")
+ledger_aa     = pd.read_csv("data/input/inventory_ledger_Audio Array.csv")
+ledger_fossil = pd.read_csv("data/input/Fossil Replenishment/inventory_ledger_fossil.csv")
 
-ledger_nexlev.columns = ledger_nexlev.columns.str.strip()
-ledger_viomi.columns = ledger_viomi.columns.str.strip()
-ledger_wm.columns = ledger_wm.columns.str.strip()
-ledger_aa.columns = ledger_aa.columns.str.strip()
+for df in [ledger_nexlev, ledger_viomi, ledger_wm, ledger_aa, ledger_fossil]:
+    df.columns = df.columns.str.strip()
 
 ledger_nexlev["account"] = "nexlev"
-ledger_viomi["account"] = "viomi"
-ledger_wm["account"] = "white mulberry"
-ledger_aa["account"] = "audio array"
+ledger_viomi["account"]  = "viomi"
+ledger_wm["account"]     = "white mulberry"
+ledger_aa["account"]     = "audio array"
+ledger_fossil["account"] = "fossil"
 
-ledger = pd.concat([ledger_nexlev, ledger_viomi, ledger_wm, ledger_aa], ignore_index=True)
+ledger = pd.concat(
+    [ledger_nexlev, ledger_viomi, ledger_wm, ledger_aa, ledger_fossil],
+    ignore_index=True
+)
 
 ledger["account"] = ledger["account"].str.lower().str.strip()
 

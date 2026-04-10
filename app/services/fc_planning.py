@@ -3,15 +3,6 @@ from app.services.file_cache import get, get_excel_sheet
 import os
 from sqlalchemy import create_engine
 import pandas as pd
-from pathlib import Path
-from typing import Tuple
-
-# =================================================
-# CONFIGURATION
-# =================================================
-
-BASE_DIR = Path(__file__).resolve().parents[2]
-DATA_DIR = BASE_DIR / "data" / "input"
 
 
 
@@ -19,15 +10,6 @@ DATA_DIR = BASE_DIR / "data" / "input"
 # DATA LOADERS
 # =================================================
 def load_fc_data(account: str):
-
-    # ── FOSSIL: load directly from CSV files, not DB ──
-    if account.lower() == "fossil":
-        fossil_dir = DATA_DIR / "Fossil Replenishment"
-        shipments = pd.read_csv(fossil_dir / "fba_shipments_fossil.csv", low_memory=False)
-        ledger    = pd.read_csv(fossil_dir / "inventory_ledger_fossil.csv", low_memory=False)
-        shipments.columns = shipments.columns.str.strip()
-        ledger.columns    = ledger.columns.str.strip()
-        return shipments, ledger
 
     engine = create_engine(os.getenv("DATABASE_URL"))
 
