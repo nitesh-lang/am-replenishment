@@ -85,21 +85,19 @@ export default function FCAllocation() {
         body: JSON.stringify(rowPayload),
       });
 
-      // Save cluster PO overrides — collect unique sku+cluster combos that were edited
-      const clusterEdits = {};
+      // Save cluster PO — collect unique sku+cluster combos across all visible rows
+      const clusterMap = {};
       sortedData.forEach(row => {
         const cluster = FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || "-";
         if (cluster === "-") return;
         const clusterKey = `${row.sku}|${cluster}`;
-        if (!clusterEdits[clusterKey]) {
-          const editedVal = fossilEdits[clusterKey]?.cluster_po;
-          if (editedVal !== undefined) {
-            clusterEdits[clusterKey] = { sku: row.sku, cluster, cluster_po: parseInt(editedVal) || 0 };
-          }
+        if (!clusterMap[clusterKey]) {
+          const val = fossilEdits[clusterKey]?.cluster_po ?? row.cluster_po ?? 0;
+          clusterMap[clusterKey] = { sku: row.sku, cluster, cluster_po: parseInt(val) || 0 };
         }
       });
 
-      const clusterPayload = Object.values(clusterEdits);
+      const clusterPayload = Object.values(clusterMap);
       if (clusterPayload.length > 0) {
         await fetch(`${BASE}/fc-final-allocation/fossil-cluster-save`, {
           method: "POST",

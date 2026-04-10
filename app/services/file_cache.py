@@ -60,7 +60,7 @@ def preload():
         "fba_shipments_viomi.csv",
         "inventory_model_snapshot_China Reorder.csv",
         "Fossil Replenishment/Fossil Replenishment.xlsx",
-        "Fossil Replenishment/Cambium - SOH.xlsx",
+        "Fossil Replenishment/Fossil - SOH.xlsx",
         "Fossil Replenishment/fba_shipments_fossil.csv",
     ]
 
