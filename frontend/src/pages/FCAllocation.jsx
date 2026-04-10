@@ -126,7 +126,33 @@ export default function FCAllocation() {
     setFossilEdits({});
     getFCFinal(replenishWeeks, channel, account)
       .then((res) => {
-        setData(Array.isArray(res) ? res : []);
+        const rows = Array.isArray(res) ? res : [];
+        setData(rows);
+
+        // Pre-populate edits from DB values so inputs show saved data after refresh
+        if (account === "Fossil" && rows.length > 0) {
+          const preloaded = {};
+          rows.forEach(row => {
+            const key = `${row.sku}|${row.fulfillment_center}`;
+            preloaded[key] = {
+              send_qty:     row.send_qty ?? 0,
+              master_carton: row.master_carton ?? 24,
+              remarks:      row.remarks ?? "",
+            };
+            // cluster PO
+            const cluster = FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || "-";
+            if (cluster !== "-") {
+              const clusterKey = `${row.sku}|${cluster}`;
+              if (!preloaded[clusterKey]?.cluster_po) {
+                preloaded[clusterKey] = {
+                  ...preloaded[clusterKey],
+                  cluster_po: row.cluster_po ?? 0,
+                };
+              }
+            }
+          });
+          setFossilEdits(preloaded);
+        }
       })
       .finally(() => setLoading(false));
   }, [replenishWeeks, channel, account]);
