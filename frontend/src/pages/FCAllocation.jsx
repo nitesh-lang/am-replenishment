@@ -281,9 +281,12 @@ const filteredData = useMemo(() => {
 function exportCSV() {
   const fossilHeaders = [
     "model", "assortment", "sku", "asin",
-    "weekly_velocity", "total_units_sold", "fc_inventory", "ampm_inventory",
-    "send_qty", "fulfillment_center", "master_carton",
-    "cluster", "cluster_po", "in_transit_qty", "open_po_qty", "remarks",
+    "fulfillment_center", "cluster",
+    "fc_inventory", "ampm_inventory",
+    "weekly_velocity", "total_units_sold",
+    "in_transit_qty", "open_po_qty",
+    "send_qty", "cluster_po",
+    "master_carton", "remarks",
   ];
 
   const defaultHeaders = [
@@ -541,14 +544,20 @@ function exportCSV() {
       SKU {getSortArrow("sku")}
     </th>
     <th onClick={() => toggleSort("asin")} className="px-4 py-3 cursor-pointer whitespace-nowrap">ASIN {getSortArrow("asin")}</th>
-    <th onClick={() => toggleSort("weekly_velocity")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
-      Avg Weekly Sales {getSortArrow("weekly_velocity")}
+    <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      FC {getSortArrow("fulfillment_center")}
     </th>
-    <th onClick={() => toggleSort("total_units_sold")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Total Sold {getSortArrow("total_units_sold")}</th>
+    {account === "Fossil" && <th onClick={() => toggleSort("cluster")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Cluster {getSortArrow("cluster")}</th>}
     <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Ledger Stock {getSortArrow("fc_inventory")}
     </th>
     <th onClick={() => toggleSort("ampm_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">{account === "Fossil" ? "Fossil SOH" : "AMPM Inventory"} {getSortArrow("ampm_inventory")}</th>
+    <th onClick={() => toggleSort("weekly_velocity")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
+      Avg Weekly Sales {getSortArrow("weekly_velocity")}
+    </th>
+    <th onClick={() => toggleSort("total_units_sold")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Total Sold {getSortArrow("total_units_sold")}</th>
+    {account === "Fossil" && <th onClick={() => toggleSort("in_transit_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap text-amber-700">In-Transit {getSortArrow("in_transit_qty")}</th>}
+    {account === "Fossil" && <th onClick={() => toggleSort("open_po_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap text-blue-700">Open PO {getSortArrow("open_po_qty")}</th>}
     <th onClick={() => toggleSort("target_cover_units")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
       Target Cover Units {getSortArrow("target_cover_units")}
     </th>
@@ -558,20 +567,15 @@ function exportCSV() {
     <th onClick={() => toggleSort("send_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       {account === "Fossil" ? "PO Requirement" : "Send Qty"} {getSortArrow("send_qty")}
     </th>
+    {account === "Fossil" && <th onClick={() => toggleSort("cluster_po")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Cluster PO {getSortArrow("cluster_po")}</th>}
     <th onClick={() => toggleSort("fill_pct")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
       Fill % {getSortArrow("fill_pct")}
     </th>
     <th onClick={() => toggleSort("velocity_flag")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>Velocity Flag {getSortArrow("velocity_flag")}</th>
-    <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
-      FC {getSortArrow("fulfillment_center")}
-    </th>
+    {account !== "Fossil" && <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">FC {getSortArrow("fulfillment_center")}</th>}
     {account !== "Fossil" && <th onClick={() => toggleSort("hazmat_type")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Hazmat Type {getSortArrow("hazmat_type")}</th>}
     <th onClick={() => toggleSort("master_carton")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Master Carton {getSortArrow("master_carton")}</th>
     {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Remarks</th>}
-    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Cluster</th>}
-    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap">Cluster PO</th>}
-    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap text-amber-700">In-Transit</th>}
-    {account === "Fossil" && <th className="px-4 py-3 whitespace-nowrap text-blue-700">Open PO</th>}
   </tr>
 </thead>
 
@@ -595,14 +599,31 @@ function exportCSV() {
                         <td className="px-4 py-3">{row.sku}</td>
                         {/* ASIN */}
                         <td className="px-4 py-3">{row.asin || "-"}</td>
-                        {/* Avg Weekly Sales */}
-                        <td className="px-4 py-3">{row.weekly_velocity ?? 0}</td>
-                        {/* Total Sold */}
-                        <td className="px-4 py-3">{row.total_units_sold ?? 0}</td>
+                        {/* FC - Fossil shows here, others show later */}
+                        {account === "Fossil" && <td className="px-4 py-3">{row.fulfillment_center}</td>}
+                        {/* Cluster - Fossil only, after FC */}
+                        {account === "Fossil" && (() => {
+                          const cluster = FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || row.cluster || "-";
+                          const clusterKey = `${row.sku}|${cluster}`;
+                          const clusterPo = fossilEdits[clusterKey]?.cluster_po ?? row.cluster_po ?? 0;
+                          return (
+                            <td className="px-4 py-3">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-bold">{cluster}</span>
+                            </td>
+                          );
+                        })()}
                         {/* Ledger Stock */}
                         <td className="px-4 py-3">{row.fc_inventory ?? 0}</td>
                         {/* AMPM Inventory / Fossil SOH */}
                         <td className="px-4 py-3">{row.ampm_inventory ?? 0}</td>
+                        {/* Avg Weekly Sales */}
+                        <td className="px-4 py-3">{row.weekly_velocity ?? 0}</td>
+                        {/* Total Sold */}
+                        <td className="px-4 py-3">{row.total_units_sold ?? 0}</td>
+                        {/* In-Transit - Fossil only */}
+                        {account === "Fossil" && <td className="px-4 py-3 text-amber-700 font-semibold text-center">{row.in_transit_qty ?? 0}</td>}
+                        {/* Open PO - Fossil only */}
+                        {account === "Fossil" && <td className="px-4 py-3 text-blue-700 font-semibold text-center">{row.open_po_qty ?? 0}</td>}
                         {/* Target Cover Units */}
                         {account !== "Fossil" && <td className="px-4 py-3">{row.target_cover_units ?? 0}</td>}
                         {/* Original Required */}
@@ -619,6 +640,27 @@ function exportCSV() {
                             : row.send_qty
                           }
                         </td>
+                        {/* Cluster PO - editable, Fossil only */}
+                        {account === "Fossil" && (() => {
+                          const cluster = FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || row.cluster || "-";
+                          const clusterKey = `${row.sku}|${cluster}`;
+                          const clusterPo = fossilEdits[clusterKey]?.cluster_po ?? row.cluster_po ?? 0;
+                          return (
+                            <td className="px-4 py-3">
+                              <input
+                                type="number"
+                                value={clusterPo}
+                                onChange={e => {
+                                  setFossilEdits(prev => ({
+                                    ...prev,
+                                    [clusterKey]: { ...prev[clusterKey], cluster_po: e.target.value }
+                                  }));
+                                }}
+                                className="w-20 px-2 py-1 border border-blue-300 rounded text-sm text-center bg-blue-50"
+                              />
+                            </td>
+                          );
+                        })()}
                         {/* Fill % */}
                         {account !== "Fossil" && <td className="px-4 py-3">{row.fill_pct ?? 0}%</td>}
                         {/* Velocity Flag */}
@@ -635,8 +677,8 @@ function exportCSV() {
                           </span>
                         </td>
                         )}
-                        {/* FC */}
-                        <td className="px-4 py-3">{row.fulfillment_center}</td>
+                        {/* FC - non-Fossil shows here */}
+                        {account !== "Fossil" && <td className="px-4 py-3">{row.fulfillment_center}</td>}
                         {/* Hazmat Type - hidden for Fossil */}
                         {account !== "Fossil" && <td className="px-4 py-3">{row.hazmat_type || "-"}</td>}
                         {/* Master Carton - editable for Fossil */}
@@ -663,36 +705,6 @@ function exportCSV() {
                             />
                           </td>
                         )}
-                        {/* Cluster - Fossil only */}
-                        {account === "Fossil" && (() => {
-                          const cluster = FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || row.cluster || "-";
-                          const clusterKey = `${row.sku}|${cluster}`;
-                          const clusterPo = fossilEdits[clusterKey]?.cluster_po ?? row.cluster_po ?? 0;
-                          return (
-                            <>
-                              <td className="px-4 py-3">
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-bold">{cluster}</span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <input
-                                  type="number"
-                                  value={clusterPo}
-                                  onChange={e => {
-                                    setFossilEdits(prev => ({
-                                      ...prev,
-                                      [clusterKey]: { ...prev[clusterKey], cluster_po: e.target.value }
-                                    }));
-                                  }}
-                                  className="w-20 px-2 py-1 border border-blue-300 rounded text-sm text-center bg-blue-50"
-                                />
-                              </td>
-                              <td className="px-4 py-3 text-amber-700 font-semibold text-center">
-                                {row.in_transit_qty ?? 0}
-                              </td>
-                              <td className="px-4 py-3 text-blue-700 font-semibold text-center">
-                                {row.open_po_qty ?? 0}
-                              </td>
-                            </>
                           );
                         })()}
                       </tr>
