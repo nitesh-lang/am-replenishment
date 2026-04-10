@@ -544,9 +544,7 @@ function exportCSV() {
       SKU {getSortArrow("sku")}
     </th>
     <th onClick={() => toggleSort("asin")} className="px-4 py-3 cursor-pointer whitespace-nowrap">ASIN {getSortArrow("asin")}</th>
-    <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
-      FC {getSortArrow("fulfillment_center")}
-    </th>
+    {account === "Fossil" && <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">FC {getSortArrow("fulfillment_center")}</th>}
     {account === "Fossil" && <th onClick={() => toggleSort("cluster")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Cluster {getSortArrow("cluster")}</th>}
     <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Ledger Stock {getSortArrow("fc_inventory")}
@@ -705,13 +703,11 @@ function exportCSV() {
                             />
                           </td>
                         )}
-                          );
-                        })()}
                       </tr>
 
                       {expandedRow === i && (
                         <tr>
-                          <td colSpan="13" className="bg-slate-50 p-4 text-sm">
+                          <td colSpan="16" className="bg-slate-50 p-4 text-sm">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
 
   <div>
