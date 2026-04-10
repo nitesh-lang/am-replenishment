@@ -127,6 +127,14 @@ async def save_cb_inputs(request: Request):
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
         cursor = conn.cursor()
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS cb_inputs (
+                model TEXT PRIMARY KEY,
+                remarks TEXT DEFAULT ''
+            )
+        """)
+        conn.commit()
+
         for row in data:
             model = row.get("model")
             po_requirement = int(row.get("po_requirement", 0))

@@ -136,6 +136,15 @@ async def save_wm_inputs(request: Request):
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
         cursor = conn.cursor()
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS wm_inputs (
+                model TEXT PRIMARY KEY,
+                po_requirement INTEGER DEFAULT 0,
+                remarks TEXT DEFAULT ''
+            )
+        """)
+        conn.commit()
+
         for row in data:
             model = row.get("model")
             po_requirement = int(row.get("po_requirement", 0))

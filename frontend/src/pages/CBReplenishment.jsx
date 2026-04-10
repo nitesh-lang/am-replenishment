@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState, useRef } from "react";
 
 export default function CBReplenishment() {
 
+  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+
   /* STATE */
 
   const [data, setData] = useState([]);
@@ -43,7 +45,7 @@ const validToWeeks = availableWeeks;
     if (fromWeek) params.append("from_week", fromWeek);
     if (toWeek) params.append("to_week", toWeek);
 
-    fetch(`https://am-replenishment.onrender.com/api/cb-replenishment/?${params}`)
+    fetch(`${BASE}/api/cb-replenishment/?${params}`)
       .then((res) => res.json())
       .then((res) => {
         setData(res.data || []);
@@ -427,7 +429,7 @@ const validToWeeks = availableWeeks;
                         );
                         setData(newData);
 
-                        fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+                        fetch(`${BASE}/api/cb-replenishment/save`, {
                           method: "POST",
                           headers: {"Content-Type": "application/json"},
                           body: JSON.stringify({
@@ -444,10 +446,14 @@ const validToWeeks = availableWeeks;
                   <td className="px-4 py-3">
                     <input
                       type="text"
-                      defaultValue={row.remarks ?? ""}
+                      value={row.remarks ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setData(data.map(d => d.model === row.model ? { ...d, remarks: value } : d));
+                      }}
                       onBlur={(e) => {
                         const value = e.target.value;
-                        fetch("https://am-replenishment.onrender.com/api/cb-replenishment/save", {
+                        fetch(`${BASE}/api/cb-replenishment/save`, {
                           method: "POST",
                           headers: {"Content-Type": "application/json"},
                           body: JSON.stringify({

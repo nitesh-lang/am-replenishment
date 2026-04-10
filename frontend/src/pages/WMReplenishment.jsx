@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 
 export default function WMReplenishment() {
 
+  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -19,7 +21,7 @@ export default function WMReplenishment() {
     const params = new URLSearchParams({ cover_weeks: coverWeeks });
     if (fromWeek) params.append("from_week", fromWeek);
     if (toWeek) params.append("to_week", toWeek);
-    fetch(`https://am-replenishment.onrender.com/api/wm-replenishment/?${params}`)
+    fetch(`${BASE}/api/wm-replenishment/?${params}`)
       .then((res) => res.json())
       .then((res) => {
         setData(res.data || []);
@@ -229,7 +231,7 @@ export default function WMReplenishment() {
                       onChange={(e) => {
                         const value = Number(e.target.value);
                         setData(data.map(d => d.model === row.model ? { ...d, po_requirement: value } : d));
-                        fetch("https://am-replenishment.onrender.com/api/wm-replenishment/save", {
+                        fetch(`${BASE}/api/wm-replenishment/save`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ model: row.model, po_requirement: value, remarks: row.remarks || "" })
@@ -241,10 +243,10 @@ export default function WMReplenishment() {
                   <td className="px-4 py-3">
                     <input
                       type="text"
-                      defaultValue={row.remarks ?? ""}
+                      value={row.remarks ?? ""}
                       onBlur={(e) => {
                         const value = e.target.value;
-                        fetch("https://am-replenishment.onrender.com/api/wm-replenishment/save", {
+                        fetch(`${BASE}/api/wm-replenishment/save`, {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ model: row.model, po_requirement: row.po_requirement || 0, remarks: value })
