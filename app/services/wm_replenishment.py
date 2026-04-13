@@ -173,15 +173,15 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         db_df = pd.read_sql("SELECT * FROM wm_inputs", conn)
 
         df = df.merge(
-            db_df[["model", "po_requirement", "remarks"]],
+            db_df[["model", "remarks"]],
             on="model",
             how="left",
             suffixes=("", "_db")
         )
 
-        df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
-        df["remarks"] = df["remarks"].fillna("")
-        df = df.drop(columns=["po_requirement_db"], errors="ignore")
+        # po_requirement is always fresh from calculation — never overridden by DB
+        df["remarks"] = df.get("remarks_db", pd.Series("", index=df.index)).fillna("")
+        df = df.drop(columns=["remarks_db"], errors="ignore")
 
         conn.close()
 

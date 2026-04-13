@@ -54,15 +54,13 @@ def get_wm_replenishment(
         )
 
         if not saved_df.empty:
-            df = df.merge(saved_df, on="model", how="left")
+            df = df.merge(saved_df[["model", "remarks_db"]], on="model", how="left")
 
-            if "po_requirement_db" in df.columns:
-                df["po_requirement"] = df["po_requirement_db"].fillna(df["po_requirement"])
-
+            # po_requirement always from fresh calculation — never overridden by DB
             if "remarks_db" in df.columns:
                 df["remarks"] = df["remarks_db"].fillna("")
 
-            df = df.drop(columns=["po_requirement_db", "remarks_db"], errors="ignore")
+            df = df.drop(columns=["remarks_db"], errors="ignore")
 
         # =========================
         # FINAL RESPONSE
