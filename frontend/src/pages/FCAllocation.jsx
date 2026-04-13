@@ -75,7 +75,6 @@ export default function FCAllocation() {
           sku: row.sku,
           fulfillment_center: row.fulfillment_center,
           po_requirement: parseInt(edits.send_qty ?? row.send_qty ?? 0) || 0,
-          master_carton: parseInt(edits.master_carton ?? row.master_carton ?? 24) || 24,
           remarks: edits.remarks ?? row.remarks ?? "",
         };
       });
@@ -134,7 +133,6 @@ export default function FCAllocation() {
             const key = `${row.sku}|${row.fulfillment_center}`;
             preloaded[key] = {
               send_qty:     row.send_qty ?? 0,
-              master_carton: row.master_carton ?? 24,
               remarks:      row.remarks ?? "",
             };
             // cluster PO
@@ -679,15 +677,10 @@ function exportCSV() {
                         {account !== "Fossil" && <td className="px-4 py-3">{row.fulfillment_center}</td>}
                         {/* Hazmat Type - hidden for Fossil */}
                         {account !== "Fossil" && <td className="px-4 py-3">{row.hazmat_type || "-"}</td>}
-                        {/* Master Carton - editable for Fossil */}
+                        {/* Master Carton - always from input sheet */}
                         <td className="px-4 py-3">
                           {account === "Fossil"
-                            ? <input
-                                type="number"
-                                value={getFossilField(row, "master_carton") ?? 24}
-                                onChange={e => setFossilField(row, "master_carton", e.target.value)}
-                                className="w-16 px-2 py-1 border border-slate-300 rounded text-sm text-center"
-                              />
+                            ? <span className="text-slate-600">{row.master_carton ?? 24}</span>
                             : row.master_carton
                           }
                         </td>

@@ -63,27 +63,8 @@ export default function Replenishment() {
       }, [fromWeek, toWeek, replenishWeeks, account]);
 
 
-    // LOAD MASTER CARTONS
+    // Master carton always comes from input sheet via API — no DB load needed
 
-useEffect(() => {
-  fetch(`${BASE}/get-master-cartons`)
-    .then(res => res.json())
-    .then(data => {
-      const map = {};
-      data.forEach(row => {
-        map[row.model] = row.master_carton;
-      });
-
-      setMasterCartons(map);
-
-      setReplenishment(prev =>
-        prev.map(r => ({
-          ...r,
-          master_carton: map[r.model] ?? r.master_carton ?? ""
-        }))
-      );
-    });
-}, []);
 
   /* ============================================================
      COLUMNS

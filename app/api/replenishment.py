@@ -108,20 +108,18 @@ def get_fc_final(
             """)
             conn.commit()
 
-            # Load only remarks and master_carton from DB — send_qty always fresh
-            cursor.execute("SELECT sku, fulfillment_center, master_carton, remarks FROM fossil_fc_inputs")
+            # Load only remarks from DB — master_carton always from input sheet/default
+            cursor.execute("SELECT sku, fulfillment_center, remarks FROM fossil_fc_inputs")
             saved = cursor.fetchall()
             conn.close()
 
             if saved:
-                saved_df = pd.DataFrame(saved, columns=["sku", "fulfillment_center", "master_carton_db", "remarks_db"])
+                saved_df = pd.DataFrame(saved, columns=["sku", "fulfillment_center", "remarks_db"])
                 df = df.merge(saved_df, on=["sku", "fulfillment_center"], how="left")
-                df["master_carton"] = df["master_carton_db"].fillna(24).astype(int).astype(str)
-                df["remarks"]       = df["remarks_db"].fillna("")
-                df.drop(columns=["master_carton_db", "remarks_db"], inplace=True)
+                df["remarks"] = df["remarks_db"].fillna("")
+                df.drop(columns=["remarks_db"], inplace=True)
             else:
-                df["remarks"]       = ""
-                df["master_carton"] = "24"
+                df["remarks"] = ""
 
             # ── Cluster mapping ──
             import pandas as pd
@@ -197,28 +195,25 @@ async def save_fossil_fc_inputs(request: Request):
                 sku TEXT,
                 fulfillment_center TEXT,
                 po_requirement INTEGER DEFAULT 0,
-                master_carton INTEGER DEFAULT 24,
                 remarks TEXT DEFAULT '',
                 PRIMARY KEY (sku, fulfillment_center)
             )
         """)
 
         for row in data:
-            sku               = str(row.get("sku", "")).strip().upper()
-            fc                = str(row.get("fulfillment_center", "")).strip().upper()
-            po_requirement    = int(row.get("po_requirement", 0))
-            master_carton     = int(row.get("master_carton", 24))
-            remarks           = str(row.get("remarks", ""))
+            sku            = str(row.get("sku", "")).strip().upper()
+            fc             = str(row.get("fulfillment_center", "")).strip().upper()
+            po_requirement = int(row.get("po_requirement", 0))
+            remarks        = str(row.get("remarks", ""))
 
             cursor.execute("""
-                INSERT INTO fossil_fc_inputs (sku, fulfillment_center, po_requirement, master_carton, remarks)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO fossil_fc_inputs (sku, fulfillment_center, po_requirement, remarks)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (sku, fulfillment_center)
                 DO UPDATE SET
                     po_requirement = EXCLUDED.po_requirement,
-                    master_carton  = EXCLUDED.master_carton,
                     remarks        = EXCLUDED.remarks;
-            """, (sku, fc, po_requirement, master_carton, remarks))
+            """, (sku, fc, po_requirement, remarks))
 
         conn.commit()
         conn.close()
