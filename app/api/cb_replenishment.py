@@ -41,17 +41,19 @@ def get_cb_replenishment(
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
         cursor = conn.cursor()
 
-        cursor.execute("SELECT model, remarks FROM cb_inputs")
+        cursor.execute("SELECT model, po_requirement, remarks FROM cb_inputs")
         saved_data = cursor.fetchall()
 
         conn.close()
 
-        # ✅ CONVERT TO DF
-        saved_df = pd.DataFrame(saved_data, columns=["model", "remarks_db"])
+        saved_df = pd.DataFrame(saved_data, columns=["model", "po_requirement_db", "remarks_db"])
 
-        # ✅ SAFE MERGE — only remarks persisted, po_requirement always recalculated
+        # Restore saved po_requirement and remarks — fresh calc only if no DB value
         if not saved_df.empty:
             df = df.merge(saved_df, on="model", how="left")
+            if "po_requirement_db" in df.columns:
+                df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
+                df = df.drop(columns=["po_requirement_db"], errors="ignore")
             if "remarks_db" in df.columns:
                 df["remarks"] = df["remarks_db"].fillna("")
                 df = df.drop(columns=["remarks_db"], errors="ignore")
@@ -132,6 +134,7 @@ async def save_cb_inputs(request: Request):
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS cb_inputs (
                 model TEXT PRIMARY KEY,
+                po_requirement INTEGER DEFAULT 0,
                 remarks TEXT DEFAULT ''
             )
         """)
@@ -143,12 +146,13 @@ async def save_cb_inputs(request: Request):
             remarks = row.get("remarks", "")
 
             cursor.execute("""
-                INSERT INTO cb_inputs (model, remarks)
-                VALUES (%s, %s)
+                INSERT INTO cb_inputs (model, po_requirement, remarks)
+                VALUES (%s, %s, %s)
                 ON CONFLICT (model)
                 DO UPDATE SET
+                    po_requirement = EXCLUDED.po_requirement,
                     remarks = EXCLUDED.remarks;
-            """, (model, remarks))
+            """, (model, po_requirement, remarks))
 
         conn.commit()
         conn.close()
