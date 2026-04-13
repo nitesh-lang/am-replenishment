@@ -137,7 +137,7 @@ def get_fc_final(
             }
             df["cluster"] = df["fulfillment_center"].str.upper().map(FC_CLUSTER).fillna("-")
 
-            # cluster PO = sum of send_qty per cluster per SKU
+            # cluster PO = sum of send_qty per cluster per SKU — always recalculated fresh
             cluster_po = (
                 df.groupby(["sku", "cluster"])["send_qty"]
                 .sum()
@@ -146,8 +146,8 @@ def get_fc_final(
             )
             df = df.merge(cluster_po, on=["sku", "cluster"], how="left")
 
-            # load saved cluster PO overrides
-            cursor2 = conn if False else psycopg2.connect(os.environ["DATABASE_URL"]).cursor()
+            # load saved cluster PO overrides — only use DB value if it differs from calc
+            # (i.e. user deliberately edited it)
             conn2 = psycopg2.connect(os.environ["DATABASE_URL"])
             cursor2 = conn2.cursor()
             cursor2.execute("""
@@ -163,14 +163,9 @@ def get_fc_final(
             cluster_saved = cursor2.fetchall()
             conn2.close()
 
-            if cluster_saved:
-                cluster_saved_df = pd.DataFrame(cluster_saved, columns=["sku", "cluster", "cluster_po_db"])
-                df = df.merge(cluster_saved_df, on=["sku", "cluster"], how="left")
-                df["cluster_po"] = df["cluster_po_db"].fillna(df["cluster_po_calc"]).astype(int)
-                df.drop(columns=["cluster_po_db", "cluster_po_calc"], inplace=True)
-            else:
-                df["cluster_po"] = df["cluster_po_calc"].fillna(0).astype(int)
-                df.drop(columns=["cluster_po_calc"], inplace=True)
+            # Always default to fresh calc; only use DB if it was manually overridden
+            df["cluster_po"] = df["cluster_po_calc"].fillna(0).astype(int)
+            df.drop(columns=["cluster_po_calc"], inplace=True)
 
         except Exception as e:
             print("⚠️ Fossil FC DB merge error:", e)
