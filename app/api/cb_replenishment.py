@@ -62,6 +62,8 @@ def get_cb_replenishment(
         response_df = df[[
             "brand",
             "model",
+            "asin",
+            "sku",
             "china_in_transit",
             "final_cb_qty",
             "ampm_inventory",

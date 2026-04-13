@@ -337,6 +337,8 @@ const validToWeeks = availableWeeks;
               <tr>
                 {[
                   "model",
+                  "asin",
+                  "sku",
                   "china_in_transit",
                   "final_cb_qty",
                   "ampm_inventory",
@@ -371,6 +373,14 @@ const validToWeeks = availableWeeks;
 
                   <td className="px-4 py-3 font-medium">
                     {row.model}
+                  </td>
+
+                  <td className="px-4 py-3 text-slate-500">
+                    {row.asin || "-"}
+                  </td>
+
+                  <td className="px-4 py-3 font-mono text-slate-500">
+                    {row.sku || "-"}
                   </td>
 
                   <td className="px-4 py-3">
