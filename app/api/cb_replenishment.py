@@ -113,9 +113,20 @@ def get_cb_replenishment(
 
 
 # =========================
-# SAVE API
+# RESET API
 # =========================
-@router.post("/save")
+@router.post("/reset")
+async def reset_cb_inputs():
+    try:
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM cb_inputs")
+        conn.commit()
+        conn.close()
+        return {"status": "reset"}
+    except Exception as e:
+        print("CB RESET ERROR:", str(e))
+        return {"status": "error", "error": str(e)}
 async def save_cb_inputs(request: Request):
 
     try:
@@ -138,6 +149,8 @@ async def save_cb_inputs(request: Request):
                 remarks TEXT DEFAULT ''
             )
         """)
+        cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
+        cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
         conn.commit()
 
         for row in data:

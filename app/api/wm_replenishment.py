@@ -54,13 +54,15 @@ def get_wm_replenishment(
         )
 
         if not saved_df.empty:
-            df = df.merge(saved_df[["model", "remarks_db"]], on="model", how="left")
+            df = df.merge(saved_df, on="model", how="left")
 
-            # po_requirement always from fresh calculation — never overridden by DB
+            # Restore saved po_requirement and remarks — fresh calc only if no DB value
+            if "po_requirement_db" in df.columns:
+                df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
+                df = df.drop(columns=["po_requirement_db"], errors="ignore")
             if "remarks_db" in df.columns:
                 df["remarks"] = df["remarks_db"].fillna("")
-
-            df = df.drop(columns=["remarks_db"], errors="ignore")
+                df = df.drop(columns=["remarks_db"], errors="ignore")
 
         # =========================
         # FINAL RESPONSE
@@ -141,6 +143,8 @@ async def save_wm_inputs(request: Request):
                 remarks TEXT DEFAULT ''
             )
         """)
+        cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
+        cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
         conn.commit()
 
         for row in data:
@@ -164,4 +168,20 @@ async def save_wm_inputs(request: Request):
 
     except Exception as e:
         print("WM SAVE ERROR:", str(e))
+        return {"status": "error", "error": str(e)}
+
+# =========================
+# RESET API
+# =========================
+@router.post("/reset")
+async def reset_wm_inputs():
+    try:
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM wm_inputs")
+        conn.commit()
+        conn.close()
+        return {"status": "reset"}
+    except Exception as e:
+        print("WM RESET ERROR:", str(e))
         return {"status": "error", "error": str(e)}

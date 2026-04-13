@@ -179,20 +179,26 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
                 remarks TEXT DEFAULT ''
             )
         """)
+        cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
+        cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
         conn.commit()
 
-        # Load remarks only — po_requirement always fresh from calculation
-        db_df = pd.read_sql("SELECT model, remarks FROM wm_inputs", conn)
+        # Load po_requirement and remarks — DB value wins if user saved it
+        db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM wm_inputs", conn)
 
-        df = df.merge(
-            db_df[["model", "remarks"]],
-            on="model",
-            how="left",
-            suffixes=("", "_db")
-        )
-
-        df["remarks"] = df.get("remarks_db", pd.Series("", index=df.index)).fillna("")
-        df = df.drop(columns=["remarks_db"], errors="ignore")
+        if not db_df.empty and "model" in db_df.columns:
+            df = df.merge(
+                db_df[["model", "po_requirement", "remarks"]],
+                on="model",
+                how="left",
+                suffixes=("", "_db")
+            )
+            if "po_requirement_db" in df.columns:
+                df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
+                df = df.drop(columns=["po_requirement_db"], errors="ignore")
+            if "remarks_db" in df.columns:
+                df["remarks"] = df.get("remarks_db", pd.Series("", index=df.index)).fillna("")
+                df = df.drop(columns=["remarks_db"], errors="ignore")
 
         conn.close()
 
