@@ -90,9 +90,10 @@ def get_fc_final(
         account=account
     )
 
-    # ── Fossil: merge saved PO requirement + remarks from DB ──
+    # ── Fossil: fresh calc always wins, auto-save to DB, only remarks + master_carton persist ──
     if account.lower() == "fossil":
         try:
+            import pandas as pd
             conn = psycopg2.connect(os.environ["DATABASE_URL"])
             cursor = conn.cursor()
             cursor.execute("""
@@ -106,22 +107,37 @@ def get_fc_final(
                 )
             """)
             conn.commit()
-            cursor.execute("SELECT sku, fulfillment_center, po_requirement, master_carton, remarks FROM fossil_fc_inputs")
+
+            # Load only remarks and master_carton from DB — never override send_qty
+            cursor.execute("SELECT sku, fulfillment_center, master_carton, remarks FROM fossil_fc_inputs")
             saved = cursor.fetchall()
-            conn.close()
 
             if saved:
-                import pandas as pd
-                saved_df = pd.DataFrame(saved, columns=["sku", "fulfillment_center", "po_requirement_db", "master_carton_db", "remarks_db"])
+                saved_df = pd.DataFrame(saved, columns=["sku", "fulfillment_center", "master_carton_db", "remarks_db"])
                 df = df.merge(saved_df, on=["sku", "fulfillment_center"], how="left")
-                # Use saved po_requirement if exists, otherwise fall back to system calc (send_qty)
-                df["send_qty"]      = df["po_requirement_db"].fillna(df["send_qty"])
                 df["master_carton"] = df["master_carton_db"].fillna(24).astype(int).astype(str)
                 df["remarks"]       = df["remarks_db"].fillna("")
-                df.drop(columns=["po_requirement_db", "master_carton_db", "remarks_db"], inplace=True)
+                df.drop(columns=["master_carton_db", "remarks_db"], inplace=True)
             else:
-                df["remarks"] = ""
+                df["remarks"]       = ""
                 df["master_carton"] = "24"
+
+            # Auto-save fresh send_qty to DB (overwrites old po_requirement)
+            for _, row in df.iterrows():
+                cursor.execute("""
+                    INSERT INTO fossil_fc_inputs (sku, fulfillment_center, po_requirement, master_carton, remarks)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (sku, fulfillment_center)
+                    DO UPDATE SET po_requirement = EXCLUDED.po_requirement;
+                """, (
+                    str(row["sku"]).strip().upper(),
+                    str(row["fulfillment_center"]).strip().upper(),
+                    int(row["send_qty"]) if pd.notna(row["send_qty"]) else 0,
+                    int(float(row["master_carton"])) if str(row.get("master_carton", "24")).replace(".","").isdigit() else 24,
+                    str(row.get("remarks", ""))
+                ))
+            conn.commit()
+            conn.close()
 
             # ── Cluster mapping ──
             import pandas as pd
