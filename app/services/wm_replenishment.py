@@ -164,13 +164,25 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         df["po_requirement"] = (df["deficiency"] - (df["open_po"] + df["in_transit"])).clip(lower=0)
 
         # =========================
-        # DB MERGE
+        # DB MERGE (remarks only)
         # =========================
 
         import psycopg2, os
 
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        db_df = pd.read_sql("SELECT * FROM wm_inputs", conn)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS wm_inputs (
+                model TEXT PRIMARY KEY,
+                po_requirement INTEGER DEFAULT 0,
+                remarks TEXT DEFAULT ''
+            )
+        """)
+        conn.commit()
+
+        # Load remarks only — po_requirement always fresh from calculation
+        db_df = pd.read_sql("SELECT model, remarks FROM wm_inputs", conn)
 
         df = df.merge(
             db_df[["model", "remarks"]],
@@ -179,7 +191,6 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
             suffixes=("", "_db")
         )
 
-        # po_requirement is always fresh from calculation — never overridden by DB
         df["remarks"] = df.get("remarks_db", pd.Series("", index=df.index)).fillna("")
         df = df.drop(columns=["remarks_db"], errors="ignore")
 

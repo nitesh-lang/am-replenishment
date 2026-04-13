@@ -204,14 +204,25 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         df.loc[df["po_requirement"] < 0, "po_requirement"] = 0
 
         # =========================
-        # DB MERGE (PERSISTED INPUTS)
+        # DB MERGE (remarks only)
         # =========================
 
         import psycopg2, os
 
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cursor = conn.cursor()
 
-        db_df = pd.read_sql("SELECT * FROM cb_inputs", conn)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS cb_inputs (
+                model TEXT PRIMARY KEY,
+                po_requirement INTEGER DEFAULT 0,
+                remarks TEXT DEFAULT ''
+            )
+        """)
+        conn.commit()
+
+        # Load remarks only — po_requirement always fresh from calculation
+        db_df = pd.read_sql("SELECT model, remarks FROM cb_inputs", conn)
         conn.close()
 
         if "remarks" in db_df.columns and "model" in db_df.columns:

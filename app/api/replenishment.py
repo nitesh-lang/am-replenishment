@@ -90,7 +90,7 @@ def get_fc_final(
         account=account
     )
 
-    # ── Fossil: fresh calc always wins, auto-save to DB, only remarks + master_carton persist ──
+    # ── Fossil: load remarks + master_carton from DB only, send_qty always fresh ──
     if account.lower() == "fossil":
         try:
             import pandas as pd
@@ -108,9 +108,10 @@ def get_fc_final(
             """)
             conn.commit()
 
-            # Load only remarks and master_carton from DB — never override send_qty
+            # Load only remarks and master_carton from DB — send_qty always fresh
             cursor.execute("SELECT sku, fulfillment_center, master_carton, remarks FROM fossil_fc_inputs")
             saved = cursor.fetchall()
+            conn.close()
 
             if saved:
                 saved_df = pd.DataFrame(saved, columns=["sku", "fulfillment_center", "master_carton_db", "remarks_db"])
@@ -121,23 +122,6 @@ def get_fc_final(
             else:
                 df["remarks"]       = ""
                 df["master_carton"] = "24"
-
-            # Auto-save fresh send_qty to DB (overwrites old po_requirement)
-            for _, row in df.iterrows():
-                cursor.execute("""
-                    INSERT INTO fossil_fc_inputs (sku, fulfillment_center, po_requirement, master_carton, remarks)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (sku, fulfillment_center)
-                    DO UPDATE SET po_requirement = EXCLUDED.po_requirement;
-                """, (
-                    str(row["sku"]).strip().upper(),
-                    str(row["fulfillment_center"]).strip().upper(),
-                    int(row["send_qty"]) if pd.notna(row["send_qty"]) else 0,
-                    int(float(row["master_carton"])) if str(row.get("master_carton", "24")).replace(".","").isdigit() else 24,
-                    str(row.get("remarks", ""))
-                ))
-            conn.commit()
-            conn.close()
 
             # ── Cluster mapping ──
             import pandas as pd
