@@ -62,9 +62,7 @@ def load_data(account: str):
         amazon_inventory = get("inventory_amazon_audio_array.csv")
 
     elif account.upper() == "WHITE MULBERRY":
-        wm = get("inventory_amazon_WM.csv")
-        viomi = get("inventory_amazon_viomi.csv")
-        amazon_inventory = pd.concat([wm, viomi], ignore_index=True)
+        amazon_inventory = get("inventory_amazon_WM.csv")
 
     else:
         raise ValueError(f"Unsupported account: {account}")
