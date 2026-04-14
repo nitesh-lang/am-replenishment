@@ -211,6 +211,9 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
         master_df["Required Inventory"] - master_df["Total Inventory"]
     ).clip(lower=0)
 
+    # If Fossil SOH is 0, no requirement — Fossil doesn't hold the stock
+    master_df.loc[master_df["Fossil SOH"] == 0, "Replenishment Qty"] = 0
+
     master_df = master_df.fillna(0)
 
     return master_df, available_weeks
