@@ -451,6 +451,17 @@ function exportCSV() {
         >
           Export CSV
         </button>
+        <button
+          onClick={async () => {
+            if (!window.confirm("Reset all saved master carton values? Fresh values from input sheet will show.")) return;
+            await fetch(`${BASE}/reset-master-cartons`, { method: "POST" });
+            setMasterCartons({});
+            window.location.reload();
+          }}
+          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+        >
+          Reset
+        </button>
       </div>
 
       {/* TABLE */}

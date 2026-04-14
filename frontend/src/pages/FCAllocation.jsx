@@ -446,6 +446,21 @@ function exportCSV() {
       {saving ? "Saving..." : "Save"}
     </button>
   )}
+  {account === "Fossil" && (
+    <button
+      onClick={async () => {
+        if (!window.confirm("Reset all saved PO requirements, cluster PO and remarks? Fresh calculations will show.")) return;
+        await fetch(`${BASE}/fc-final-allocation/fossil-reset`, { method: "POST" });
+        setFossilEdits({});
+        setSaveMsg("✅ Reset complete");
+        setTimeout(() => setSaveMsg(""), 3000);
+        window.location.reload();
+      }}
+      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+    >
+      Reset
+    </button>
+  )}
   {saveMsg && <span className="text-sm font-medium text-slate-600">{saveMsg}</span>}
 </div>
 </div>

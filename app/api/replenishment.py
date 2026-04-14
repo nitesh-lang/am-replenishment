@@ -176,6 +176,24 @@ def get_fc_final(
 
 
 # =================================================
+# FOSSIL FC RESET ENDPOINT
+# =================================================
+@router.post("/fc-final-allocation/fossil-reset")
+async def reset_fossil_fc_inputs():
+    try:
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM fossil_fc_inputs")
+        cursor.execute("DELETE FROM fossil_cluster_po")
+        conn.commit()
+        conn.close()
+        return {"status": "reset"}
+    except Exception as e:
+        print("⚠️ Fossil FC reset error:", e)
+        return {"status": "error", "error": str(e)}
+
+
+# =================================================
 # FOSSIL FC SAVE ENDPOINT
 # =================================================
 @router.post("/fc-final-allocation/fossil-save")

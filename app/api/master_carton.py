@@ -64,3 +64,13 @@ def get_master_cartons():
         })
 
     return response
+
+# =====================================================
+# RESET MASTER CARTONS
+# =====================================================
+@router.post("/reset-master-cartons")
+def reset_master_cartons():
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM master_cartons"))
+        conn.commit()
+    return {"status": "reset"}
