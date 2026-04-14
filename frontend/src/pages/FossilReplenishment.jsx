@@ -94,9 +94,9 @@ export default function FossilReplenishment() {
   const filteredData = useMemo(() => {
     return data.filter(row => {
       const matchSearch =
-        row["Item No"]?.toLowerCase().includes(search.toLowerCase()) ||
-        row["SKU"]?.toLowerCase().includes(search.toLowerCase()) ||
-        row["ASIN"]?.toLowerCase().includes(search.toLowerCase());
+        String(row["Item No"] ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        String(row["SKU"] ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        String(row["ASIN"] ?? "").toLowerCase().includes(search.toLowerCase());
       const matchAssort = assortmentFilter === "All" || row["Assortment Type"] === assortmentFilter;
       const matchBrand  = brandFilter === "All" || row["Brand"] === brandFilter;
       return matchSearch && matchAssort && matchBrand;

@@ -214,6 +214,12 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     # If Fossil SOH is 0, no requirement — Fossil doesn't hold the stock
     master_df.loc[master_df["Fossil SOH"] == 0, "Replenishment Qty"] = 0
 
+    # Preserve string columns before blanket fillna(0)
+    str_cols = ["SKU", "ASIN", "Item No", "Brand", "Assortment Type", "Fossil Assortment", "Category"]
+    for col in str_cols:
+        if col in master_df.columns:
+            master_df[col] = master_df[col].fillna("").astype(str).str.strip()
+
     master_df = master_df.fillna(0)
 
     return master_df, available_weeks
