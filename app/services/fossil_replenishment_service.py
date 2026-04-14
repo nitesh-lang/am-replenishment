@@ -195,6 +195,13 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     if cover_weeks:
         master_df["Weeks of Cover"] = cover_weeks
 
+    # Core ASINs — ALWAYS 12 weeks, overrides matrix AND manual selection
+    CORE_SKUS = {
+        "FBA66963", "FBA66636", "FBA69595",
+        "FBA79633", "FBA79527", "FBA79882"
+    }
+    master_df.loc[master_df["SKU"].isin(CORE_SKUS), "Weeks of Cover"] = 12
+
     # =====================
     # REQUIRED INVENTORY
     # =====================
