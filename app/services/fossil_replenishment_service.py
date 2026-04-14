@@ -87,11 +87,33 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     # OTHER STOCK (from Fossil Replenishment.xlsx)
     # =====================
 
-    for col in ["Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO"]:
+    for col in ["Andheri/Goregaon sellable Stock", "Open PO"]:
         if col in master_df.columns:
             master_df[col] = pd.to_numeric(master_df[col], errors="coerce").fillna(0)
         else:
             master_df[col] = 0
+
+    # =====================
+    # IN TRANSIT — read from In-Transit_Open_PO_Fossil.xlsx
+    # Sum Packing List Qty per Item No where PO fulfillment Remark = In-Transit
+    # =====================
+    try:
+        po_df = get("Fossil Replenishment/In-Transit_Open_PO_Fossil.xlsx")
+        po_df.columns = po_df.columns.str.strip()
+        po_df["Item No"] = po_df["Item No"].astype(str).str.strip().str.upper()
+        po_df["packing_list_qty"] = pd.to_numeric(po_df["Packing List Qty"], errors="coerce").fillna(0)
+        in_transit_df = (
+            po_df[po_df["PO fulfillment Remark"].astype(str).str.strip() == "In-Transit"]
+            .groupby("Item No", as_index=False)
+            .agg(in_transit_total=("packing_list_qty", "sum"))
+        )
+        master_df["_item_no_upper"] = master_df["Item No"].astype(str).str.strip().str.upper()
+        master_df = master_df.merge(in_transit_df, left_on="_item_no_upper", right_on="Item No", how="left", suffixes=("", "_it"))
+        master_df["In Transit PO"] = master_df["in_transit_total"].fillna(0).astype(int)
+        master_df.drop(columns=["_item_no_upper", "in_transit_total", "Item No_it"], inplace=True, errors="ignore")
+    except Exception as e:
+        print(f"⚠️ Fossil Replenishment In-Transit load error: {e}")
+        master_df["In Transit PO"] = pd.to_numeric(master_df.get("In Transit PO", 0), errors="coerce").fillna(0)
 
     # =====================
     # TOTAL INVENTORY
