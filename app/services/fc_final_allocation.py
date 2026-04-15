@@ -270,7 +270,15 @@ def calculate_final_allocation(
                 for _, row in missing.iterrows():
                     model = row["item_no_upper"]
                     fc    = row["fc_upper"]
-                    mr = fossil_master_lookup.loc[model] if model in fossil_master_lookup.index else {}
+                    if model in fossil_master_lookup.index:
+                        mr_raw = fossil_master_lookup.loc[model]
+                        # Handle duplicate models — take first row
+                        if isinstance(mr_raw, pd.DataFrame):
+                            mr = mr_raw.iloc[0].to_dict()
+                        else:
+                            mr = mr_raw.to_dict()
+                    else:
+                        mr = {}
                     def safe(val, default=""):
                         import math
                         if val is None: return default

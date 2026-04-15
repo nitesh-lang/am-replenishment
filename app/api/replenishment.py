@@ -187,15 +187,17 @@ def get_fc_final(
         df = df.sort_values(["sku", "cluster", "fulfillment_center"]).reset_index(drop=True)
 
     # cluster_po and cluster_in_transit: only show on first FC row per SKU+cluster
-    # MUST happen before fillna("") which would corrupt the -1 sentinel
+    # MUST happen before fillna("") which would corrupt the sentinel
     if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
         df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce").fillna(0).astype(int)
         df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce").fillna(0).astype(int)
+        # cluster_total = cluster_po (send_qty sum) + cluster_in_transit
         df["cluster_total"] = df["cluster_po"] + df["cluster_in_transit"]
+        # Mark non-first rows with sentinel string that survives fillna
         df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
-        df.loc[df["_rank"] > 0, "cluster_po"] = -1
-        df.loc[df["_rank"] > 0, "cluster_in_transit"] = -1
-        df.loc[df["_rank"] > 0, "cluster_total"] = -1
+        df.loc[df["_rank"] > 0, "cluster_po"] = "BLANK"
+        df.loc[df["_rank"] > 0, "cluster_in_transit"] = "BLANK"
+        df.loc[df["_rank"] > 0, "cluster_total"] = "BLANK"
         df.drop(columns=["_rank"], inplace=True)
 
     # Replace NaN/inf with safe defaults before JSON serialization
@@ -209,11 +211,11 @@ def get_fc_final(
 
     records = df.to_dict(orient="records")
     for r in records:
-        if r.get("cluster_po") == -1:
+        if r.get("cluster_po") == "BLANK":
             r["cluster_po"] = None
-        if r.get("cluster_in_transit") == -1:
+        if r.get("cluster_in_transit") == "BLANK":
             r["cluster_in_transit"] = None
-        if r.get("cluster_total") == -1:
+        if r.get("cluster_total") == "BLANK":
             r["cluster_total"] = None
     return records
 
