@@ -182,6 +182,14 @@ def get_fc_final(
             df["cluster"] = "-"
             df["cluster_po"] = 0
 
+    # Replace NaN/inf with safe defaults before JSON serialization
+    df = df.fillna("").replace([float("inf"), float("-inf")], 0)
+    # Ensure numeric columns don't have string "" 
+    for col in ["in_transit_qty", "open_po_qty", "send_qty", "fc_inventory",
+                "weekly_velocity", "total_units_sold", "cluster_po", "cluster_in_transit"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+
     return df.to_dict(orient="records")
 
 
