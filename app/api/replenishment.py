@@ -175,6 +175,13 @@ def get_fc_final(
             df["cluster_po"] = df["cluster_po_calc"].fillna(0).astype(int)
             df.drop(columns=["cluster_po_calc"], inplace=True)
 
+            # Show cluster_po and cluster_in_transit only on first FC row per SKU+cluster
+            # blank on subsequent rows to avoid double-counting in Excel sums
+            df["_cluster_rank"] = df.groupby(["sku", "cluster"]).cumcount()
+            df.loc[df["_cluster_rank"] > 0, "cluster_po"] = ""
+            df.loc[df["_cluster_rank"] > 0, "cluster_in_transit"] = ""
+            df.drop(columns=["_cluster_rank"], inplace=True)
+
         except Exception as e:
             print("⚠️ Fossil FC DB merge error:", e)
             df["remarks"] = ""
