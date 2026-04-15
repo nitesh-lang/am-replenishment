@@ -192,18 +192,23 @@ def get_fc_final(
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
     # cluster_po and cluster_in_transit: only show on first FC row per SKU+cluster
-    # Must be done AFTER fillna so blanks aren't overwritten
     if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
+        # First convert to numeric safely
+        df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce").fillna(0).astype(int)
+        df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce").fillna(0).astype(int)
+        # Then blank non-first rows by setting to -1 sentinel, convert to dict, replace with None
         df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
-        df["cluster_po"] = df.apply(
-            lambda r: None if r["_rank"] > 0 else (int(r["cluster_po"]) if str(r["cluster_po"]).lstrip('-').isdigit() else 0), axis=1
-        )
-        df["cluster_in_transit"] = df.apply(
-            lambda r: None if r["_rank"] > 0 else (int(r["cluster_in_transit"]) if str(r["cluster_in_transit"]).lstrip('-').isdigit() else 0), axis=1
-        )
+        df.loc[df["_rank"] > 0, "cluster_po"] = -1
+        df.loc[df["_rank"] > 0, "cluster_in_transit"] = -1
         df.drop(columns=["_rank"], inplace=True)
 
-    return df.to_dict(orient="records")
+    records = df.to_dict(orient="records")
+    for r in records:
+        if r.get("cluster_po") == -1:
+            r["cluster_po"] = None
+        if r.get("cluster_in_transit") == -1:
+            r["cluster_in_transit"] = None
+    return records
 
 
 # =================================================
