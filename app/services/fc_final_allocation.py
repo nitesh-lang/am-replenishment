@@ -245,6 +245,64 @@ def calculate_final_allocation(
             ).clip(lower=0)
             df_plan["allocation_logic"] = "send_qty = max(0, weekly_velocity * replenish_weeks - ledger_stock - in_transit - open_po)"
 
+            # Add missing SKU+FC rows from In-Transit file (no sales/ledger history)
+            po_df["item_no_upper"] = po_df["Item No"].astype(str).str.strip().str.upper()
+            po_df["fc_upper"]      = po_df["FC"].astype(str).str.strip().str.upper()
+
+            # Get SKU+FC combos in In-Transit file but not in df_plan
+            plan_keys = set(zip(
+                df_plan["model"].astype(str).str.strip().str.upper(),
+                df_plan["fulfillment_center"].astype(str).str.strip().str.upper()
+            ))
+            it_rows = (
+                po_df[po_df["remark"] == "In-Transit"]
+                .groupby(["item_no_upper", "fc_upper"], as_index=False)
+                .agg(in_transit_qty=("packing_list_qty", "sum"))
+            )
+            missing = it_rows[
+                ~it_rows.apply(lambda r: (r["item_no_upper"], r["fc_upper"]) in plan_keys, axis=1)
+            ]
+
+            if len(missing) > 0:
+                # Build skeleton rows for missing SKU+FC
+                fossil_master_lookup = fossil_master.set_index("model") if "model" in fossil_master.columns else fossil_master.rename(columns={"Item No": "model"}).set_index("model")
+                new_rows = []
+                for _, row in missing.iterrows():
+                    model = row["item_no_upper"]
+                    fc    = row["fc_upper"]
+                    master_row = fossil_master_lookup.loc[model] if model in fossil_master_lookup.index else {}
+                    new_rows.append({
+                        "model":             model,
+                        "sku":               master_row.get("sku", ""),
+                        "asin":              master_row.get("asin", ""),
+                        "category":          master_row.get("category", "-"),
+                        "assortment":        master_row.get("assortment", "-"),
+                        "fossil_assortment": master_row.get("fossil_assortment", "-"),
+                        "listing_status":    "-",
+                        "ampm_inventory":    master_row.get("ampm_inventory", 0),
+                        "fulfillment_center": fc,
+                        "weekly_velocity":   0,
+                        "total_units_sold":  0,
+                        "fc_inventory":      0,
+                        "transfer_in":       0,
+                        "target_cover_units":0,
+                        "post_transfer_stock":0,
+                        "coverage_gap_units":0,
+                        "send_qty":          0,
+                        "expected_units":    0,
+                        "fill_pct":          0,
+                        "velocity_flag":     "NO_SALES",
+                        "ixd_flag":          "-",
+                        "hazmat_type":       "-",
+                        "master_carton":     "24",
+                        "remarks":           "",
+                        "allocation_logic":  "in_transit_only",
+                        "in_transit_qty":    int(row["in_transit_qty"]),
+                        "open_po_qty":       0,
+                    })
+                if new_rows:
+                    df_plan = pd.concat([df_plan, pd.DataFrame(new_rows)], ignore_index=True)
+
         except Exception as e:
             print("⚠️ Fossil In-Transit/Open PO load error:", e)
             df_plan["in_transit_qty"] = 0

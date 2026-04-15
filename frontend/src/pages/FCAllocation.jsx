@@ -656,6 +656,7 @@ function exportCSV() {
                           const cluster = FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || row.cluster || "-";
                           const clusterKey = `${row.sku}|${cluster}`;
                           const clusterPo = fossilEdits[clusterKey]?.cluster_po ?? row.cluster_po ?? 0;
+                          const clusterIt = row.cluster_in_transit ?? 0;
                           return (
                             <td className="px-4 py-3">
                               <input
@@ -669,6 +670,9 @@ function exportCSV() {
                                 }}
                                 className="w-20 px-2 py-1 border border-blue-300 rounded text-sm text-center bg-blue-50"
                               />
+                              {clusterIt > 0 && (
+                                <div className="text-xs text-amber-600 mt-0.5 text-center">↓ {clusterIt} in-transit</div>
+                              )}
                             </td>
                           );
                         })()}
