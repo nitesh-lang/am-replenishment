@@ -6,6 +6,7 @@ from app.services.validation_engine import run_full_validation
 import psycopg2
 import os
 import json
+import pandas as pd
 
 
 # =================================================
@@ -205,8 +206,6 @@ def get_fc_final(
         df.drop(columns=["_rank"], inplace=True)
 
     # Replace NaN/inf with safe defaults before JSON serialization
-    import pandas as pd
-    import math
     df = df.fillna("").replace([float("inf"), float("-inf")], 0)
     for col in ["in_transit_qty", "open_po_qty", "send_qty", "fc_inventory",
                 "weekly_velocity", "total_units_sold"]:
