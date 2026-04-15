@@ -191,15 +191,20 @@ def get_fc_final(
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
+    # Sort by SKU then cluster so rows are grouped correctly
+    if "sku" in df.columns and "cluster" in df.columns:
+        df = df.sort_values(["sku", "cluster", "fulfillment_center"]).reset_index(drop=True)
+
     # cluster_po and cluster_in_transit: only show on first FC row per SKU+cluster
     if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
-        # First convert to numeric safely
         df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce").fillna(0).astype(int)
         df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce").fillna(0).astype(int)
-        # Then blank non-first rows by setting to -1 sentinel, convert to dict, replace with None
+        # Add cluster_total = cluster_po + cluster_in_transit (only on first row)
+        df["cluster_total"] = df["cluster_po"] + df["cluster_in_transit"]
         df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
         df.loc[df["_rank"] > 0, "cluster_po"] = -1
         df.loc[df["_rank"] > 0, "cluster_in_transit"] = -1
+        df.loc[df["_rank"] > 0, "cluster_total"] = -1
         df.drop(columns=["_rank"], inplace=True)
 
     records = df.to_dict(orient="records")
@@ -208,6 +213,8 @@ def get_fc_final(
             r["cluster_po"] = None
         if r.get("cluster_in_transit") == -1:
             r["cluster_in_transit"] = None
+        if r.get("cluster_total") == -1:
+            r["cluster_total"] = None
     return records
 
 
