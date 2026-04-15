@@ -195,11 +195,13 @@ def get_fc_final(
     # Must be done AFTER fillna so blanks aren't overwritten
     if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
         df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
-        df.loc[df["_rank"] > 0, "cluster_po"] = None
-        df.loc[df["_rank"] > 0, "cluster_in_transit"] = None
+        df["cluster_po"] = df.apply(
+            lambda r: None if r["_rank"] > 0 else (int(r["cluster_po"]) if str(r["cluster_po"]).lstrip('-').isdigit() else 0), axis=1
+        )
+        df["cluster_in_transit"] = df.apply(
+            lambda r: None if r["_rank"] > 0 else (int(r["cluster_in_transit"]) if str(r["cluster_in_transit"]).lstrip('-').isdigit() else 0), axis=1
+        )
         df.drop(columns=["_rank"], inplace=True)
-        df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce")
-        df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce")
 
     return df.to_dict(orient="records")
 
