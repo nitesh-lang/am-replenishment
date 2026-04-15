@@ -143,14 +143,14 @@ def get_fc_final(
             )
             df = df.merge(cluster_po, on=["sku", "cluster"], how="left")
 
-            # cluster in-transit = sum of in_transit_qty per cluster per SKU
+            # cluster in-transit = sum of in_transit_qty per model+cluster (use model not sku to avoid blank SKU grouping)
             cluster_it = (
-                df.groupby(["sku", "cluster"])["in_transit_qty"]
+                df.groupby(["model", "cluster"])["in_transit_qty"]
                 .sum()
                 .reset_index()
                 .rename(columns={"in_transit_qty": "cluster_in_transit"})
             )
-            df = df.merge(cluster_it, on=["sku", "cluster"], how="left")
+            df = df.merge(cluster_it, on=["model", "cluster"], how="left")
             df["cluster_in_transit"] = df["cluster_in_transit"].fillna(0).astype(int)
 
             # load saved cluster PO overrides — only use DB value if it differs from calc
