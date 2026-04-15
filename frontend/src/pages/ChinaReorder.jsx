@@ -26,8 +26,6 @@ export default function ChinaReorder() {
 
   // 👇 ADD HERE
   const [search, setSearch] = useState("");
-
-  const [search, setSearch] = useState("");
   const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: "asc",
