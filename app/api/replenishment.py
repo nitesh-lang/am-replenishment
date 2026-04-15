@@ -182,6 +182,22 @@ def get_fc_final(
             df["cluster"] = "-"
             df["cluster_po"] = 0
 
+    # Sort by SKU+cluster before blanking — must happen before fillna
+    if "sku" in df.columns and "cluster" in df.columns:
+        df = df.sort_values(["sku", "cluster", "fulfillment_center"]).reset_index(drop=True)
+
+    # cluster_po and cluster_in_transit: only show on first FC row per SKU+cluster
+    # MUST happen before fillna("") which would corrupt the -1 sentinel
+    if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
+        df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce").fillna(0).astype(int)
+        df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce").fillna(0).astype(int)
+        df["cluster_total"] = df["cluster_po"] + df["cluster_in_transit"]
+        df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
+        df.loc[df["_rank"] > 0, "cluster_po"] = -1
+        df.loc[df["_rank"] > 0, "cluster_in_transit"] = -1
+        df.loc[df["_rank"] > 0, "cluster_total"] = -1
+        df.drop(columns=["_rank"], inplace=True)
+
     # Replace NaN/inf with safe defaults before JSON serialization
     import pandas as pd
     import math
@@ -190,22 +206,6 @@ def get_fc_final(
                 "weekly_velocity", "total_units_sold"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
-
-    # Sort by SKU then cluster so rows are grouped correctly
-    if "sku" in df.columns and "cluster" in df.columns:
-        df = df.sort_values(["sku", "cluster", "fulfillment_center"]).reset_index(drop=True)
-
-    # cluster_po and cluster_in_transit: only show on first FC row per SKU+cluster
-    if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
-        df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce").fillna(0).astype(int)
-        df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce").fillna(0).astype(int)
-        # Add cluster_total = cluster_po + cluster_in_transit (only on first row)
-        df["cluster_total"] = df["cluster_po"] + df["cluster_in_transit"]
-        df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
-        df.loc[df["_rank"] > 0, "cluster_po"] = -1
-        df.loc[df["_rank"] > 0, "cluster_in_transit"] = -1
-        df.loc[df["_rank"] > 0, "cluster_total"] = -1
-        df.drop(columns=["_rank"], inplace=True)
 
     records = df.to_dict(orient="records")
     for r in records:
