@@ -490,6 +490,18 @@ function exportCSV() {
                       ? "AVG WEEKLY SALES"
                       : col === "total_units_sold"
                       ? "TOTAL SOLD"
+                      : col === "ampm_inventory"
+                      ? "MOTHER WAREHOUSE"
+                      : col === "amazon_inventory"
+                      ? "AMAZON INVENTORY"
+                      : col === "inbound_inventory"
+                      ? "INBOUND INVENTORY"
+                      : col === "replenishment_qty"
+                      ? "REPLENISHMENT QTY"
+                      : col === "required_units"
+                      ? "REQUIRED UNITS"
+                      : col === "warehouse_shortfall"
+                      ? "WAREHOUSE SHORTFALL"
                       : col}{" "}
                     {getSortArrow(col)}
                   </th>

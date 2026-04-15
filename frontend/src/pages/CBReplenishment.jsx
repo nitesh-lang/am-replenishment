@@ -369,7 +369,7 @@ const validToWeeks = availableWeeks;
                     onClick={() => toggleSort(col)}
                     className="px-4 py-3 cursor-pointer"
                   >
-                    {col === "hazmat_type" ? "ASIN Sort Details" : col}
+                    {col === "hazmat_type" ? "ASIN Sort Details" : col === "ampm_inventory" ? "Mother Warehouse" : col}
                     {sortConfig.key === col ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : " ↕"}
                   </th>
                 ))}
