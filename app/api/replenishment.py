@@ -175,13 +175,6 @@ def get_fc_final(
             df["cluster_po"] = df["cluster_po_calc"].fillna(0).astype(int)
             df.drop(columns=["cluster_po_calc"], inplace=True)
 
-            # Show cluster_po and cluster_in_transit only on first FC row per SKU+cluster
-            # blank on subsequent rows to avoid double-counting in Excel sums
-            df["_cluster_rank"] = df.groupby(["sku", "cluster"]).cumcount()
-            df.loc[df["_cluster_rank"] > 0, "cluster_po"] = ""
-            df.loc[df["_cluster_rank"] > 0, "cluster_in_transit"] = ""
-            df.drop(columns=["_cluster_rank"], inplace=True)
-
         except Exception as e:
             print("⚠️ Fossil FC DB merge error:", e)
             df["remarks"] = ""
@@ -194,9 +187,19 @@ def get_fc_final(
     import math
     df = df.fillna("").replace([float("inf"), float("-inf")], 0)
     for col in ["in_transit_qty", "open_po_qty", "send_qty", "fc_inventory",
-                "weekly_velocity", "total_units_sold", "cluster_po", "cluster_in_transit"]:
+                "weekly_velocity", "total_units_sold"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+
+    # cluster_po and cluster_in_transit: only show on first FC row per SKU+cluster
+    # Must be done AFTER fillna so blanks aren't overwritten
+    if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
+        df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
+        df.loc[df["_rank"] > 0, "cluster_po"] = None
+        df.loc[df["_rank"] > 0, "cluster_in_transit"] = None
+        df.drop(columns=["_rank"], inplace=True)
+        df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce")
+        df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce")
 
     return df.to_dict(orient="records")
 
