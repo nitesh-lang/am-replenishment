@@ -283,7 +283,7 @@ function exportCSV() {
     "fc_inventory", "ampm_inventory",
     "weekly_velocity", "total_units_sold",
     "in_transit_qty", "open_po_qty",
-    "send_qty", "cluster_po", "cluster_in_transit", "cluster_total",
+    "send_qty", "cluster_po", "cluster_in_transit",
     "master_carton", "remarks",
   ];
 
@@ -320,7 +320,6 @@ function exportCSV() {
     cluster: "CLUSTER",
     cluster_po: "CLUSTER PO",
     cluster_in_transit: "CLUSTER IN-TRANSIT",
-    cluster_total: "CLUSTER TOTAL (PO+TRANSIT)",
     remarks: "REMARKS",
     in_transit_qty: "IN-TRANSIT QTY",
     open_po_qty: "OPEN PO QTY",

@@ -189,15 +189,11 @@ def get_fc_final(
     if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
         df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce").fillna(0).astype(int)
         df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce").fillna(0).astype(int)
-        df["cluster_total"] = df["cluster_po"] + df["cluster_in_transit"]
         df["cluster_po"] = df["cluster_po"].astype(object)
         df["cluster_in_transit"] = df["cluster_in_transit"].astype(object)
-        df["cluster_total"] = df["cluster_total"].astype(object)
-        # Use model for rank — sku may be blank for some rows
         df["_rank"] = df.groupby(["model", "cluster"]).cumcount()
         df.loc[df["_rank"] > 0, "cluster_po"] = "BLANK"
         df.loc[df["_rank"] > 0, "cluster_in_transit"] = "BLANK"
-        df.loc[df["_rank"] > 0, "cluster_total"] = "BLANK"
         df.drop(columns=["_rank"], inplace=True)
 
     # Replace NaN/inf with safe defaults before JSON serialization
@@ -213,8 +209,6 @@ def get_fc_final(
             r["cluster_po"] = None
         if r.get("cluster_in_transit") == "BLANK":
             r["cluster_in_transit"] = None
-        if r.get("cluster_total") == "BLANK":
-            r["cluster_total"] = None
     return records
 
 
