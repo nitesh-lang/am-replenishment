@@ -134,14 +134,14 @@ def get_fc_final(
             }
             df["cluster"] = df["fulfillment_center"].str.upper().map(FC_CLUSTER).fillna("-")
 
-            # cluster PO = sum of send_qty per cluster per SKU — always recalculated fresh
+            # cluster PO = sum of send_qty per model+cluster — use model not sku (sku may be blank)
             cluster_po = (
-                df.groupby(["sku", "cluster"])["send_qty"]
+                df.groupby(["model", "cluster"])["send_qty"]
                 .sum()
                 .reset_index()
                 .rename(columns={"send_qty": "cluster_po_calc"})
             )
-            df = df.merge(cluster_po, on=["sku", "cluster"], how="left")
+            df = df.merge(cluster_po, on=["model", "cluster"], how="left")
 
             # cluster in-transit = sum of in_transit_qty per model+cluster (use model not sku to avoid blank SKU grouping)
             cluster_it = (
@@ -181,23 +181,20 @@ def get_fc_final(
             df["cluster"] = "-"
             df["cluster_po"] = 0
 
-    # Sort by SKU+cluster before blanking — must happen before fillna
-    if "sku" in df.columns and "cluster" in df.columns:
-        df = df.sort_values(["sku", "cluster", "fulfillment_center"]).reset_index(drop=True)
+    # Sort by model+cluster before blanking
+    if "model" in df.columns and "cluster" in df.columns:
+        df = df.sort_values(["model", "cluster", "fulfillment_center"]).reset_index(drop=True)
 
-    # cluster_po and cluster_in_transit: only show on first FC row per SKU+cluster
-    # MUST happen before fillna("") which would corrupt the sentinel
+    # cluster_po and cluster_in_transit: only show on first FC row per model+cluster
     if "cluster_po" in df.columns and "cluster_in_transit" in df.columns:
         df["cluster_po"] = pd.to_numeric(df["cluster_po"], errors="coerce").fillna(0).astype(int)
         df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce").fillna(0).astype(int)
-        # cluster_total = cluster_po (send_qty sum) + cluster_in_transit
         df["cluster_total"] = df["cluster_po"] + df["cluster_in_transit"]
-        # Convert to object dtype so string sentinel can be assigned to int64 column
         df["cluster_po"] = df["cluster_po"].astype(object)
         df["cluster_in_transit"] = df["cluster_in_transit"].astype(object)
         df["cluster_total"] = df["cluster_total"].astype(object)
-        # Mark non-first rows with sentinel string that survives fillna
-        df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
+        # Use model for rank — sku may be blank for some rows
+        df["_rank"] = df.groupby(["model", "cluster"]).cumcount()
         df.loc[df["_rank"] > 0, "cluster_po"] = "BLANK"
         df.loc[df["_rank"] > 0, "cluster_in_transit"] = "BLANK"
         df.loc[df["_rank"] > 0, "cluster_total"] = "BLANK"
