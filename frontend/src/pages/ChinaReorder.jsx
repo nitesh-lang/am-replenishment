@@ -25,8 +25,7 @@ export default function ChinaReorder() {
 
 
   // 👇 ADD HERE
-  const [minCover, setMinCover] = useState("");
-  const [maxCover, setMaxCover] = useState("");
+  const [search, setSearch] = useState("");
 
   const [search, setSearch] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -79,14 +78,11 @@ export default function ChinaReorder() {
   return data
     .filter((row) => row.model?.toLowerCase().includes(search.toLowerCase()))
     .filter((row) => {
-      const cover = row.weeks_cover || 0;
-      if (minCover !== "" && cover < Number(minCover)) return false;
-      if (maxCover !== "" && cover > Number(maxCover)) return false;
       return true;
     })
     .filter((row) => !selectedL0 || row.category_l0 === selectedL0)
     .filter((row) => !selectedL1 || row.category_l1 === selectedL1);
-}, [data, search, minCover, maxCover, selectedL0, selectedL1]);
+}, [data, search, selectedL0, selectedL1]);
 
   /* ============================================================
      SORT
@@ -289,15 +285,15 @@ export default function ChinaReorder() {
           </select>
 
           <div className="flex items-center gap-2">
-            <input
-              type="range" min="1" max="6" step="1"
+            <select
               value={selectedMonths}
               onChange={(e) => { setCurrentPage(1); setSelectedMonths(Number(e.target.value)); }}
-              className="w-32"
-            />
-            <span className="text-sm font-medium whitespace-nowrap">
-              {selectedMonths} Month{selectedMonths > 1 ? "s" : ""}
-            </span>
+              className="px-4 py-2 border rounded-lg"
+            >
+              {[1,2,3,4,5,6].map(m => (
+                <option key={m} value={m}>{m} Month{m > 1 ? "s" : ""}</option>
+              ))}
+            </select>
           </div>
 
           {l0Options.length > 0 && (
@@ -323,18 +319,6 @@ export default function ChinaReorder() {
           )}
 
           <input
-            type="number" placeholder="Min Cover"
-            value={minCover}
-            onChange={(e) => setMinCover(e.target.value)}
-            className="px-3 py-2 border rounded w-32"
-          />
-          <input
-            type="number" placeholder="Max Cover"
-            value={maxCover}
-            onChange={(e) => setMaxCover(e.target.value)}
-            className="px-3 py-2 border rounded w-32"
-          />
-          <input
             value={search}
             onChange={(e) => { setCurrentPage(1); setSearch(e.target.value); }}
             placeholder="Search model..."
@@ -356,7 +340,7 @@ export default function ChinaReorder() {
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
-                {["model", "last_12w_sales", "avg_weekly_sales", "current_inventory", "open_order_qty", "pipeline_qty", "weeks_cover", "suggested_reorder"]
+                {["model", "last_12w_sales", "avg_weekly_sales", "current_inventory", "open_order_qty", "pipeline_qty", "suggested_reorder"]
                   .map((col) => (
                     <th
                       key={col}
@@ -394,7 +378,6 @@ export default function ChinaReorder() {
                     <td className="px-4 py-3 font-medium text-purple-600">
                       {row.pipeline_qty || 0}
                     </td>
-                    <td className="px-4 py-3">{row.weeks_cover?.toFixed(1)}</td>
                     <td className="px-4 py-3 font-semibold text-indigo-700">
                       {Math.round(row.suggested_reorder)}
                     </td>

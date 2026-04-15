@@ -246,7 +246,7 @@ function exportCSV() {
     total_units_sold: "TOTAL SOLD",
     amazon_inventory: "AMAZON INVENTORY",
     inbound_inventory: "INBOUND INVENTORY",
-    ampm_inventory: "AMPM INVENTORY",
+    ampm_inventory: "Mother Warehouse",
     required_units: "REQUIRED UNITS",
     replenishment_qty: "REPLENISHMENT QTY",
     recommended_qty: "RECOMMENDED QTY",

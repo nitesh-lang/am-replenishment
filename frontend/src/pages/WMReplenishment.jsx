@@ -203,7 +203,7 @@ export default function WMReplenishment() {
                       "final_cb_qty": "Clicktech QTY",
                       "cb_3m_sales": "Clicktech 3M Sales",
                       "amazon_3m_sales": "Amazon 3M Sales",
-                      "ampm_inventory": "AMPM Inventory",
+                      "ampm_inventory": "Mother Warehouse",
                       "hazmat_type": "Hazmat Type",
                       "avg_weekly_sales": "Avg Weekly Sales",
                       "estimated_qty": "Estimated QTY",

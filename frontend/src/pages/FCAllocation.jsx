@@ -307,11 +307,11 @@ function exportCSV() {
     listing_status: "LISTING STATUS",
     weekly_velocity: "AVG WEEKLY SALES",
     total_units_sold: "TOTAL SOLD",
-    fc_inventory: "LEDGER STOCK",
-    ampm_inventory: account === "Fossil" ? "FOSSIL SOH" : "AMPM INVENTORY",
+    fc_inventory: "FC SOH",
+    ampm_inventory: account === "Fossil" ? "FOSSIL SOH" : "Mother Warehouse",
     target_cover_units: "TARGET COVER UNITS",
     expected_units: "ORIGINAL REQUIRED",
-    send_qty: account === "Fossil" ? "PO REQUIREMENT" : "SEND QTY",
+    send_qty: account === "Fossil" ? "PO REQUIREMENT" : "To Send QTY",
     fill_pct: "FILL %",
     velocity_flag: "VELOCITY FLAG",
     fulfillment_center: "FC",
@@ -377,7 +377,7 @@ function exportCSV() {
           Nexlev FC Allocation Intelligence
         </h1>
         <p className="text-slate-300 mt-2 text-sm">
-          Final distribution planning from AMPM to fulfillment centers
+          Final distribution planning from Mother Warehouse to fulfillment centers
         </p>
       </div>
 
@@ -432,7 +432,7 @@ function exportCSV() {
   >
     <option value="All">All</option>
     <option value="amazon.in">Amazon.in</option>
-    <option value="Non-Amazon">MCF (Non-Amazon)</option>
+    <option value="Non-Amazon">D2C</option>
   </select>
 </div>
 
@@ -566,9 +566,9 @@ function exportCSV() {
     {account === "Fossil" && <th onClick={() => toggleSort("fulfillment_center")} className="px-4 py-3 cursor-pointer whitespace-nowrap">FC {getSortArrow("fulfillment_center")}</th>}
     {account === "Fossil" && <th onClick={() => toggleSort("cluster")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Cluster {getSortArrow("cluster")}</th>}
     <th onClick={() => toggleSort("fc_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
-      Ledger Stock {getSortArrow("fc_inventory")}
+      FC SOH {getSortArrow("fc_inventory")}
     </th>
-    <th onClick={() => toggleSort("ampm_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">{account === "Fossil" ? "Fossil SOH" : "AMPM Inventory"} {getSortArrow("ampm_inventory")}</th>
+    <th onClick={() => toggleSort("ampm_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">{account === "Fossil" ? "Fossil SOH" : "Mother Warehouse"} {getSortArrow("ampm_inventory")}</th>
     <th onClick={() => toggleSort("weekly_velocity")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Avg Weekly Sales {getSortArrow("weekly_velocity")}
     </th>
@@ -582,7 +582,7 @@ function exportCSV() {
       Original Required {getSortArrow("expected_units")}
     </th>
     <th onClick={() => toggleSort("send_qty")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
-      {account === "Fossil" ? "PO Requirement" : "Send Qty"} {getSortArrow("send_qty")}
+      {account === "Fossil" ? "PO Requirement" : "To Send QTY"} {getSortArrow("send_qty")}
     </th>
     {account === "Fossil" && <th onClick={() => toggleSort("cluster_po")} className="px-4 py-3 cursor-pointer whitespace-nowrap">Cluster PO {getSortArrow("cluster_po")}</th>}
     <th onClick={() => toggleSort("fill_pct")} className={`px-4 py-3 cursor-pointer whitespace-nowrap ${account === "Fossil" ? "hidden" : ""}`}>
@@ -629,9 +629,9 @@ function exportCSV() {
                             </td>
                           );
                         })()}
-                        {/* Ledger Stock */}
+                        {/* FC SOH */}
                         <td className="px-4 py-3">{row.fc_inventory ?? 0}</td>
-                        {/* AMPM Inventory / Fossil SOH */}
+                        {/* Mother Warehouse / Fossil SOH */}
                         <td className="px-4 py-3">{row.ampm_inventory ?? 0}</td>
                         {/* Avg Weekly Sales */}
                         <td className="px-4 py-3">{row.weekly_velocity ?? 0}</td>
@@ -751,7 +751,7 @@ function exportCSV() {
   </div>
 
   <div>
-    <strong>Final Allocated (Send Qty):</strong>
+    <strong>Final Allocated (To Send QTY):</strong>
     <div className="mt-1 font-semibold">{row.send_qty}</div>
   </div>
 
