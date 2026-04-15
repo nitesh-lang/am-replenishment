@@ -62,6 +62,7 @@ def preload():
         "Fossil Replenishment/Fossil Replenishment.xlsx",
         "Fossil Replenishment/Fossil - SOH.xlsx",
         "Fossil Replenishment/fba_shipments_fossil.csv",
+        "Fossil Replenishment/In-Transit_Open_PO_Fossil.xlsx",
     ]
 
     # Excel files with specific sheets
