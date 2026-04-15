@@ -341,7 +341,12 @@ function exportCSV() {
           if (col === "master_carton") return fossilEdits[key]?.master_carton ?? row[col] ?? 24;
           if (col === "remarks")     return fossilEdits[key]?.remarks      ?? row[col] ?? "";
           if (col === "cluster")     return FC_CLUSTER[row.fulfillment_center?.toUpperCase()] || "-";
-          if (col === "cluster_po")  return fossilEdits[clusterKey]?.cluster_po ?? row[col] ?? 0;
+          if (col === "cluster_po")  {
+            if (row.cluster_po === null || row.cluster_po === undefined) return "";
+            return fossilEdits[clusterKey]?.cluster_po ?? row[col] ?? 0;
+          }
+          if (col === "cluster_in_transit") return (row.cluster_in_transit === null || row.cluster_in_transit === undefined) ? "" : (row[col] ?? "");
+          if (col === "cluster_total") return (row.cluster_total === null || row.cluster_total === undefined) ? "" : (row[col] ?? "");
         }
         return row[col] ?? "";
       };
