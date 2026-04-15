@@ -193,6 +193,10 @@ def get_fc_final(
         df["cluster_in_transit"] = pd.to_numeric(df["cluster_in_transit"], errors="coerce").fillna(0).astype(int)
         # cluster_total = cluster_po (send_qty sum) + cluster_in_transit
         df["cluster_total"] = df["cluster_po"] + df["cluster_in_transit"]
+        # Convert to object dtype so string sentinel can be assigned to int64 column
+        df["cluster_po"] = df["cluster_po"].astype(object)
+        df["cluster_in_transit"] = df["cluster_in_transit"].astype(object)
+        df["cluster_total"] = df["cluster_total"].astype(object)
         # Mark non-first rows with sentinel string that survives fillna
         df["_rank"] = df.groupby(["sku", "cluster"]).cumcount()
         df.loc[df["_rank"] > 0, "cluster_po"] = "BLANK"
