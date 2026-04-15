@@ -94,7 +94,6 @@ def get_fc_final(
     # ── Fossil: load remarks + master_carton from DB only, send_qty always fresh ──
     if account.lower() == "fossil":
         try:
-            import pandas as pd
             conn = psycopg2.connect(os.environ["DATABASE_URL"])
             cursor = conn.cursor()
             cursor.execute("""
@@ -123,7 +122,6 @@ def get_fc_final(
                 df["remarks"] = ""
 
             # ── Cluster mapping ──
-            import pandas as pd
             FC_CLUSTER = {
                 "BLR5": "BLR", "BLR7": "BLR", "BLR8": "BLR",
                 "BOM4": "BOM", "BOM5": "BOM", "BOM7": "BOM",
