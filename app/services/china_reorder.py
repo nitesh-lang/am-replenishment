@@ -106,6 +106,23 @@ def china_reorder_logic(
         .str.strip()
     )
 
+    # Normalize sales model names — strip variant suffixes like "ETC-07-WH" → "ETC-07"
+    inv_models = set(inv_df["model"].unique())
+    def normalize_model(m):
+        m = str(m).strip()
+        if m in inv_models:
+            return m
+        # Strip after last '-' if result matches inventory model
+        parts = m.rsplit("-", 1)
+        if len(parts) == 2 and parts[0] in inv_models:
+            return parts[0]
+        # Strip bundle description after '('
+        base = m.split("(")[0].strip()
+        if base in inv_models:
+            return base
+        return m
+    sales_df["model"] = sales_df["model"].apply(normalize_model)
+
     inv_df["channel"] = (
         inv_df["channel"]
         .astype(str)

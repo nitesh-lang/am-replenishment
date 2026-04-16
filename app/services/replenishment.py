@@ -232,6 +232,25 @@ def calculate_replenishment(
     validate_columns(inventory, ["Model", "Channel", "Qty"], "inventory snapshot")
     validate_columns(sales, ["model", "units_sold", "week"], "sales snapshot")
 
+    # Normalize sales model names — strip variant suffixes like "ETC-07-WH" → "ETC-07"
+    # Check if master models are a prefix of sales models and normalize accordingly
+    master_models = set(master["Model"].astype(str).str.strip().unique())
+    def normalize_model(m):
+        m = str(m).strip()
+        # If exact match exists, keep as is
+        if m in master_models:
+            return m
+        # Try stripping after last '-' if result matches master
+        parts = m.rsplit("-", 1)
+        if len(parts) == 2 and parts[0] in master_models:
+            return parts[0]
+        # Try stripping after '(' like "UB-01 (AI-04...)" → "UB-01"
+        base = m.split("(")[0].strip()
+        if base in master_models:
+            return base
+        return m
+    sales["model"] = sales["model"].apply(normalize_model)
+
     # ---------------------------------------------
     # SALES WINDOW
     # ---------------------------------------------
