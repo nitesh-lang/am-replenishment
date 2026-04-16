@@ -142,6 +142,14 @@ def calculate_final_allocation(
 
     df_plan["send_qty"] = df_plan["adjusted_shortfall"]
     df_plan["original_required_units"] = df_plan["adjusted_shortfall"]
+
+    # DEBUG — check FBA66963 DEL5 at adjusted_shortfall step
+    if account.lower() == "fossil" and "sku" in df_plan.columns:
+        d = df_plan[(df_plan["sku"].astype(str).str.contains("66963", na=False)) & 
+                    (df_plan["fulfillment_center"].astype(str).str.upper() == "DEL5")]
+        if len(d):
+            r = d.iloc[0]
+            print(f"🔍 STEP4 FBA66963/DEL5: velocity={r['weekly_velocity']:.2f}, fc_inv={r['fc_inventory']:.0f}, target={r['target_cover_units']:.1f}, shortfall={r['adjusted_shortfall']:.1f}, send_qty={r['send_qty']:.1f}")
     
 
     # NOW create expected_units
@@ -331,6 +339,12 @@ def calculate_final_allocation(
             "ixd_flag", "hazmat_type", "master_carton", "remarks", "allocation_logic",
             "in_transit_qty", "open_po_qty",
         ]].copy()
+
+        # DEBUG — check send_qty before numeric cleanup
+        d = fossil_final[fossil_final["sku"].astype(str).str.contains("66963", na=False) & 
+                         (fossil_final["fulfillment_center"].astype(str).str.upper()=="DEL5")]
+        if len(d):
+            print(f"🔍 PRE-CLEANUP FBA66963/DEL5: send_qty={d.iloc[0]['send_qty']}, in_transit={d.iloc[0]['in_transit_qty']}")
 
         numeric_cleanup_cols = [
             "weekly_velocity", "fc_inventory", "transfer_in", "target_cover_units",
