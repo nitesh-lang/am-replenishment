@@ -45,6 +45,9 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             df["brand"] = df["brand"].astype(str).str.strip()
             df["model"] = df["model"].astype(str).str.strip()
 
+        # Normalize sales model names — strip bundle descriptions like "UB-01 (AI-04, AM-S1...)"
+        sales_df["model"] = sales_df["model"].str.split("(").str[0].str.strip()
+
         po_df["model"] = po_df["model"].fillna(po_df["sku"]).astype(str).str.strip()
 
         # =========================
