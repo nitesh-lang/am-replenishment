@@ -1,29 +1,48 @@
 from app.services.validation_engine import run_full_validation
 from app.services.file_cache import get, get_excel_sheet
 import os
-from sqlalchemy import create_engine
 import pandas as pd
 
 
+# =================================================
+# FILE MAP — account → shipments + ledger files
+# =================================================
+
+ACCOUNT_FILES = {
+    "nexlev": {
+        "shipments": "fba_shipments_nexlev.csv",
+        "ledger":    "inventory_ledger_nexlev.csv",
+    },
+    "viomi": {
+        "shipments": "fba_shipments_viomi.csv",
+        "ledger":    "inventory_ledger_viomi.csv",
+    },
+    "white mulberry": {
+        "shipments": "fba_shipments_WM.csv",
+        "ledger":    "inventory_ledger_WM.csv",
+    },
+    "audio array": {
+        "shipments": "fba_shipments_Audio Array.csv",
+        "ledger":    "inventory_ledger_Audio Array.csv",
+    },
+    "fossil": {
+        "shipments": "Fossil Replenishment/fba_shipments_fossil.csv",
+        "ledger":    "Fossil Replenishment/inventory_ledger_fossil.csv",
+    },
+}
+
 
 # =================================================
-# DATA LOADERS
+# DATA LOADERS — reads directly from repo files
 # =================================================
 def load_fc_data(account: str):
+    key = account.strip().lower()
+    if key not in ACCOUNT_FILES:
+        raise ValueError(f"Unknown account for FC data: {account}")
 
-    engine = create_engine(os.getenv("DATABASE_URL"))
-
-    shipments = pd.read_sql(
-        "SELECT * FROM shipments WHERE LOWER(account) = %s",
-        engine,
-        params=(account.lower(),)
-    )
-
-    ledger = pd.read_sql(
-        "SELECT * FROM inventory_ledger WHERE LOWER(account) = %s",
-        engine,
-        params=(account.lower(),)
-    )
+    files = ACCOUNT_FILES[key]
+    shipments = get(files["shipments"]).copy()
+    ledger    = get(files["ledger"]).copy()
 
     shipments.columns = shipments.columns.str.strip()
     ledger.columns    = ledger.columns.str.strip()

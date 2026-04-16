@@ -58,10 +58,16 @@ def preload():
         "inventory_amazon_WM.csv",
         "fba_shipments_nexlev.csv",
         "fba_shipments_viomi.csv",
-        "inventory_model_snapshot_China Reorder.csv",
+        "fba_shipments_WM.csv",
+        "fba_shipments_Audio Array.csv",
+        "inventory_ledger_nexlev.csv",
+        "inventory_ledger_viomi.csv",
+        "inventory_ledger_WM.csv",
+        "inventory_ledger_Audio Array.csv",
         "Fossil Replenishment/Fossil Replenishment.xlsx",
         "Fossil Replenishment/Fossil - SOH.xlsx",
         "Fossil Replenishment/fba_shipments_fossil.csv",
+        "Fossil Replenishment/inventory_ledger_fossil.csv",
         "Fossil Replenishment/In-Transit_Open_PO_Fossil.xlsx",
     ]
 
