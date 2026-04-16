@@ -69,12 +69,15 @@ def calculate_final_allocation(
     )
     # ==========================================================
     # STEP 2 — LOAD TRANSFER DATA
+    # (Fossil skips transfers — direct dispatch from Mother Warehouse)
     # ==========================================================
 
-    df_transfer = calculate_fc_transfers(
-        replenish_weeks=replenish_weeks,
-        account=account
-    )
+    df_transfer = None
+    if account.lower() != "fossil":
+        df_transfer = calculate_fc_transfers(
+            replenish_weeks=replenish_weeks,
+            account=account
+        )
 
     if df_transfer is None or df_transfer.empty:
         df_plan["transfer_in"] = 0
