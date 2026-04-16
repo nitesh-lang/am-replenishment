@@ -200,6 +200,12 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
                 df["remarks"] = df.get("remarks_db", pd.Series("", index=df.index)).fillna("")
                 df = df.drop(columns=["remarks_db"], errors="ignore")
 
+        # Always ensure these columns exist (e.g. after reset when DB is empty)
+        if "remarks" not in df.columns:
+            df["remarks"] = ""
+        if "po_requirement" not in df.columns:
+            df["po_requirement"] = 0
+
         conn.close()
 
         return df
