@@ -128,6 +128,18 @@ def calculate_fc_plan(
     shipments_90 = shipments[
         shipments["Shipment Date"] >= cutoff_date
     ].copy()
+
+    # DEBUG — log key values for Fossil to verify file is fresh
+    if account.lower() == "fossil":
+        print(f"🔍 FC PLANNING DEBUG [{account}] replenish_weeks={replenish_weeks}")
+        print(f"   Shipments total rows: {len(shipments)}")
+        print(f"   Last shipment date: {last_date.date()}")
+        print(f"   90-day cutoff: {cutoff_date.date()}")
+        print(f"   Rows in 90-day window: {len(shipments_90)}")
+        # Check FBA66963 DEL5 specifically
+        del5 = shipments_90[(shipments_90["sku"]=="FBA66963") & (shipments_90["FC"]=="DEL5")]
+        print(f"   FBA66963/DEL5 units in window: {del5['Shipped Quantity'].sum()}")
+        print(f"   FBA66963/DEL5 velocity: {del5['Shipped Quantity'].sum()/12.857:.2f}")
     
     # =================================================
     # SALES CHANNEL FILTER
@@ -201,6 +213,12 @@ def calculate_fc_plan(
         .groupby(["MSKU", "Location"], as_index=False)
         .agg(fc_inventory=("Ending Warehouse Balance", "sum"))
     )
+
+    # DEBUG — log ledger values for Fossil
+    if account.lower() == "fossil":
+        del5_led = fc_inventory[(fc_inventory["MSKU"]=="FBA66963") & (fc_inventory["Location"]=="DEL5")]
+        print(f"   Ledger total rows: {len(ledger)}")
+        print(f"   FBA66963/DEL5 FC SOH from ledger: {del5_led['fc_inventory'].sum()}")
     
 
     # =================================================
