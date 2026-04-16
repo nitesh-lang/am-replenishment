@@ -45,8 +45,11 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             df["brand"] = df["brand"].astype(str).str.strip()
             df["model"] = df["model"].astype(str).str.strip()
 
-        # Normalize sales model names — strip bundle descriptions like "UB-01 (AI-04, AM-S1...)"
-        sales_df["model"] = sales_df["model"].str.split("(").str[0].str.strip()
+        # Normalize master model names for joining — strip bundle descriptions like "UB-01 (AI-04...)"
+        # Sales file has full names, master now has full names too — exact match
+        # But keep a normalized key for joining in case of minor differences
+        master_df["model_join"] = master_df["model"].astype(str).str.split("(").str[0].str.strip()
+        sales_df["model_join"]  = sales_df["model"].astype(str).str.split("(").str[0].str.strip()
 
         po_df["model"] = po_df["model"].fillna(po_df["sku"]).astype(str).str.strip()
 
@@ -96,7 +99,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         cb_sales = (
             sales_df[sales_df["channel"] == "1p Sales"]
-            .groupby(["brand", "model"], as_index=False)["units_sold"]
+            .groupby(["brand", "model_join"], as_index=False)["units_sold"]
             .sum()
             .rename(columns={"units_sold": "cb_3m_sales"})
         )
@@ -107,7 +110,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         cambium_sales = (
             sales_df[sales_df["channel"] == "Amazon"]
-            .groupby(["brand", "model"], as_index=False)["units_sold"]
+            .groupby(["brand", "model_join"], as_index=False)["units_sold"]
             .sum()
             .rename(columns={"units_sold": "cambium_3m_sales"})
         )
@@ -115,7 +118,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # =========================
         # INVENTORY
         # =========================
-        ampm_inventory_df = pd.DataFrame(columns=["brand", "model", "ampm_inventory"])
+        ampm_inventory_df = pd.DataFrame(columns=["brand", "model_join", "ampm_inventory"])
 
         if "channel" in inventory_df.columns:
             print("UNIQUE CHANNELS IN INVENTORY:", inventory_df["channel"].str.strip().unique().tolist())
@@ -127,7 +130,8 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             print("AMPM ROWS FOUND:", len(ampm_raw))
 
             if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
-                ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["brand", "model", "ampm_inventory"]]
+                ampm_raw["model_join"] = ampm_raw["model"].astype(str).str.split("(").str[0].str.strip()
+                ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["brand", "model_join", "ampm_inventory"]]
 
             inventory_df = inventory_df[
                 inventory_df["channel"].str.lower() == "1p"
@@ -137,6 +141,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             inventory_df.groupby(["brand", "model"], as_index=False)
             .sum(numeric_only=True)
         )
+        inventory_df["model_join"] = inventory_df["model"].astype(str).str.split("(").str[0].str.strip()
 
         if "qty" in inventory_df.columns:
             inventory_df = inventory_df.rename(
@@ -147,16 +152,18 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # OPEN PO / IN TRANSIT
         # =========================
 
+        po_df["model_join"] = po_df["model"].astype(str).str.split("(").str[0].str.strip()
+
         open_po = (
             po_df[po_df["delivery status"] == "Open PO"]
-            .groupby("model", as_index=False)["accepted quantity"]
+            .groupby("model_join", as_index=False)["accepted quantity"]
             .sum()
             .rename(columns={"accepted quantity": "open_po"})
         )
 
         in_transit = (
             po_df[po_df["delivery status"] == "In-Transit"]
-            .groupby("model", as_index=False)["accepted quantity"]
+            .groupby("model_join", as_index=False)["accepted quantity"]
             .sum()
             .rename(columns={"accepted quantity": "in_transit"})
         )
@@ -170,16 +177,12 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             "china in transit": "china_in_transit"
         })
 
-        df = master_df.merge(cb_sales, on=["brand","model"], how="left")
-
-        df = df.merge(cambium_sales, on=["brand","model"], how="left")
-
-        df = df.merge(inventory_df, on=["brand","model"], how="left")
-        df = df.merge(ampm_inventory_df[["brand", "model", "ampm_inventory"]], on=["brand","model"], how="left")
-
-        df = df.merge(open_po, on="model", how="left")
-
-        df = df.merge(in_transit, on="model", how="left")
+        df = master_df.merge(cb_sales, on=["brand","model_join"], how="left")
+        df = df.merge(cambium_sales, on=["brand","model_join"], how="left")
+        df = df.merge(inventory_df[["brand","model_join","final_cb_qty"]], on=["brand","model_join"], how="left")
+        df = df.merge(ampm_inventory_df[["brand","model_join","ampm_inventory"]], on=["brand","model_join"], how="left")
+        df = df.merge(open_po, on="model_join", how="left")
+        df = df.merge(in_transit, on="model_join", how="left")
 
         df = df.fillna(0)
         df["remarks"] = ""
