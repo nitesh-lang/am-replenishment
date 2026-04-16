@@ -118,28 +118,27 @@ def calculate_fc_plan(
     # FILTER LAST 90 DAYS
     # =================================================
 
-    last_date = shipments["Shipment Date"].max()
+    last_date  = shipments["Shipment Date"].max()
+    first_date = shipments["Shipment Date"].min()
 
-    if pd.isna(last_date):
+    if pd.isna(last_date) or pd.isna(first_date):
         raise ValueError("Shipment Date column contains no valid dates.")
 
-    cutoff_date = last_date - pd.Timedelta(days=90)
+    total_days  = max((last_date - first_date).days + 1, 1)
+    total_weeks = total_days / 7
 
-    shipments_90 = shipments[
-        shipments["Shipment Date"] >= cutoff_date
-    ].copy()
+    # Use ALL data in the file — no arbitrary cutoff
+    # File should contain exactly the sales window you want (e.g. 90 days)
+    shipments_90 = shipments.copy()
 
     # DEBUG — log key values for Fossil to verify file is fresh
     if account.lower() == "fossil":
         print(f"🔍 FC PLANNING DEBUG [{account}] replenish_weeks={replenish_weeks}")
         print(f"   Shipments total rows: {len(shipments)}")
-        print(f"   Last shipment date: {last_date.date()}")
-        print(f"   90-day cutoff: {cutoff_date.date()}")
-        print(f"   Rows in 90-day window: {len(shipments_90)}")
-        # Check FBA66963 DEL5 specifically
-        del5 = shipments_90[(shipments_90["sku"]=="FBA66963") & (shipments_90["FC"]=="DEL5")]
-        print(f"   FBA66963/DEL5 units in window: {del5['Shipped Quantity'].sum()}")
-        print(f"   FBA66963/DEL5 velocity: {del5['Shipped Quantity'].sum()/12.857:.2f}")
+        print(f"   File date range: {first_date.date()} → {last_date.date()} ({total_days} days / {total_weeks:.2f} weeks)")
+        del5 = shipments[(shipments["sku"]=="FBA66963") & (shipments["FC"]=="DEL5")]
+        print(f"   FBA66963/DEL5 units in file: {del5['Shipped Quantity'].sum()}")
+        print(f"   FBA66963/DEL5 velocity: {del5['Shipped Quantity'].sum()/total_weeks:.2f}")
     
     # =================================================
     # SALES CHANNEL FILTER
@@ -170,9 +169,9 @@ def calculate_fc_plan(
 
     fc_velocity["FC"] = fc_velocity["FC"].astype(str).str.strip().str.upper()
 
-    # Convert 90-day to weekly velocity
+    # Convert total period to weekly velocity
     fc_velocity["weekly_velocity"] = (
-        fc_velocity["total_units_90d"] / 12.857
+        fc_velocity["total_units_90d"] / total_weeks
     )
 
     fc_velocity["weekly_velocity"] = fc_velocity[
@@ -218,7 +217,12 @@ def calculate_fc_plan(
     if account.lower() == "fossil":
         del5_led = fc_inventory[(fc_inventory["MSKU"]=="FBA66963") & (fc_inventory["Location"]=="DEL5")]
         print(f"   Ledger total rows: {len(ledger)}")
-        print(f"   FBA66963/DEL5 FC SOH from ledger: {del5_led['fc_inventory'].sum()}")
+        print(f"   FBA66963/DEL5 FC SOH: {del5_led['fc_inventory'].sum()}")
+        del5_vel = fc_velocity[(fc_velocity["sku"]=="FBA66963") & (fc_velocity["FC"]=="DEL5")]
+        if len(del5_vel):
+            v = del5_vel['weekly_velocity'].values[0]
+            soh = del5_led['fc_inventory'].sum()
+            print(f"   FBA66963/DEL5 → velocity={v:.2f}, target_8w={v*8:.1f}, po_req_8w={max(0,v*8-soh):.1f}")
     
 
     # =================================================
