@@ -134,16 +134,7 @@ def get_fc_final(
             }
             df["cluster"] = df["fulfillment_center"].str.upper().map(FC_CLUSTER).fillna("-")
 
-            # cluster PO = sum of send_qty per model+cluster — use model not sku (sku may be blank)
-            cluster_po = (
-                df.groupby(["model", "cluster"])["send_qty"]
-                .sum()
-                .reset_index()
-                .rename(columns={"send_qty": "cluster_po_calc"})
-            )
-            df = df.merge(cluster_po, on=["model", "cluster"], how="left")
-
-            # cluster in-transit = sum of in_transit_qty per model+cluster (use model not sku to avoid blank SKU grouping)
+            # cluster in-transit = sum of in_transit_qty per model+cluster
             cluster_it = (
                 df.groupby(["model", "cluster"])["in_transit_qty"]
                 .sum()
@@ -152,6 +143,35 @@ def get_fc_final(
             )
             df = df.merge(cluster_it, on=["model", "cluster"], how="left")
             df["cluster_in_transit"] = df["cluster_in_transit"].fillna(0).astype(int)
+
+            # cluster SOH = sum of fc_inventory per model+cluster
+            cluster_soh = (
+                df.groupby(["model", "cluster"])["fc_inventory"]
+                .sum()
+                .reset_index()
+                .rename(columns={"fc_inventory": "cluster_soh"})
+            )
+            df = df.merge(cluster_soh, on=["model", "cluster"], how="left")
+            df["cluster_soh"] = df["cluster_soh"].fillna(0)
+
+            # cluster target = sum of target_cover_units per model+cluster
+            cluster_target = (
+                df.groupby(["model", "cluster"])["target_cover_units"]
+                .sum()
+                .reset_index()
+                .rename(columns={"target_cover_units": "cluster_target"})
+            )
+            df = df.merge(cluster_target, on=["model", "cluster"], how="left")
+            df["cluster_target"] = df["cluster_target"].fillna(0)
+
+            # cluster PO = max(0, cluster_target - cluster_soh - cluster_in_transit)
+            # This nets existing SOH across ALL FCs in cluster against combined target
+            df["cluster_po_calc"] = (
+                df["cluster_target"] - df["cluster_soh"] - df["cluster_in_transit"]
+            ).clip(lower=0).round(0).astype(int)
+
+            # Drop helper columns
+            df.drop(columns=["cluster_soh", "cluster_target"], inplace=True)
 
             # load saved cluster PO overrides — only use DB value if it differs from calc
             # (i.e. user deliberately edited it)
