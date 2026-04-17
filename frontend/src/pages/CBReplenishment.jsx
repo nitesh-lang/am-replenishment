@@ -163,34 +163,50 @@ const validToWeeks = availableWeeks;
   ============================================================ */
 
   function exportCSV() {
-
     if (!sortedData.length) return;
 
-    const headerMap = { "hazmat_type": "ASIN Sort Details" };
-    const headers = Object.keys(sortedData[0]).map(k => headerMap[k] || k).join(",");
+    const exportColumns = [
+      "model", "asin", "sku",
+      "china_in_transit", "final_cb_qty", "ampm_inventory",
+      "cb_3m_sales", "cambium_3m_sales", "avg_weekly_sales",
+      "estimated_qty", "deficiency", "open_po", "in_transit",
+      "asin_sort_details", "po_requirement", "remarks"
+    ];
 
-    const rows = sortedData
-      .map((row) =>
-        Object.keys(row).map(key => {
-          const val = row[key];
-          if (["avg_weekly_sales","estimated_qty","deficiency"].includes(key)) {
-            return `"${Math.round(val)}"`;
-          }
-          return `"${val ?? ""}"`;
-        }).join(",")
-      )
-      .join("\n");
+    const labelMap = {
+      model:             "MODEL",
+      asin:              "ASIN",
+      sku:               "SKU",
+      china_in_transit:  "CHINA IN-TRANSIT",
+      final_cb_qty:      "CB SOH",
+      ampm_inventory:    "MOTHER WAREHOUSE",
+      cb_3m_sales:       "CB SALES",
+      cambium_3m_sales:  "CAMBIUM SALES",
+      avg_weekly_sales:  "AVG WEEKLY SALES",
+      estimated_qty:     "ESTIMATED QTY",
+      deficiency:        "STOCK SHORTFALL",
+      open_po:           "OPEN PO",
+      in_transit:        "IN-TRANSIT",
+      asin_sort_details: "ASIN SORT DETAILS",
+      po_requirement:    "PO REQUIREMENT",
+      remarks:           "REMARKS",
+    };
 
-    const blob = new Blob([headers + "\n" + rows], {
-      type: "text/csv;charset=utf-8;",
-    });
+    const roundCols = ["avg_weekly_sales", "estimated_qty", "deficiency"];
 
+    const headers = exportColumns.map(k => labelMap[k] || k).join(",");
+    const rows = sortedData.map(row =>
+      exportColumns.map(key => {
+        const val = row[key];
+        const out = roundCols.includes(key) ? Math.round(val ?? 0) : (val ?? "");
+        return `"${out}"`;
+      }).join(",")
+    ).join("\n");
+
+    const blob = new Blob([headers + "\n" + rows], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
-
     link.href = URL.createObjectURL(blob);
-
     link.download = "cb_replenishment.csv";
-
     link.click();
   }
 
@@ -369,7 +385,24 @@ const validToWeeks = availableWeeks;
                     onClick={() => toggleSort(col)}
                     className="px-4 py-3 cursor-pointer"
                   >
-                    {col === "hazmat_type" ? "ASIN Sort Details" : col === "ampm_inventory" ? "Mother Warehouse" : col}
+                    {({
+                      model: "Model",
+                      asin: "ASIN",
+                      sku: "SKU",
+                      china_in_transit: "China In-Transit",
+                      final_cb_qty: "CB SOH",
+                      ampm_inventory: "Mother Warehouse",
+                      cb_3m_sales: "CB Sales",
+                      cambium_3m_sales: "Cambium Sales",
+                      avg_weekly_sales: "Avg Weekly Sales",
+                      estimated_qty: "Estimated Qty",
+                      deficiency: "Stock Shortfall",
+                      open_po: "Open PO",
+                      in_transit: "In-Transit",
+                      asin_sort_details: "ASIN Sort Details",
+                      po_requirement: "PO Requirement",
+                      remarks: "Remarks",
+                    })[col] || col}
                     {sortConfig.key === col ? (sortConfig.direction === "asc" ? " ▲" : " ▼") : " ↕"}
                   </th>
                 ))}
