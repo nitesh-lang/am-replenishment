@@ -468,7 +468,7 @@ const validToWeeks = availableWeeks;
                   </td>
 
                   <td className="px-4 py-3">
-                    {row.hazmat_type || "-"}
+                    {row.asin_sort_details || "-"}
                   </td>
 
                   <td className="px-4 py-3">
