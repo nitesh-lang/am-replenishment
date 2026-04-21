@@ -119,6 +119,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # INVENTORY
         # =========================
         ampm_inventory_df = pd.DataFrame(columns=["brand", "model_join", "ampm_inventory"])
+        china_in_transit_df = pd.DataFrame(columns=["model_join", "china_in_transit"])
 
         if "channel" in inventory_df.columns:
             print("UNIQUE CHANNELS IN INVENTORY:", inventory_df["channel"].str.strip().unique().tolist())
@@ -132,6 +133,22 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
                 ampm_raw["model_join"] = ampm_raw["model"].astype(str).str.split("(").str[0].str.strip()
                 ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["brand", "model_join", "ampm_inventory"]]
+
+            # =========================
+            # CHINA IN-TRANSIT (Pipeline channel from inventory snapshots)
+            # =========================
+            pipeline_raw = inventory_df[
+                inventory_df["channel"].str.strip().str.lower() == "pipeline"
+            ].copy()
+
+            if "qty" in pipeline_raw.columns and len(pipeline_raw) > 0:
+                pipeline_raw["model_join"] = pipeline_raw["model"].astype(str).str.split("(").str[0].str.strip()
+                china_in_transit_df = (
+                    pipeline_raw.groupby("model_join", as_index=False)["qty"]
+                    .sum()
+                    .rename(columns={"qty": "china_in_transit"})
+                )
+                print("PIPELINE (China In-Transit) ROWS FOUND:", len(china_in_transit_df))
 
             inventory_df = inventory_df[
                 inventory_df["channel"].str.lower() == "1p"
@@ -174,13 +191,17 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         master_df = master_df.rename(columns={
             "hazmat type": "hazmat_type",
-            "china in transit": "china_in_transit"
         })
+
+        # Drop static china_in_transit from master — now sourced from Pipeline inventory
+        if "china in transit" in master_df.columns:
+            master_df = master_df.drop(columns=["china in transit"])
 
         df = master_df.merge(cb_sales, on=["brand","model_join"], how="left")
         df = df.merge(cambium_sales, on=["brand","model_join"], how="left")
         df = df.merge(inventory_df[["brand","model_join","final_cb_qty"]], on=["brand","model_join"], how="left")
         df = df.merge(ampm_inventory_df[["brand","model_join","ampm_inventory"]], on=["brand","model_join"], how="left")
+        df = df.merge(china_in_transit_df, on="model_join", how="left")
         df = df.merge(open_po, on="model_join", how="left")
         df = df.merge(in_transit, on="model_join", how="left")
 
