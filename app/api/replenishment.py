@@ -128,7 +128,7 @@ def get_fc_final(
                 "AMD2": "BOM", "PNQ3": "BOM", "ISK3": "BOM",
                 "MAA4": "TN",  "CJB1": "TN",
                 "DEL2": "DEL", "DEL4": "DEL", "DEL5": "DEL",
-                "DED4": "DEL", "LKO1": "DEL",
+                "DED3": "DEL", "DED4": "DEL", "LKO1": "DEL",
                 "HYD3": "TEL", "HYD8": "TEL",
                 "CCX1": "WB",
             }

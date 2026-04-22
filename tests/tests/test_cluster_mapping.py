@@ -16,7 +16,7 @@ FC_CLUSTER = {
     "AMD2": "BOM", "PNQ3": "BOM", "ISK3": "BOM",
     "MAA4": "TN",  "CJB1": "TN",
     "DEL2": "DEL", "DEL4": "DEL", "DEL5": "DEL",
-    "DED4": "DEL", "LKO1": "DEL",
+    "DED3": "DEL", "DED4": "DEL", "LKO1": "DEL",
     "HYD3": "TEL", "HYD8": "TEL",
     "CCX1": "WB",
 }
@@ -37,7 +37,7 @@ class TestClusterMapping:
             assert FC_CLUSTER[fc] == "TN", f"{fc} should map to TN"
 
     def test_all_del_fcs(self):
-        for fc in ["DEL2", "DEL4", "DEL5", "DED4", "LKO1"]:
+        for fc in ["DEL2", "DEL4", "DEL5", "DED3", "DED4", "LKO1"]:
             assert FC_CLUSTER[fc] == "DEL", f"{fc} should map to DEL"
 
     def test_all_tel_fcs(self):
@@ -52,8 +52,8 @@ class TestClusterMapping:
         assert "UNKNOWN_FC" not in FC_CLUSTER
 
     def test_total_fc_count(self):
-        """Exactly 19 FCs mapped."""
-        assert len(FC_CLUSTER) == 19
+        """Exactly 20 FCs mapped."""
+        assert len(FC_CLUSTER) == 20
 
     def test_cluster_count(self):
         """6 clusters: BLR, BOM, TN, DEL, TEL, WB."""
