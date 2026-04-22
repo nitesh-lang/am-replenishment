@@ -227,9 +227,9 @@ def calculate_final_allocation(
                 .agg(in_transit_qty=("packing_list_qty", "sum"))
             )
 
-            # Open PO: use PO Qty (non In-Transit rows)
+            # Open PO: use PO Qty
             open_po = (
-                po_df[po_df["remark"] != "In-Transit"]
+                po_df[po_df["remark"] == "Open PO"]
                 .groupby(["Item No", "FC"], as_index=False)
                 .agg(open_po_qty=("po_qty", "sum"))
             )
