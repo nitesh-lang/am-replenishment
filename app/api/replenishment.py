@@ -144,6 +144,16 @@ def get_fc_final(
             df = df.merge(cluster_it, on=["model", "cluster"], how="left")
             df["cluster_in_transit"] = df["cluster_in_transit"].fillna(0).astype(int)
 
+            # cluster open PO = sum of open_po_qty per model+cluster
+            cluster_op = (
+                df.groupby(["model", "cluster"])["open_po_qty"]
+                .sum()
+                .reset_index()
+                .rename(columns={"open_po_qty": "cluster_open_po"})
+            )
+            df = df.merge(cluster_op, on=["model", "cluster"], how="left")
+            df["cluster_open_po"] = df["cluster_open_po"].fillna(0).astype(int)
+
             # cluster SOH = sum of fc_inventory per model+cluster
             cluster_soh = (
                 df.groupby(["model", "cluster"])["fc_inventory"]
@@ -164,10 +174,10 @@ def get_fc_final(
             df = df.merge(cluster_target, on=["model", "cluster"], how="left")
             df["cluster_target"] = df["cluster_target"].fillna(0)
 
-            # cluster PO = max(0, cluster_target - cluster_soh - cluster_in_transit)
-            # This nets existing SOH across ALL FCs in cluster against combined target
+            # cluster PO = max(0, cluster_target - cluster_soh - cluster_in_transit - cluster_open_po)
+            # This nets existing SOH + in-transit + open PO across ALL FCs in cluster against combined target
             df["cluster_po_calc"] = (
-                df["cluster_target"] - df["cluster_soh"] - df["cluster_in_transit"]
+                df["cluster_target"] - df["cluster_soh"] - df["cluster_in_transit"] - df["cluster_open_po"]
             ).clip(lower=0).round(0).astype(int)
 
             # Drop helper columns
