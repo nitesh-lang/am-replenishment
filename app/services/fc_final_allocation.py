@@ -256,22 +256,36 @@ def calculate_final_allocation(
             ).clip(lower=0)
             df_plan["allocation_logic"] = "send_qty = max(0, weekly_velocity * replenish_weeks - ledger_stock - in_transit - open_po)"
 
-            # Add missing SKU+FC rows from In-Transit file (no sales/ledger history)
+            # Add missing SKU+FC rows from In-Transit AND Open PO file (no sales/ledger history)
             po_df["item_no_upper"] = po_df["Item No"].astype(str).str.strip().str.upper()
             po_df["fc_upper"]      = po_df["FC"].astype(str).str.strip().str.upper()
 
-            # Get SKU+FC combos in In-Transit file but not in df_plan
+            # Get SKU+FC combos already in df_plan
             plan_keys = set(zip(
                 df_plan["model"].astype(str).str.strip().str.upper(),
                 df_plan["fulfillment_center"].astype(str).str.strip().str.upper()
             ))
+
+            # Aggregate In-Transit and Open PO per Item No + FC
             it_rows = (
                 po_df[po_df["remark"] == "In-Transit"]
                 .groupby(["item_no_upper", "fc_upper"], as_index=False)
                 .agg(in_transit_qty=("packing_list_qty", "sum"))
             )
-            missing = it_rows[
-                ~it_rows.apply(lambda r: (r["item_no_upper"], r["fc_upper"]) in plan_keys, axis=1)
+            op_rows = (
+                po_df[po_df["remark"] == "Open PO"]
+                .groupby(["item_no_upper", "fc_upper"], as_index=False)
+                .agg(open_po_qty=("po_qty", "sum"))
+            )
+
+            # Merge In-Transit and Open PO into one view per Item No + FC
+            po_combined = it_rows.merge(op_rows, on=["item_no_upper", "fc_upper"], how="outer").fillna(0)
+            po_combined["in_transit_qty"] = po_combined["in_transit_qty"].astype(int)
+            po_combined["open_po_qty"] = po_combined["open_po_qty"].astype(int)
+
+            # Find rows not already in df_plan
+            missing = po_combined[
+                ~po_combined.apply(lambda r: (r["item_no_upper"], r["fc_upper"]) in plan_keys, axis=1)
             ]
 
             if len(missing) > 0:
@@ -322,9 +336,9 @@ def calculate_final_allocation(
                         "hazmat_type":        "-",
                         "master_carton":      "24",
                         "remarks":            "",
-                        "allocation_logic":   "in_transit_only",
+                        "allocation_logic":   "in_transit_or_open_po_only",
                         "in_transit_qty":     int(row["in_transit_qty"]),
-                        "open_po_qty":        0,
+                        "open_po_qty":        int(row["open_po_qty"]),
                     })
                 if new_rows:
                     df_plan = pd.concat([df_plan, pd.DataFrame(new_rows)], ignore_index=True)
