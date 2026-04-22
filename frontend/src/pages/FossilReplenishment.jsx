@@ -169,7 +169,7 @@ export default function FossilReplenishment() {
       { label: "Total Inventory",                 key: "Total Inventory" },
       { label: "Fossil SOH",                      key: "Fossil SOH" },
       { label: "Required Inventory",              key: "Required Inventory" },
-      { label: "Replenishment Qty",               key: "Replenishment Qty" },
+      { label: "PO Qty",               key: "Replenishment Qty" },
     ];
 
     const headers = columns.map(c => `"${c.label}"`).join(",");
@@ -446,7 +446,7 @@ export default function FossilReplenishment() {
                   { label: "Total Inventory",                 key: "Total Inventory" },
                   { label: "Fossil SOH",                      key: "Fossil SOH" },
                   { label: "Required Inventory",              key: "Required Inventory" },
-                  { label: "Replenishment Qty",               key: "Replenishment Qty" },
+                  { label: "PO Qty",               key: "Replenishment Qty" },
                 ].map(({ label, key }) => (
                   <th
                     key={key}
