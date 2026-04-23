@@ -260,6 +260,26 @@ def calculate_final_allocation(
             po_df["item_no_upper"] = po_df["Item No"].astype(str).str.strip().str.upper()
             po_df["fc_upper"]      = po_df["FC"].astype(str).str.strip().str.upper()
 
+            # Build ledger lookup for skeleton rows — so fc_inventory reflects actual stock
+            try:
+                from app.services.fc_planning import load_fc_data
+                _, ledger_raw = load_fc_data("fossil")
+                ledger_raw = ledger_raw[ledger_raw["Disposition"] == "SELLABLE"].copy()
+                ledger_raw["MSKU"] = ledger_raw["MSKU"].astype(str).str.strip().str.upper()
+                ledger_raw["MSKU"] = ledger_raw["MSKU"].str.replace(r"^FB[^A]", "FBA", regex=True)
+                ledger_raw["Location"] = ledger_raw["Location"].astype(str).str.strip().str.upper()
+                ledger_raw["Ending Warehouse Balance"] = pd.to_numeric(ledger_raw["Ending Warehouse Balance"], errors="coerce").fillna(0)
+                # Build SKU→model mapping from fossil master
+                sku_to_model = fossil_master.set_index("sku")["model"].to_dict() if "sku" in fossil_master.columns else {}
+                ledger_raw["model_upper"] = ledger_raw["MSKU"].map(sku_to_model).fillna("").astype(str).str.upper()
+                ledger_lookup = (
+                    ledger_raw.groupby(["model_upper", "Location"], as_index=False)
+                    .agg(fc_inventory=("Ending Warehouse Balance", "sum"))
+                )
+            except Exception as e:
+                print(f"⚠️ Ledger lookup for skeleton rows failed: {e}")
+                ledger_lookup = pd.DataFrame(columns=["model_upper", "Location", "fc_inventory"])
+
             # Get SKU+FC combos already in df_plan
             plan_keys = set(zip(
                 df_plan["model"].astype(str).str.strip().str.upper(),
@@ -311,6 +331,15 @@ def calculate_final_allocation(
                             if isinstance(val, float) and math.isnan(val): return default
                         except: pass
                         return val if val != "" else default
+                    # Look up actual ledger inventory for this model+FC
+                    ledger_inv = 0
+                    if not ledger_lookup.empty:
+                        match = ledger_lookup[
+                            (ledger_lookup["model_upper"] == model) &
+                            (ledger_lookup["Location"] == fc)
+                        ]
+                        if len(match):
+                            ledger_inv = int(match["fc_inventory"].sum())
                     new_rows.append({
                         "model":              model,
                         "sku":                safe(mr.get("sku", ""), ""),
@@ -323,10 +352,10 @@ def calculate_final_allocation(
                         "fulfillment_center": fc,
                         "weekly_velocity":    0,
                         "total_units_sold":   0,
-                        "fc_inventory":       0,
+                        "fc_inventory":       ledger_inv,
                         "transfer_in":        0,
                         "target_cover_units": 0,
-                        "post_transfer_stock":0,
+                        "post_transfer_stock":ledger_inv,
                         "coverage_gap_units": 0,
                         "send_qty":           0,
                         "expected_units":     0,
