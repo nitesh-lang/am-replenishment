@@ -98,18 +98,20 @@ def china_reorder_logic(
         sales_df["model"]
         .astype(str)
         .str.strip()
+        .str.upper()
     )
 
     inv_df["model"] = (
         inv_df["model"]
         .astype(str)
         .str.strip()
+        .str.upper()
     )
 
     # Normalize sales model names — strip variant suffixes like "ETC-07-WH" → "ETC-07"
     inv_models = set(inv_df["model"].unique())
     def normalize_model(m):
-        m = str(m).strip()
+        m = str(m).strip().upper()
         if m in inv_models:
             return m
         # Strip after last '-' if result matches inventory model
