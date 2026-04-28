@@ -256,6 +256,17 @@ def calculate_replenishment(
     # ---------------------------------------------
     sales_n = get_last_n_weeks_sales(sales, sales_window)
 
+    # Filter sales by brand to prevent cross-brand model collisions (e.g. PB-01 in Nexlev vs Audio Array)
+    ACCOUNT_BRAND_MAP = {
+        "NEXLEV": "Nexlev",
+        "VIOMI": "Viomi",
+        "AUDIO ARRAY": "Audio Array",
+        "WHITE MULBERRY": "White Mulberry",
+    }
+    brand_filter = ACCOUNT_BRAND_MAP.get(account.upper())
+    if brand_filter and "brand" in sales_n.columns:
+        sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == brand_filter]
+
     if account.upper() == "AUDIO ARRAY":
         sales_n = sales_n[sales_n["channel"] == "Amazon"]
 
