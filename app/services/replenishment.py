@@ -257,15 +257,16 @@ def calculate_replenishment(
     sales_n = get_last_n_weeks_sales(sales, sales_window)
 
     # Filter sales by brand to prevent cross-brand model collisions (e.g. PB-01 in Nexlev vs Audio Array)
-    ACCOUNT_BRAND_MAP = {
-        "NEXLEV": "Nexlev",
-        "VIOMI": "Viomi",
-        "AUDIO ARRAY": "Audio Array",
-        "WHITE MULBERRY": "White Mulberry",
-    }
-    brand_filter = ACCOUNT_BRAND_MAP.get(account.upper())
-    if brand_filter and "brand" in sales_n.columns:
-        sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == brand_filter]
+    # Nexlev and Viomi share the same sales data (both tagged as "Nexlev" brand)
+    # Audio Array and White Mulberry have their own brand tags
+    if "brand" in sales_n.columns:
+        if account.upper() in ("NEXLEV", "VIOMI"):
+            # Exclude other brands — keep only Nexlev (shared by both accounts)
+            sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "Nexlev"]
+        elif account.upper() == "AUDIO ARRAY":
+            sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "Audio Array"]
+        elif account.upper() == "WHITE MULBERRY":
+            sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "White Mulberry"]
 
     if account.upper() == "AUDIO ARRAY":
         sales_n = sales_n[sales_n["channel"] == "Amazon"]
