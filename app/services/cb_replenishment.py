@@ -42,7 +42,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # =========================
 
         for df in [master_df, sales_df, inventory_df]:
-            df["brand"] = df["brand"].astype(str).str.strip()
+            df["brand"] = df["brand"].astype(str).str.strip().str.title()
             df["model"] = df["model"].astype(str).str.strip()
 
         # Normalize master model names for joining — strip bundle descriptions like "UB-01 (AI-04...)"
@@ -154,10 +154,17 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
                 inventory_df["channel"].str.lower() == "1p"
             ]
 
-        inventory_df = (
-            inventory_df.groupby(["brand", "model"], as_index=False)
-            .sum(numeric_only=True)
-        )
+        # Group 1P inventory by ASIN — one model can have multiple ASINs
+        if "asin" in inventory_df.columns:
+            inventory_df = (
+                inventory_df.groupby(["brand", "model", "asin"], as_index=False)
+                .sum(numeric_only=True)
+            )
+        else:
+            inventory_df = (
+                inventory_df.groupby(["brand", "model"], as_index=False)
+                .sum(numeric_only=True)
+            )
         inventory_df["model_join"] = inventory_df["model"].astype(str).str.split("(").str[0].str.strip()
 
         if "qty" in inventory_df.columns:
@@ -199,7 +206,10 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         df = master_df.merge(cb_sales, on=["brand","model_join"], how="left")
         df = df.merge(cambium_sales, on=["brand","model_join"], how="left")
-        df = df.merge(inventory_df[["brand","model_join","final_cb_qty"]], on=["brand","model_join"], how="left")
+        if "asin" in inventory_df.columns:
+            df = df.merge(inventory_df[["asin","final_cb_qty"]], on="asin", how="left")
+        else:
+            df = df.merge(inventory_df[["brand","model_join","final_cb_qty"]], on=["brand","model_join"], how="left")
         df = df.merge(ampm_inventory_df[["brand","model_join","ampm_inventory"]], on=["brand","model_join"], how="left")
         df = df.merge(china_in_transit_df, on="model_join", how="left")
         df = df.merge(open_po, on="model_join", how="left")
