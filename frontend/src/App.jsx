@@ -1,6 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
+import { AuthProvider } from "./auth/AuthContext";
+import ProtectedRoute from "./auth/ProtectedRoute";
+
 import Layout from "./layout/Layout";
+import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
 import Replenishment from "./pages/Replenishment";
 import FCAllocation from "./pages/FCAllocation";
 import SalesAnalytics from "./pages/SalesAnalytics";
@@ -12,33 +17,75 @@ import WMReplenishment from "./pages/WMReplenishment";
 import FossilReplenishment from "./pages/FossilReplenishment";
 import Dashboard from "./pages/Dashboard";
 
+function ProtectedLayout({ children }) {
+  return (
+    <ProtectedRoute>
+      <Layout>{children}</Layout>
+    </ProtectedRoute>
+  );
+}
+
 function App() {
   return (
-    <BrowserRouter>
-      <Layout>
+    <AuthProvider>
+      <BrowserRouter>
         <Routes>
+
+          {/* Public Routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
 
           {/* Default Redirect */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-          {/* Main Pages */}
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/replenishment" element={<Replenishment />} />
-          <Route path="/fc-allocation" element={<FCAllocation />} />
-          <Route path="/sales-analytics" element={<SalesAnalytics />} />
-          <Route path="/region-sales" element={<RegionSales />} />
-          <Route path="/china-reorder" element={<ChinaReorder />} />
-          <Route path="/china-reorder-working" element={<ChinaReorderWorking />} />
-          <Route path="/cb-replenishment" element={<CBReplenishment />} />
-          <Route path="/wm-replenishment" element={<WMReplenishment />} />
-          <Route path="/fossil-replenishment" element={<FossilReplenishment />} />
+          {/* Protected Pages */}
+          <Route
+            path="/dashboard"
+            element={<ProtectedLayout><Dashboard /></ProtectedLayout>}
+          />
+          <Route
+            path="/replenishment"
+            element={<ProtectedLayout><Replenishment /></ProtectedLayout>}
+          />
+          <Route
+            path="/fc-allocation"
+            element={<ProtectedLayout><FCAllocation /></ProtectedLayout>}
+          />
+          <Route
+            path="/sales-analytics"
+            element={<ProtectedLayout><SalesAnalytics /></ProtectedLayout>}
+          />
+          <Route
+            path="/region-sales"
+            element={<ProtectedLayout><RegionSales /></ProtectedLayout>}
+          />
+          <Route
+            path="/china-reorder"
+            element={<ProtectedLayout><ChinaReorder /></ProtectedLayout>}
+          />
+          <Route
+            path="/china-reorder-working"
+            element={<ProtectedLayout><ChinaReorderWorking /></ProtectedLayout>}
+          />
+          <Route
+            path="/cb-replenishment"
+            element={<ProtectedLayout><CBReplenishment /></ProtectedLayout>}
+          />
+          <Route
+            path="/wm-replenishment"
+            element={<ProtectedLayout><WMReplenishment /></ProtectedLayout>}
+          />
+          <Route
+            path="/fossil-replenishment"
+            element={<ProtectedLayout><FossilReplenishment /></ProtectedLayout>}
+          />
 
           {/* Catch All Route */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
         </Routes>
-      </Layout>
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
