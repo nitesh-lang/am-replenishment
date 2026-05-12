@@ -179,6 +179,26 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     master_df["Fossil Weekly Sales"] = master_df["3 Months Gross Sales"] / week_count
 
     # =====================
+    # LAST 4 WEEKS AVG (independent of selected window)
+    # Used to bump Required Inventory for FP/Discount when
+    # recent demand outpaces the 12-week average.
+    # =====================
+
+    last_4_weeks = sorted(available_weeks)[-4:] if available_weeks else []
+    last_4_count = max(len(last_4_weeks), 1)
+    last_4_sales = fossil_sales[fossil_sales["week_num"].isin(last_4_weeks)]
+    last_4_agg = (
+        last_4_sales.groupby("sku")["units_sold"]
+        .sum()
+        .reset_index()
+        .rename(columns={"sku": "SKU", "units_sold": "_last_4_sum"})
+    )
+    master_df = master_df.merge(last_4_agg, on="SKU", how="left")
+    master_df["_last_4_sum"] = master_df["_last_4_sum"].fillna(0)
+    master_df["Last 4 Weeks Top Avg"] = master_df["_last_4_sum"] / last_4_count
+    master_df = master_df.drop(columns=["_last_4_sum"])
+
+    # =====================
     # WEEKS OF COVER (per row)
     # Driven by Brand x Assortment Type matrix
     # Unless cover_weeks override is passed
@@ -204,11 +224,18 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
 
     # =====================
     # REQUIRED INVENTORY
+    # For FP/Discount, use the higher of 12-week avg vs last-4-week avg so
+    # recent demand spikes flow through into the reorder.
     # =====================
 
-    master_df["Required Inventory"] = (
-        master_df["Fossil Weekly Sales"] * master_df["Weeks of Cover"]
-    )
+    def _effective_weekly_sales(row):
+        a = str(row.get("Assortment Type", "")).strip().upper()
+        if a in ("FP", "FULL PRICE", "DISCOUNT", "DISCOUNTED"):
+            return max(row["Fossil Weekly Sales"], row["Last 4 Weeks Top Avg"])
+        return row["Fossil Weekly Sales"]
+
+    effective_sales = master_df.apply(_effective_weekly_sales, axis=1)
+    master_df["Required Inventory"] = effective_sales * master_df["Weeks of Cover"]
 
     # =====================
     # REPLENISHMENT QTY

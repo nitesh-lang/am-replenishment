@@ -162,6 +162,7 @@ export default function FossilReplenishment() {
       { label: "Assortment Type",                 key: "Assortment Type" },
       { label: "Total Units Sold",                key: "3 Months Gross Sales" },
       { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
+      { label: "Last 4 Weeks Top Avg",            key: "Last 4 Weeks Top Avg" },
       { label: "Cambium SOH",                     key: "Cambium SOH" },
       { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
       { label: "In Transit PO",                   key: "In Transit PO" },
@@ -176,7 +177,7 @@ export default function FossilReplenishment() {
     const rows = filteredData.map(row =>
       columns.map(({ key }) => {
         const val = row[key];
-        if (key === "Fossil Weekly Sales") return `"${Number(val).toFixed(2)}"`;
+        if (["Fossil Weekly Sales", "Last 4 Weeks Top Avg"].includes(key)) return `"${Number(val || 0).toFixed(2)}"`;
         if (["Required Inventory", "Replenishment Qty"].includes(key)) return `"${Math.round(val)}"`;
         return `"${val ?? ""}"`;
       }).join(",")
@@ -439,6 +440,7 @@ export default function FossilReplenishment() {
                   { label: "Assortment Type",                 key: "Assortment Type" },
                   { label: "Total Units Sold",                key: "3 Months Gross Sales" },
                   { label: "Fossil Weekly Sales",             key: "Fossil Weekly Sales" },
+                  { label: "Last 4 Weeks Top Avg",            key: "Last 4 Weeks Top Avg" },
                   { label: "Cambium SOH",                     key: "Cambium SOH" },
                   { label: "Andheri/Goregaon sellable Stock", key: "Andheri/Goregaon sellable Stock" },
                   { label: "In Transit PO",                   key: "In Transit PO" },
@@ -476,6 +478,7 @@ export default function FossilReplenishment() {
                   </td>
                   <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
+                  <td className="px-4 py-3">{row["Last 4 Weeks Top Avg"]?.toFixed(2)}</td>
                   <td className="px-4 py-3">{row["Cambium SOH"]}</td>
                   <td className="px-4 py-3">{row["Andheri/Goregaon sellable Stock"]}</td>
                   <td className="px-4 py-3">{row["In Transit PO"]}</td>
