@@ -177,7 +177,10 @@ export default function FossilReplenishment() {
     const rows = filteredData.map(row =>
       columns.map(({ key }) => {
         const val = row[key];
-        if (["Fossil Weekly Sales", "Last 4 Weeks Top Avg"].includes(key)) return `"${Number(val || 0).toFixed(2)}"`;
+        if (key === "Last 4 Weeks Top Avg") {
+          return row["Assortment Type"] === "VD" ? `""` : `"${Number(val || 0).toFixed(2)}"`;
+        }
+        if (key === "Fossil Weekly Sales") return `"${Number(val || 0).toFixed(2)}"`;
         if (["Required Inventory", "Replenishment Qty"].includes(key)) return `"${Math.round(val)}"`;
         return `"${val ?? ""}"`;
       }).join(",")
@@ -478,7 +481,9 @@ export default function FossilReplenishment() {
                   </td>
                   <td className="px-4 py-3">{row["3 Months Gross Sales"]}</td>
                   <td className="px-4 py-3">{row["Fossil Weekly Sales"]?.toFixed(2)}</td>
-                  <td className="px-4 py-3">{row["Last 4 Weeks Top Avg"]?.toFixed(2)}</td>
+                  <td className="px-4 py-3">
+                    {row["Assortment Type"] === "VD" ? "-" : row["Last 4 Weeks Top Avg"]?.toFixed(2)}
+                  </td>
                   <td className="px-4 py-3">{row["Cambium SOH"]}</td>
                   <td className="px-4 py-3">{row["Andheri/Goregaon sellable Stock"]}</td>
                   <td className="px-4 py-3">{row["In Transit PO"]}</td>
