@@ -336,18 +336,27 @@ def calculate_replenishment(
     df["required_units"] = (df["sales_velocity"] * replenish_weeks).round(0)
 
     # ---------------------------------------------
-    # FBA REPLENISHMENT
+    # FBA REPLENISHMENT (raw need = required - on-hand FBA)
     # ---------------------------------------------
-    df["replenishment_qty"] = (
+    raw_replenishment = (
         df["required_units"] - df["amazon_inventory"]
     ).clip(lower=0)
 
     # ---------------------------------------------
-    # WAREHOUSE SHORTFALL
+    # WAREHOUSE SHORTFALL — computed BEFORE capping so we still
+    # surface how much the mother warehouse is short of the full need.
     # ---------------------------------------------
     df["warehouse_shortfall"] = (
-        df["replenishment_qty"] - df["ampm_inventory"]
+        raw_replenishment - df["ampm_inventory"]
     ).clip(lower=0)
+
+    # ---------------------------------------------
+    # CAP AT MOTHER WAREHOUSE (AMPM) STOCK
+    # Can't ship more than the mother warehouse actually has.
+    # ---------------------------------------------
+    df["replenishment_qty"] = pd.concat(
+        [raw_replenishment, df["ampm_inventory"]], axis=1
+    ).min(axis=1)
 
     # ---------------------------------------------
     # FLAGS
@@ -383,6 +392,10 @@ def calculate_replenishment(
     df["carton_break_flag"] = carton_cols["carton_break_flag"]
     df["cartons_needed"] = carton_cols["cartons_needed"]
     df["excess_units"] = carton_cols["excess_units"]
+
+    # Cap carton-rounded qty at mother warehouse stock too — if carton math
+    # rounded up past what AMPM holds, ship only what AMPM has.
+    df["recommended_qty"] = df[["recommended_qty", "ampm_inventory"]].min(axis=1).astype(int)
 
     # ---------------------------------------------
     # FINAL SHAPING FOR API
