@@ -163,6 +163,11 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         df["deficiency"] = (df["estimated_qty"] - df["final_cb_qty"]).clip(lower=0)
         df["po_requirement"] = (df["deficiency"] - (df["open_po"] + df["in_transit"])).clip(lower=0)
 
+        # Cap PO requirement at AMPM (mother warehouse) stock — can't ship more
+        # than what AMPM physically has. Applied BEFORE the DB merge so any
+        # user-saved override in wm_inputs still wins below.
+        df["po_requirement"] = df[["po_requirement", "ampm_inventory"]].min(axis=1)
+
         # =========================
         # DB MERGE (remarks only)
         # =========================
