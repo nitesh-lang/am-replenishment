@@ -48,8 +48,23 @@ export default function Replenishment() {
   // Team export modal state
   const [exportOpen, setExportOpen] = useState(false);
   const [exportRows, setExportRows] = useState([]);
+  const [exportFormat, setExportFormat] = useState("nexlev_viomi");
   const [exportWeekLabel, setExportWeekLabel] = useState("");
   const [exportLoading, setExportLoading] = useState(false);
+
+  function teamExportFormat(acc) {
+    if (acc === "NEXLEV" || acc === "VIOMI") return "nexlev_viomi";
+    if (acc === "AUDIO ARRAY") return "audio_array";
+    if (acc === "WHITE MULBERRY") return "white_mulberry";
+    return "nexlev_viomi";
+  }
+
+  function teamExportButtonLabel(acc) {
+    if (acc === "NEXLEV" || acc === "VIOMI") return "Team Export (NX+VM)";
+    if (acc === "AUDIO ARRAY") return "Team Export (AA)";
+    if (acc === "WHITE MULBERRY") return "Team Export (WM)";
+    return "Team Export";
+  }
 
   async function openTeamExport() {
     const ws = weekStart || currentWeekMeta?.week_start;
@@ -60,18 +75,35 @@ export default function Replenishment() {
     }
     setExportLoading(true);
     try {
-      const [nx, vm] = await Promise.all([
-        fetch(`${BASE}/replenishment/saved-week-data?account=NEXLEV&week_start=${ws}`).then(r => r.json()),
-        fetch(`${BASE}/replenishment/saved-week-data?account=VIOMI&week_start=${ws}`).then(r => r.json()),
-      ]);
-      const nxRows = (nx.rows || []).filter(r => String(r.working_value || "").trim() !== "");
-      const vmRows = (vm.rows || []).filter(r => String(r.working_value || "").trim() !== "");
-      nxRows.sort((a, b) => String(a.sku || "").localeCompare(String(b.sku || "")));
-      vmRows.sort((a, b) => String(a.sku || "").localeCompare(String(b.sku || "")));
-      setExportRows([
-        ...nxRows.map(r => ({ ...r, _src: "nx" })),
-        ...vmRows.map(r => ({ ...r, _src: "vm" })),
-      ]);
+      const fmt = teamExportFormat(account);
+      let rows = [];
+
+      const fetchAcc = (a) =>
+        fetch(`${BASE}/replenishment/saved-week-data?account=${encodeURIComponent(a)}&week_start=${ws}`)
+          .then(r => r.json());
+
+      const onlyWithWorking = (list) =>
+        (list || []).filter(r => String(r.working_value || "").trim() !== "");
+      const bySku = (a, b) => String(a.sku || "").localeCompare(String(b.sku || ""));
+
+      if (fmt === "nexlev_viomi") {
+        const [nx, vm] = await Promise.all([fetchAcc("NEXLEV"), fetchAcc("VIOMI")]);
+        const nxRows = onlyWithWorking(nx.rows).sort(bySku);
+        const vmRows = onlyWithWorking(vm.rows).sort(bySku);
+        rows = [
+          ...nxRows.map(r => ({ ...r, _src: "nx" })),
+          ...vmRows.map(r => ({ ...r, _src: "vm" })),
+        ];
+      } else if (fmt === "audio_array") {
+        const res = await fetchAcc("AUDIO ARRAY");
+        rows = onlyWithWorking(res.rows).sort(bySku);
+      } else if (fmt === "white_mulberry") {
+        const res = await fetchAcc("WHITE MULBERRY");
+        rows = onlyWithWorking(res.rows).sort(bySku);
+      }
+
+      setExportFormat(fmt);
+      setExportRows(rows);
       setExportWeekLabel(label);
       setExportOpen(true);
     } catch (e) {
@@ -713,9 +745,9 @@ function exportCSV() {
           onClick={openTeamExport}
           disabled={exportLoading}
           className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
-          title="Combined Nexlev + Viomi export with Working values"
+          title="Pre-formatted export of saved Working values for the current account"
         >
-          {exportLoading ? "Loading…" : "Team Export (NX+VM)"}
+          {exportLoading ? "Loading…" : teamExportButtonLabel(account)}
         </button>
         <button
           onClick={async () => {
@@ -1004,6 +1036,7 @@ function exportCSV() {
       <TeamExportModal
         open={exportOpen}
         rows={exportRows}
+        format={exportFormat}
         weekLabel={exportWeekLabel}
         onClose={() => setExportOpen(false)}
       />
@@ -1032,34 +1065,61 @@ function exportCSV() {
   );
 }
 
-function TeamExportModal({ open, onClose, rows, weekLabel }) {
+function TeamExportModal({ open, onClose, rows, format, weekLabel }) {
   const [copied, setCopied] = useState(false);
   if (!open) return null;
 
-  const cols = [
-    "SKU", "ASIN", "HAZMAT TYPE", "MASTER CARTON", "MODEL",
-    "ISK3 NexLev AC", "ISK3 Viomi Ac", "Remarks",
-  ];
+  const sumWorking = (filter) =>
+    rows.filter(filter).reduce((s, r) => s + (parseFloat(r.working_value) || 0), 0);
 
-  const tableRows = rows.map(r => [
-    r.sku || "",
-    r.asin || "",
-    r.hazmat_type || "",
-    r.master_carton ?? "",
-    r.model || "",
-    r._src === "nx" ? (r.working_value || "") : "",
-    r._src === "vm" ? (r.working_value || "") : "",
-    "",
-  ]);
+  let cols, tableRows, totalRow, titleSuffix;
 
-  const nxTotal = rows
-    .filter(r => r._src === "nx")
-    .reduce((s, r) => s + (parseFloat(r.working_value) || 0), 0);
-  const vmTotal = rows
-    .filter(r => r._src === "vm")
-    .reduce((s, r) => s + (parseFloat(r.working_value) || 0), 0);
-
-  const totalRow = ["Total", "", "", "", "", nxTotal || "", vmTotal || "", ""];
+  if (format === "audio_array") {
+    titleSuffix = "Audio Array";
+    cols = ["SKU", "ASIN", "MASTER CARTON", "MODEL", "Audio Array"];
+    tableRows = rows.map(r => [
+      r.sku || "",
+      r.asin || "",
+      r.master_carton ?? "",
+      r.model || "",
+      r.working_value || "",
+    ]);
+    const tot = sumWorking(() => true);
+    totalRow = ["Total", "", "", "", tot || ""];
+  } else if (format === "white_mulberry") {
+    titleSuffix = "White Mulberry";
+    cols = ["SKU", "ASIN", "HAZMAT TYPE", "MASTER CARTON", "MODEL", "Viomi Ac"];
+    tableRows = rows.map(r => [
+      r.sku || "",
+      r.asin || "",
+      r.hazmat_type || "",
+      r.master_carton ?? "",
+      r.model || "",
+      r.working_value || "",
+    ]);
+    const tot = sumWorking(() => true);
+    totalRow = ["Total", "", "", "", "", tot || ""];
+  } else {
+    // nexlev_viomi (default)
+    titleSuffix = "Nexlev + Viomi";
+    cols = [
+      "SKU", "ASIN", "HAZMAT TYPE", "MASTER CARTON", "MODEL",
+      "ISK3 NexLev AC", "ISK3 Viomi Ac", "Remarks",
+    ];
+    tableRows = rows.map(r => [
+      r.sku || "",
+      r.asin || "",
+      r.hazmat_type || "",
+      r.master_carton ?? "",
+      r.model || "",
+      r._src === "nx" ? (r.working_value || "") : "",
+      r._src === "vm" ? (r.working_value || "") : "",
+      "",
+    ]);
+    const nxTotal = sumWorking(r => r._src === "nx");
+    const vmTotal = sumWorking(r => r._src === "vm");
+    totalRow = ["Total", "", "", "", "", nxTotal || "", vmTotal || "", ""];
+  }
 
   function buildTSV() {
     const header = cols.join("\t");
@@ -1159,7 +1219,7 @@ function TeamExportModal({ open, onClose, rows, weekLabel }) {
               Team Export — {weekLabel}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Nexlev + Viomi combined · {rows.length} row{rows.length !== 1 ? "s" : ""}
+              {titleSuffix} · {rows.length} row{rows.length !== 1 ? "s" : ""}
             </p>
           </div>
           <div className="flex gap-2">
@@ -1190,7 +1250,7 @@ function TeamExportModal({ open, onClose, rows, weekLabel }) {
           <div className="p-12 text-center text-slate-500">
             <p className="text-sm">No rows to export.</p>
             <p className="text-xs mt-2">
-              Save Working values for Nexlev and/or Viomi for this week first,
+              Save Working values for {titleSuffix} for this week first,
               then click Team Export again.
             </p>
           </div>
