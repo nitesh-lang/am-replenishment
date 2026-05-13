@@ -45,6 +45,42 @@ export default function Replenishment() {
   const [columnFilters, setColumnFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null); // { col, rect }
 
+  // Team export modal state
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportRows, setExportRows] = useState([]);
+  const [exportWeekLabel, setExportWeekLabel] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
+
+  async function openTeamExport() {
+    const ws = weekStart || currentWeekMeta?.week_start;
+    const label = pastWeekMeta?.label || currentWeekMeta?.label || "Week";
+    if (!ws) {
+      alert("No working week available.");
+      return;
+    }
+    setExportLoading(true);
+    try {
+      const [nx, vm] = await Promise.all([
+        fetch(`${BASE}/replenishment/saved-week-data?account=NEXLEV&week_start=${ws}`).then(r => r.json()),
+        fetch(`${BASE}/replenishment/saved-week-data?account=VIOMI&week_start=${ws}`).then(r => r.json()),
+      ]);
+      const nxRows = (nx.rows || []).filter(r => String(r.working_value || "").trim() !== "");
+      const vmRows = (vm.rows || []).filter(r => String(r.working_value || "").trim() !== "");
+      nxRows.sort((a, b) => String(a.sku || "").localeCompare(String(b.sku || "")));
+      vmRows.sort((a, b) => String(a.sku || "").localeCompare(String(b.sku || "")));
+      setExportRows([
+        ...nxRows.map(r => ({ ...r, _src: "nx" })),
+        ...vmRows.map(r => ({ ...r, _src: "vm" })),
+      ]);
+      setExportWeekLabel(label);
+      setExportOpen(true);
+    } catch (e) {
+      alert("Failed to load export: " + e.message);
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
   const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: "asc",
@@ -674,6 +710,14 @@ function exportCSV() {
           Export CSV
         </button>
         <button
+          onClick={openTeamExport}
+          disabled={exportLoading}
+          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
+          title="Combined Nexlev + Viomi export with Working values"
+        >
+          {exportLoading ? "Loading…" : "Team Export (NX+VM)"}
+        </button>
+        <button
           onClick={async () => {
             if (!window.confirm("Reset all saved master carton values? Fresh values from input sheet will show.")) return;
             await fetch(`${BASE}/reset-master-cartons`, { method: "POST" });
@@ -956,6 +1000,14 @@ function exportCSV() {
         </div>
       </div>
 
+      {/* TEAM EXPORT MODAL */}
+      <TeamExportModal
+        open={exportOpen}
+        rows={exportRows}
+        weekLabel={exportWeekLabel}
+        onClose={() => setExportOpen(false)}
+      />
+
       {/* COLUMN FILTER POPOVER */}
       {openFilter && (
         <HeaderFilterPopover
@@ -976,6 +1028,156 @@ function exportCSV() {
         />
       )}
 
+    </div>
+  );
+}
+
+function TeamExportModal({ open, onClose, rows, weekLabel }) {
+  const [copied, setCopied] = useState(false);
+  if (!open) return null;
+
+  const cols = [
+    "SKU", "ASIN", "HAZMAT TYPE", "MASTER CARTON", "MODEL",
+    "ISK3 NexLev AC", "ISK3 Viomi Ac", "Remarks",
+  ];
+
+  const tableRows = rows.map(r => [
+    r.sku || "",
+    r.asin || "",
+    r.hazmat_type || "",
+    r.master_carton ?? "",
+    r.model || "",
+    r._src === "nx" ? (r.working_value || "") : "",
+    r._src === "vm" ? (r.working_value || "") : "",
+    "",
+  ]);
+
+  const nxTotal = rows
+    .filter(r => r._src === "nx")
+    .reduce((s, r) => s + (parseFloat(r.working_value) || 0), 0);
+  const vmTotal = rows
+    .filter(r => r._src === "vm")
+    .reduce((s, r) => s + (parseFloat(r.working_value) || 0), 0);
+
+  function buildTSV() {
+    const header = cols.join("\t");
+    const lines = tableRows.map(r => r.join("\t"));
+    const total = ["Total", "", "", "", "", nxTotal || "", vmTotal || "", ""].join("\t");
+    return [header, ...lines, total].join("\n");
+  }
+
+  function buildCSV() {
+    const esc = v => `"${String(v).replace(/"/g, '""')}"`;
+    const header = cols.map(esc).join(",");
+    const lines = tableRows.map(r => r.map(esc).join(","));
+    const total = ["Total", "", "", "", "", nxTotal || "", vmTotal || "", ""].map(esc).join(",");
+    return [header, ...lines, total].join("\n");
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(buildTSV());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      alert("Copy failed: " + e.message);
+    }
+  }
+
+  function download() {
+    const blob = new Blob([buildCSV()], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `team_export_${weekLabel.replace(/\s/g, "_")}.csv`;
+    a.click();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Team Export — {weekLabel}
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Nexlev + Viomi combined · {rows.length} row{rows.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={copy}
+              disabled={rows.length === 0}
+              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-40"
+            >
+              {copied ? "Copied!" : "Copy to clipboard"}
+            </button>
+            <button
+              onClick={download}
+              disabled={rows.length === 0}
+              className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800 disabled:opacity-40"
+            >
+              Download CSV
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs rounded hover:bg-slate-200"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="p-12 text-center text-slate-500">
+            <p className="text-sm">No rows to export.</p>
+            <p className="text-xs mt-2">
+              Save Working values for Nexlev and/or Viomi for this week first,
+              then click Team Export again.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-auto flex-1">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-100 sticky top-0">
+                <tr>
+                  {cols.map(c => (
+                    <th
+                      key={c}
+                      className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap"
+                    >
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((r, i) => (
+                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
+                    {r.map((v, j) => (
+                      <td key={j} className="px-3 py-1.5 whitespace-nowrap">{v}</td>
+                    ))}
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-slate-300 font-semibold bg-slate-50">
+                  <td className="px-3 py-2">Total</td>
+                  <td colSpan={4}></td>
+                  <td className="px-3 py-2">{nxTotal || ""}</td>
+                  <td className="px-3 py-2">{vmTotal || ""}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
