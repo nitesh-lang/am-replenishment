@@ -193,17 +193,20 @@ export default function Replenishment() {
   // Header label resolver (shared by thead + filter popover)
   function colLabel(col) {
     const map = {
-      recommended_qty: "RECOMMENDED QTY",
+      recommended_qty: "REC QTY",
       cartons_needed: "CARTONS",
-      sales_velocity: "AVG WEEKLY SALES",
-      total_units_sold: "TOTAL SOLD",
-      ampm_inventory: "MOTHER WAREHOUSE",
-      amazon_inventory: "AMAZON INVENTORY",
-      inbound_inventory: "INBOUND INVENTORY",
-      replenishment_qty: "REPLENISHMENT QTY",
-      required_units: "REQUIRED UNITS",
-      warehouse_shortfall: "WAREHOUSE SHORTFALL",
+      sales_velocity: "AVG/WK",
+      total_units_sold: "TOTAL",
+      ampm_inventory: "AMPM",
+      amazon_inventory: "AZ INV",
+      inbound_inventory: "INBOUND",
+      replenishment_qty: "REPLEN",
+      required_units: "REQ UNITS",
+      warehouse_shortfall: "SHORTFALL",
       working_value: "WORKING",
+      master_carton: "MC",
+      ixd_type: "IXD",
+      hazmat_type: "HAZMAT",
     };
     return map[col] || col.toUpperCase();
   }
@@ -456,13 +459,9 @@ function exportCSV() {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
-        <h1 className="text-3xl font-semibold">
-          Nexlev Replenishment Intelligence
-        </h1>
-        <p className="text-slate-300 mt-2 text-sm">
-          Advanced replenishment & coverage analytics
-        </p>
+      <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow flex items-baseline gap-3">
+        <h1 className="text-lg font-semibold">Replenishment Intelligence</h1>
+        <p className="text-slate-300 text-xs">Coverage & replenishment analytics</p>
       </div>
 
     <div className="card grid grid-cols-1 md:grid-cols-3 gap-3 py-3">
@@ -689,16 +688,16 @@ function exportCSV() {
 
       {/* TABLE */}
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-auto max-h-[75vh]">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-100 text-xs uppercase sticky top-0 z-20">
+        <div className="overflow-auto max-h-[82vh]">
+          <table className="w-full text-[11px] table-auto">
+            <thead className="bg-slate-100 text-[10px] uppercase sticky top-0 z-20">
               <tr>
                 {tableColumns.map((col) => {
                   const hasFilter = columnFilters[col] && columnFilters[col].size > 0;
                   return (
                     <th
                       key={col}
-                      className="px-4 py-3 whitespace-nowrap"
+                      className="px-2 py-2 whitespace-nowrap font-semibold tracking-tight"
                     >
                       <div className="flex items-center gap-1">
                         <span
@@ -755,7 +754,7 @@ function exportCSV() {
                             ls === "EOL"    ? "bg-red-100 text-red-700" :
                                              "bg-slate-100 text-slate-500";
                           return (
-                            <td key={col} className="px-4 py-3">
+                            <td key={col} className="px-2 py-1.5">
                               <span className={`px-2 py-1 text-xs rounded ${badgeStyle}`}>{ls}</span>
                             </td>
                           );
@@ -763,20 +762,20 @@ function exportCSV() {
 
                         if (col === "required_units" && row[col] > 0)
                           return (
-                            <td key={col} className="px-4 py-3 font-bold text-red-600">
+                            <td key={col} className="px-2 py-1.5 font-bold text-red-600">
                               {row[col]}
                             </td>
                           );
 
                         if (col === "ixd_type")
-                          return <td key={col} className="px-4 py-3">{row.ixd_type}</td>;
+                          return <td key={col} className="px-2 py-1.5">{row.ixd_type}</td>;
 
                         if (col === "hazmat_type")
-                          return <td key={col} className="px-4 py-3">{row.hazmat_type}</td>;
+                          return <td key={col} className="px-2 py-1.5">{row.hazmat_type}</td>;
 
                         if (col === "master_carton")
                           return (
-                            <td key={col} className="px-4 py-3">
+                            <td key={col} className="px-2 py-1.5">
                               <input
                                 type="text"
                                 value={masterCartons[row.model] ?? row.master_carton ?? ""}
@@ -790,7 +789,7 @@ function exportCSV() {
                                   });
                                 }}
                                 onClick={e => e.stopPropagation()}
-                                className="border px-2 py-1 rounded w-20"
+                                className="border px-1.5 py-0.5 rounded w-14 text-[11px]"
                               />
                             </td>
                           );
@@ -803,17 +802,17 @@ function exportCSV() {
                           const noCarton = !row.master_carton || row.master_carton === 0;
 
                           if (rawQty === 0)
-                            return <td key={col} className="px-4 py-3 text-slate-300">—</td>;
+                            return <td key={col} className="px-2 py-1.5 text-slate-300">—</td>;
 
                           if (noCarton)
                             return (
-                              <td key={col} className="px-4 py-3 text-slate-400 text-xs italic">
+                              <td key={col} className="px-2 py-1.5 text-slate-400 text-xs italic">
                                 No carton set
                               </td>
                             );
 
                           return (
-                            <td key={col} className="px-4 py-3">
+                            <td key={col} className="px-2 py-1.5">
                               <span
                                 className={`font-semibold ${breakFlag ? "text-orange-600" : row.ixd_type === "IXD" ? "text-blue-700" : "text-slate-700"}`}
                                 title={`Raw replenishment: ${rawQty} → Rounded up to ${recQty}`}
@@ -837,13 +836,13 @@ function exportCSV() {
                           const noCarton = !row.master_carton || row.master_carton === 0;
 
                           if (rawQty === 0)
-                            return <td key={col} className="px-4 py-3 text-slate-300">—</td>;
+                            return <td key={col} className="px-2 py-1.5 text-slate-300">—</td>;
 
                           if (noCarton)
-                            return <td key={col} className="px-4 py-3 text-slate-300">—</td>;
+                            return <td key={col} className="px-2 py-1.5 text-slate-300">—</td>;
 
                           return (
-                            <td key={col} className="px-4 py-3">
+                            <td key={col} className="px-2 py-1.5">
                               <span
                                 className={`px-2 py-0.5 text-xs rounded-full ${row.ixd_type === "IXD" ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}
                                 title={row.ixd_type === "IXD" ? "IXD — full cartons mandatory" : "Non-IXD — carton break allowed"}
@@ -859,13 +858,13 @@ function exportCSV() {
                           const val = workingValues[row.sku] ?? row.working_value ?? "";
                           if (isReadOnly || currentWeekMeta?.locked) {
                             return (
-                              <td key={col} className="px-4 py-3 bg-amber-50 font-medium">
+                              <td key={col} className="px-2 py-1.5 bg-amber-50 font-medium">
                                 {val || <span className="text-slate-300">—</span>}
                               </td>
                             );
                           }
                           return (
-                            <td key={col} className="px-4 py-3 bg-amber-50">
+                            <td key={col} className="px-2 py-1.5 bg-amber-50">
                               <input
                                 type="text"
                                 value={val}
@@ -876,13 +875,13 @@ function exportCSV() {
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                                 placeholder="—"
-                                className="border border-amber-300 px-2 py-1 rounded w-24 bg-white"
+                                className="border border-amber-300 px-1.5 py-0.5 rounded w-16 bg-white text-[11px]"
                               />
                             </td>
                           );
                         }
 
-                        return <td key={col} className="px-4 py-3">{row[col]}</td>;
+                        return <td key={col} className="px-2 py-1.5">{row[col]}</td>;
                       })}
                     </tr>
 
