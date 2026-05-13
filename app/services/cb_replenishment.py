@@ -240,6 +240,11 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         df.loc[df["po_requirement"] < 0, "po_requirement"] = 0
 
+        # Cap PO requirement at AMPM (mother warehouse) stock — can't ship more
+        # than what AMPM physically has. Applied BEFORE the DB merge so any
+        # user-saved override in cb_inputs still wins below.
+        df["po_requirement"] = df[["po_requirement", "ampm_inventory"]].min(axis=1)
+
         # =========================
         # DB MERGE (remarks only)
         # =========================
