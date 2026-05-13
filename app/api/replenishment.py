@@ -3,6 +3,15 @@ from app.services.replenishment import calculate_replenishment
 from app.services.fc_final_allocation import calculate_final_allocation
 from app.services.fc_planning import calculate_fc_plan, load_fc_data
 from app.services.validation_engine import run_full_validation
+from app.services import replenishment_saved
+from app.services.week_helper import (
+    current_working_week_start,
+    week_end,
+    week_label,
+    is_week_locked,
+    now_ist,
+)
+from datetime import date as _date
 import psycopg2
 import os
 import json
@@ -33,6 +42,17 @@ def get_replenishment(
         account=account
     )
 
+    # Merge in saved working_value for the current working week.
+    saved_map = {}
+    try:
+        replenishment_saved.ensure_table()
+        saved_map = replenishment_saved.load_working_value_map(
+            account.strip().upper(),
+            current_working_week_start(),
+        )
+    except Exception as e:
+        print("⚠️ Could not load saved working values:", e)
+
     response = []
 
     for _, row in df.iterrows():
@@ -41,11 +61,13 @@ def get_replenishment(
         haz = str(row.get("Hazmat/non-Hazmat", "")).strip()
         ixd_type = "Non-IXD" if haz == "Non-IXD Non Hazmat" else "IXD"
 
+        sku = str(row["SKU"]).strip().upper() if row["SKU"] == row["SKU"] else ""
+
         response.append({
             "model": row["model"],
             "category": str(row["Category"]) if row.get("Category") == row.get("Category") else "",
             "asin": str(row["ASIN"]) if row["ASIN"] == row["ASIN"] else "",
-            "sku": str(row["SKU"]) if row["SKU"] == row["SKU"] else "",
+            "sku": sku,
             "listing_status": str(row["listing_status"]) if row.get("listing_status") == row.get("listing_status") else "-",
             "master_carton": int(row["Master Carton"]) if row.get("Master Carton") == row.get("Master Carton") else 0,
             "sales_velocity": int(row["sales_velocity"]),
@@ -60,20 +82,101 @@ def get_replenishment(
             "is_overstock": bool(row["is_overstock"]),
             "ixd_type": ixd_type,
             "hazmat_type": str(row["Hazmat Type"]) if row.get("Hazmat Type") else "",
-            # ── Master Carton Intelligence (NEW) ──────────────────────────
-            # recommended_qty : replenishment_qty rounded up to nearest
-            #                     full carton (IXD = mandatory, Non-IXD = advisory)
-            # carton_break_flag : True when excess > 50 % of one carton
-            #                     → breaking the carton is the smarter move
-            # cartons_needed    : how many full cartons that equals
-            # excess_units      : units above raw requirement in full-carton scenario
             "recommended_qty": int(row.get("recommended_qty", row["replenishment_qty"])),
             "carton_break_flag": bool(row.get("carton_break_flag", False)),
             "cartons_needed": int(row.get("cartons_needed", 0)),
             "excess_units": int(row.get("excess_units", 0)),
+            "working_value": saved_map.get(sku, ""),
         })
 
     return response
+
+
+# =================================================
+# REPLENISHMENT — WEEK META + SAVED WEEKS
+# =================================================
+@router.get("/replenishment/saved-weeks")
+def get_replenishment_saved_weeks(account: str = Query(default="NEXLEV")):
+    account = account.strip().upper()
+    try:
+        replenishment_saved.ensure_table()
+        saved = replenishment_saved.list_saved_weeks(account)
+    except Exception as e:
+        print("⚠️ Could not list saved weeks:", e)
+        saved = []
+
+    ws = current_working_week_start()
+    current = {
+        "week_start": ws.isoformat(),
+        "week_end":   week_end(ws).isoformat(),
+        "label":      week_label(ws),
+        "locked":     is_week_locked(ws),
+    }
+
+    for w in saved:
+        wd = _date.fromisoformat(w["week_start"])
+        w["week_end"] = week_end(wd).isoformat()
+        w["label"]    = week_label(wd)
+
+    return {"current_week": current, "saved_weeks": saved}
+
+
+# =================================================
+# REPLENISHMENT — VIEW PAST WEEK SNAPSHOT (read only)
+# =================================================
+@router.get("/replenishment/saved-week-data")
+def get_replenishment_saved_week_data(
+    account: str = Query(default="NEXLEV"),
+    week_start: str = Query(...),
+):
+    try:
+        replenishment_saved.ensure_table()
+        ws = _date.fromisoformat(week_start)
+        rows = replenishment_saved.load_week_snapshot(account.strip().upper(), ws)
+        return {
+            "week_start": ws.isoformat(),
+            "week_end":   week_end(ws).isoformat(),
+            "label":      week_label(ws),
+            "locked":     True,
+            "rows":       rows,
+        }
+    except Exception as e:
+        print("⚠️ Replenishment saved week load error:", e)
+        return {"week_start": week_start, "rows": [], "error": str(e)}
+
+
+# =================================================
+# REPLENISHMENT — SAVE CURRENT WEEK
+# =================================================
+@router.post("/replenishment/save")
+async def save_replenishment_week(request: Request):
+    try:
+        body = await request.json()
+        account = str(body.get("account", "NEXLEV")).strip().upper()
+        rows = body.get("rows", []) or []
+        saved_by = str(body.get("saved_by", "info@cambiumretail.com"))
+
+        ws = current_working_week_start()
+        if is_week_locked(ws):
+            return {
+                "status": "locked",
+                "error":  f"Working week ({week_label(ws)}) is past Saturday 11:59 PM IST. Cannot save.",
+                "week_start": ws.isoformat(),
+            }
+
+        replenishment_saved.ensure_table()
+        n = replenishment_saved.save_rows(account, ws, rows, saved_by)
+
+        return {
+            "status":     "saved",
+            "rows":       n,
+            "week_start": ws.isoformat(),
+            "label":      week_label(ws),
+            "saved_at":   now_ist().isoformat(),
+        }
+    except Exception as e:
+        print("⚠️ Replenishment save error:", e)
+        return {"status": "error", "error": str(e)}
 
 
 # =================================================

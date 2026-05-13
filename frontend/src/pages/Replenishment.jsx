@@ -29,6 +29,23 @@ export default function Replenishment() {
   const [expandedRow, setExpandedRow] = useState(null);
   const [masterCartons, setMasterCartons] = useState({});
 
+  // Working-week save state (Nexlev only for now)
+  const [weekStart, setWeekStart] = useState(null); // null = current working week
+  const [currentWeekMeta, setCurrentWeekMeta] = useState(null);
+  const [pastWeekMeta, setPastWeekMeta] = useState(null);
+  const [savedWeeks, setSavedWeeks] = useState([]);
+  const [workingValues, setWorkingValues] = useState({}); // { [sku]: text }
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const isNexlev = account === "NEXLEV";
+  const isReadOnly = weekStart !== null;
+
+  // Excel-style per-column filters
+  // columnFilters[col] = Set<string> of allowed values, or undefined for "no filter"
+  const [columnFilters, setColumnFilters] = useState({});
+  const [openFilter, setOpenFilter] = useState(null); // { col, rect }
+
   const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: "asc",
@@ -42,28 +59,96 @@ export default function Replenishment() {
      DATA LOAD
   ============================================================ */
 
+  // Load week metadata + list of past saved weeks (per account)
+  useEffect(() => {
+    fetch(`${BASE}/replenishment/saved-weeks?account=${account}`)
+      .then(res => res.json())
+      .then(res => {
+        setCurrentWeekMeta(res.current_week || null);
+        setSavedWeeks(res.saved_weeks || []);
+      })
+      .catch(() => {});
+  }, [account]);
+
+  // Load replenishment data — branches on whether viewing current or past week
   useEffect(() => {
     setLoading(true);
+    setPastWeekMeta(null);
 
-    Promise.all([
+    const loadCurrent = () => Promise.all([
       getKPIs(fromWeek, toWeek),
       getReplenishment(toWeek - fromWeek + 1, replenishWeeks, account),
-      ])
-      .then(([kpiRes, replRes]) => {
-        setKpis(kpiRes);
-        const data = Array.isArray(replRes) ? replRes : [];
+    ]).then(([kpiRes, replRes]) => {
+      setKpis(kpiRes);
+      const data = Array.isArray(replRes) ? replRes : [];
+      data.forEach(r => {
+        r.master_carton = masterCartons[r.model] ?? r.master_carton ?? "";
+      });
+      setReplenishment(data);
+      const wv = {};
+      data.forEach(r => { if (r.sku && r.working_value) wv[r.sku] = r.working_value; });
+      setWorkingValues(wv);
+      setDirty(false);
+    });
 
-        data.forEach(r => {
-  r.master_carton = masterCartons[r.model] ?? r.master_carton ?? "";
-});
+    const loadPast = (ws) => fetch(
+      `${BASE}/replenishment/saved-week-data?account=${account}&week_start=${ws}`
+    )
+      .then(res => res.json())
+      .then(j => {
+        const data = Array.isArray(j.rows) ? j.rows : [];
+        setReplenishment(data);
+        setPastWeekMeta({
+          week_start: j.week_start,
+          week_end: j.week_end,
+          label: j.label,
+        });
+        const wv = {};
+        data.forEach(r => { if (r.sku && r.working_value) wv[r.sku] = r.working_value; });
+        setWorkingValues(wv);
+        setDirty(false);
+        setKpis(null);
+      });
 
-          setReplenishment(data);
-        })
-        .finally(() => setLoading(false));
-      }, [fromWeek, toWeek, replenishWeeks, account]);
+    const p = weekStart ? loadPast(weekStart) : loadCurrent();
+    p.finally(() => setLoading(false));
+  }, [fromWeek, toWeek, replenishWeeks, account, weekStart]);
 
-
-    // Master carton always comes from input sheet via API — no DB load needed
+  async function saveWeek() {
+    if (saving) return;
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      const rows = replenishment.map(r => ({
+        ...r,
+        working_value: workingValues[r.sku] ?? r.working_value ?? "",
+      }));
+      const res = await fetch(`${BASE}/replenishment/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account, rows }),
+      });
+      const j = await res.json();
+      if (j.status === "saved") {
+        setSaveMsg(`Saved ${j.rows} rows · ${j.label}`);
+        setDirty(false);
+        // refresh saved-weeks list so the new save shows up immediately
+        fetch(`${BASE}/replenishment/saved-weeks?account=${account}`)
+          .then(res => res.json())
+          .then(res => setSavedWeeks(res.saved_weeks || []))
+          .catch(() => {});
+      } else if (j.status === "locked") {
+        setSaveMsg(j.error || "Week is locked. Cannot save.");
+      } else {
+        setSaveMsg(`Error: ${j.error || "unknown"}`);
+      }
+    } catch (e) {
+      setSaveMsg(`Error: ${e.message}`);
+    } finally {
+      setSaving(false);
+      setTimeout(() => setSaveMsg(""), 6000);
+    }
+  }
 
 
   /* ============================================================
@@ -85,25 +170,88 @@ export default function Replenishment() {
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
-  const tableColumns = [
-  "model",
-  "category",
-  "asin",
-  "sku",
-  "sales_velocity",
-  "total_units_sold",
-  "amazon_inventory",
-  "inbound_inventory",
-  "ampm_inventory",
-  "required_units",
-  "replenishment_qty",
-  "recommended_qty",
-  "cartons_needed",
-  "warehouse_shortfall",
-  "ixd_type",
-  "hazmat_type",
-  "master_carton",
-];
+  const tableColumns = useMemo(() => {
+    const base = [
+      "model",
+      "category",
+      "asin",
+      "sku",
+      "sales_velocity",
+      "total_units_sold",
+      "amazon_inventory",
+      "inbound_inventory",
+      "ampm_inventory",
+      "required_units",
+      "replenishment_qty",
+      "recommended_qty",
+      "cartons_needed",
+      "warehouse_shortfall",
+      "ixd_type",
+      "hazmat_type",
+      "master_carton",
+    ];
+    if (isNexlev) base.push("working_value");
+    return base;
+  }, [isNexlev]);
+
+  // Header label resolver (shared by thead + filter popover)
+  function colLabel(col) {
+    const map = {
+      recommended_qty: "RECOMMENDED QTY",
+      cartons_needed: "CARTONS",
+      sales_velocity: "AVG WEEKLY SALES",
+      total_units_sold: "TOTAL SOLD",
+      ampm_inventory: "MOTHER WAREHOUSE",
+      amazon_inventory: "AMAZON INVENTORY",
+      inbound_inventory: "INBOUND INVENTORY",
+      replenishment_qty: "REPLENISHMENT QTY",
+      required_units: "REQUIRED UNITS",
+      warehouse_shortfall: "WAREHOUSE SHORTFALL",
+      working_value: "WORKING",
+    };
+    return map[col] || col.toUpperCase();
+  }
+
+  // Unique values per column (for Excel-style filter dropdowns).
+  // Intentionally only depends on `replenishment` — Working column filter
+  // reflects saved values, not in-flight typing, to keep this memo cheap.
+  const uniqueValuesByCol = useMemo(() => {
+    const out = {};
+    tableColumns.forEach(col => {
+      const seen = new Set();
+      replenishment.forEach(row => {
+        const v = row[col];
+        seen.add(v == null || v === "" ? "(blank)" : String(v));
+      });
+      out[col] = [...seen].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+      );
+    });
+    return out;
+  }, [replenishment, tableColumns]);
+
+  function rowValueForFilter(row, col) {
+    const v = row[col];
+    return v == null || v === "" ? "(blank)" : String(v);
+  }
+
+  function clearAllColumnFilters() {
+    setColumnFilters({});
+  }
+  const activeFilterCount = Object.values(columnFilters).filter(s => s && s.size > 0).length;
+
+  // Outside-click closes the open filter popover
+  useEffect(() => {
+    if (!openFilter) return;
+    const handler = (e) => {
+      if (!e.target.closest("[data-filter-popover]")) setOpenFilter(null);
+    };
+    const id = setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => {
+      clearTimeout(id);
+      document.removeEventListener("mousedown", handler);
+    };
+  }, [openFilter]);
 
   /* ============================================================
      FILTER
@@ -111,6 +259,7 @@ export default function Replenishment() {
 
   const filteredData = useMemo(() => {
     const q = search.toLowerCase();
+    const activeCols = Object.entries(columnFilters).filter(([, s]) => s && s.size > 0);
     return replenishment
       .filter((row) => selectedCategories.length === 0 || selectedCategories.includes(row.category))
       .filter((row) => selectedListingStatuses.length === 0 || selectedListingStatuses.includes(row.listing_status))
@@ -119,8 +268,14 @@ export default function Replenishment() {
         row.model?.toLowerCase().includes(q) ||
         row.asin?.toLowerCase().includes(q) ||
         row.sku?.toLowerCase().includes(q)
-      );
-  }, [replenishment, search, selectedCategories, selectedListingStatuses]);
+      )
+      .filter((row) => {
+        for (const [col, allowed] of activeCols) {
+          if (!allowed.has(rowValueForFilter(row, col))) return false;
+        }
+        return true;
+      });
+  }, [replenishment, search, selectedCategories, selectedListingStatuses, columnFilters]);
 
   /* ============================================================
      SORT
@@ -257,6 +412,7 @@ function exportCSV() {
     master_carton: "MASTER CARTON",
     excess_units: "EXCESS UNITS",
     carton_break_flag: "CARTON BREAK",
+    working_value: "WORKING",
   };
 
   const headers = exportColumns.map(c => columnLabels[c] || c.toUpperCase()).join(",");
@@ -267,6 +423,8 @@ function exportCSV() {
         .map(col => {
           const val = col === "master_carton"
             ? (masterCartons[row.model] ?? row.master_carton ?? "")
+            : col === "working_value"
+            ? (workingValues[row.sku] ?? row.working_value ?? "")
             : (row[col] ?? "");
           return `"${String(val).replace(/"/g, '""')}"`;
         })
@@ -300,21 +458,75 @@ function exportCSV() {
         </p>
       </div>
 
-    <div>
-  <label className="text-xs uppercase text-slate-400">
-    Account
-  </label>
-  <select
-    value={account}
-    onChange={(e) => setAccount(e.target.value)}
-    className="mt-2 w-full px-4 py-2 border rounded-lg"
-  >
-    <option value="NEXLEV">Nexlev</option>
-    <option value="VIOMI">Viomi</option>
-    <option value="AUDIO ARRAY">Audio Array</option>
-    <option value="WHITE MULBERRY">White Mulberry</option>
-  </select>
-</div>
+    <div className={`card grid grid-cols-1 ${isNexlev ? "md:grid-cols-3" : ""} gap-3 py-3`}>
+      <div>
+        <label className="text-xs uppercase text-slate-400">Account</label>
+        <select
+          value={account}
+          onChange={(e) => { setAccount(e.target.value); setWeekStart(null); }}
+          className="mt-2 w-full px-4 py-2 border rounded-lg"
+        >
+          <option value="NEXLEV">Nexlev</option>
+          <option value="VIOMI">Viomi</option>
+          <option value="AUDIO ARRAY">Audio Array</option>
+          <option value="WHITE MULBERRY">White Mulberry</option>
+        </select>
+      </div>
+
+      {isNexlev && (
+      <div>
+        <label className="text-xs uppercase text-slate-400">Working Week</label>
+        <select
+          value={weekStart ?? ""}
+          onChange={(e) => setWeekStart(e.target.value || null)}
+          className="mt-2 w-full px-4 py-2 border rounded-lg"
+        >
+          <option value="">
+            {currentWeekMeta
+              ? `${currentWeekMeta.label} (${currentWeekMeta.week_start} → ${currentWeekMeta.week_end})${currentWeekMeta.locked ? " — locked" : " — active"}`
+              : "Current week"}
+          </option>
+          {savedWeeks.map(w => (
+            <option key={w.week_start} value={w.week_start}>
+              {w.label} ({w.week_start} → {w.week_end}) — view only
+            </option>
+          ))}
+        </select>
+      </div>
+      )}
+
+      {isNexlev && (
+      <div className="flex flex-col justify-end">
+        {!isReadOnly && !currentWeekMeta?.locked && (
+          <button
+            onClick={saveWeek}
+            disabled={saving}
+            className={`px-4 py-2 rounded-lg text-white text-sm font-semibold transition ${
+              dirty
+                ? "bg-blue-600 hover:bg-blue-700"
+                : "bg-slate-700 hover:bg-slate-800"
+            } disabled:opacity-50`}
+          >
+            {saving
+              ? "Saving…"
+              : dirty
+              ? `Save ${currentWeekMeta?.label ?? "Week"} *`
+              : `Save ${currentWeekMeta?.label ?? "Week"}`}
+          </button>
+        )}
+        {(isReadOnly || currentWeekMeta?.locked) && (
+          <div className="text-xs text-slate-500 italic px-1 py-2">
+            {isReadOnly
+              ? `Viewing ${pastWeekMeta?.label ?? "past week"} — read only`
+              : "Current week locked"}
+          </div>
+        )}
+        {saveMsg && (
+          <div className="text-xs text-slate-600 mt-1 px-1">{saveMsg}</div>
+        )}
+      </div>
+      )}
+    </div>
 
     {/* SALES WINDOW + REPLENISH WEEKS FILTER */}
 <div className="card grid grid-cols-1 md:grid-cols-2 gap-3 py-3">
@@ -445,6 +657,14 @@ function exportCSV() {
             </button>
           )}
         </div>
+        {activeFilterCount > 0 && (
+          <button
+            onClick={clearAllColumnFilters}
+            className="px-3 py-1 text-xs rounded-full border border-blue-300 text-blue-600 hover:bg-blue-50"
+          >
+            {activeFilterCount} column filter{activeFilterCount > 1 ? "s" : ""} · Clear all
+          </button>
+        )}
         <button
           onClick={exportCSV}
           className="px-4 py-2 bg-slate-900 text-white rounded-lg"
@@ -468,44 +688,49 @@ function exportCSV() {
       <div className="card p-0 overflow-hidden">
         <div className="overflow-auto max-h-[75vh]">
           <table className="w-full text-sm">
-            <thead className="bg-slate-100 text-xs uppercase sticky top-0">
+            <thead className="bg-slate-100 text-xs uppercase sticky top-0 z-20">
               <tr>
-                {tableColumns.map((col) => (
-                  <th
-                    key={col}
-                    onClick={() => toggleSort(col)}
-                    className="px-4 py-3 cursor-pointer whitespace-nowrap"
-                  >
-                    {col === "recommended_qty"
-                      ? <span className="flex items-center gap-1">
-                          RECOMMENDED QTY
-                          <span
-                            className="text-slate-400 cursor-help"
-                            title="Replenishment qty rounded to nearest master carton. ⚠ = carton break recommended."
-                          >ⓘ</span>
+                {tableColumns.map((col) => {
+                  const hasFilter = columnFilters[col] && columnFilters[col].size > 0;
+                  return (
+                    <th
+                      key={col}
+                      className="px-4 py-3 whitespace-nowrap"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span
+                          className="cursor-pointer select-none flex items-center gap-1"
+                          onClick={() => toggleSort(col)}
+                        >
+                          {colLabel(col)}
+                          {col === "recommended_qty" && (
+                            <span
+                              className="text-slate-400 cursor-help"
+                              title="Replenishment qty rounded to nearest master carton. ⚠ = carton break recommended."
+                            >ⓘ</span>
+                          )}
+                          <span className="text-slate-400 ml-0.5">{getSortArrow(col)}</span>
                         </span>
-                      : col === "cartons_needed"
-                      ? "CARTONS"
-                      : col === "sales_velocity"
-                      ? "AVG WEEKLY SALES"
-                      : col === "total_units_sold"
-                      ? "TOTAL SOLD"
-                      : col === "ampm_inventory"
-                      ? "MOTHER WAREHOUSE"
-                      : col === "amazon_inventory"
-                      ? "AMAZON INVENTORY"
-                      : col === "inbound_inventory"
-                      ? "INBOUND INVENTORY"
-                      : col === "replenishment_qty"
-                      ? "REPLENISHMENT QTY"
-                      : col === "required_units"
-                      ? "REQUIRED UNITS"
-                      : col === "warehouse_shortfall"
-                      ? "WAREHOUSE SHORTFALL"
-                      : col}{" "}
-                    {getSortArrow(col)}
-                  </th>
-                ))}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setOpenFilter(prev =>
+                              prev && prev.col === col ? null : { col, rect }
+                            );
+                          }}
+                          className={`ml-auto px-1 rounded hover:bg-slate-200 ${
+                            hasFilter ? "text-blue-600" : "text-slate-400"
+                          }`}
+                          title={hasFilter ? "Filter active — click to edit" : "Filter"}
+                        >
+                          {hasFilter ? "▼" : "▽"}
+                        </button>
+                      </div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
 
@@ -627,6 +852,33 @@ function exportCSV() {
                         }
                         /* ── END CARTON COLUMNS ──────────────────────────── */
 
+                        if (col === "working_value") {
+                          const val = workingValues[row.sku] ?? row.working_value ?? "";
+                          if (isReadOnly || currentWeekMeta?.locked) {
+                            return (
+                              <td key={col} className="px-4 py-3 bg-amber-50 font-medium">
+                                {val || <span className="text-slate-300">—</span>}
+                              </td>
+                            );
+                          }
+                          return (
+                            <td key={col} className="px-4 py-3 bg-amber-50">
+                              <input
+                                type="text"
+                                value={val}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setWorkingValues(prev => ({ ...prev, [row.sku]: v }));
+                                  setDirty(true);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                placeholder="—"
+                                className="border border-amber-300 px-2 py-1 rounded w-24 bg-white"
+                              />
+                            </td>
+                          );
+                        }
+
                         return <td key={col} className="px-4 py-3">{row[col]}</td>;
                       })}
                     </tr>
@@ -702,6 +954,152 @@ function exportCSV() {
         </div>
       </div>
 
+      {/* COLUMN FILTER POPOVER */}
+      {openFilter && (
+        <HeaderFilterPopover
+          column={openFilter.col}
+          columnLabel={colLabel(openFilter.col)}
+          allValues={uniqueValuesByCol[openFilter.col] || []}
+          activeSet={columnFilters[openFilter.col]}
+          anchorRect={openFilter.rect}
+          onApply={(set) =>
+            setColumnFilters(prev => {
+              const next = { ...prev };
+              if (set === null) delete next[openFilter.col];
+              else next[openFilter.col] = set;
+              return next;
+            })
+          }
+          onClose={() => setOpenFilter(null)}
+        />
+      )}
+
+    </div>
+  );
+}
+
+function HeaderFilterPopover({ column, columnLabel, allValues, activeSet, anchorRect, onApply, onClose }) {
+  const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState(
+    activeSet && activeSet.size > 0 ? new Set(activeSet) : new Set(allValues)
+  );
+
+  const filtered = useMemo(() => {
+    if (!search) return allValues;
+    const q = search.toLowerCase();
+    return allValues.filter(v => v.toLowerCase().includes(q));
+  }, [allValues, search]);
+
+  const allChecked = filtered.length > 0 && filtered.every(v => draft.has(v));
+
+  function toggleValue(v) {
+    setDraft(prev => {
+      const next = new Set(prev);
+      if (next.has(v)) next.delete(v);
+      else next.add(v);
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setDraft(prev => {
+      const next = new Set(prev);
+      if (allChecked) filtered.forEach(v => next.delete(v));
+      else filtered.forEach(v => next.add(v));
+      return next;
+    });
+  }
+
+  function apply() {
+    if (draft.size === allValues.length) onApply(null);
+    else onApply(new Set(draft));
+    onClose();
+  }
+
+  function clearFilter() {
+    onApply(null);
+    onClose();
+  }
+
+  // Position the popover near the filter icon, clamped to viewport
+  const POPOVER_W = 280;
+  const POPOVER_H = 380;
+  let top = anchorRect ? anchorRect.bottom + 4 : 100;
+  let left = anchorRect ? anchorRect.left : 100;
+  if (typeof window !== "undefined") {
+    if (left + POPOVER_W > window.innerWidth) left = window.innerWidth - POPOVER_W - 8;
+    if (top + POPOVER_H > window.innerHeight) top = Math.max(8, window.innerHeight - POPOVER_H - 8);
+    if (left < 8) left = 8;
+  }
+
+  return (
+    <div
+      data-filter-popover
+      style={{ position: "fixed", top, left, width: POPOVER_W, zIndex: 1000 }}
+      className="bg-white border border-slate-300 shadow-2xl rounded-lg flex flex-col"
+    >
+      <div className="px-3 py-2 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
+        Filter: {columnLabel}
+      </div>
+      <div className="p-2 border-b border-slate-200">
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search values..."
+          className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+          autoFocus
+        />
+      </div>
+      <div className="px-3 py-2 border-b border-slate-200 bg-slate-50">
+        <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={allChecked}
+            onChange={toggleAllVisible}
+            ref={el => { if (el) el.indeterminate = !allChecked && filtered.some(v => draft.has(v)); }}
+          />
+          <span className="font-medium text-slate-700">(Select All{search ? " Visible" : ""})</span>
+        </label>
+      </div>
+      <div className="flex-1 overflow-auto" style={{ maxHeight: 240 }}>
+        {filtered.length === 0 && (
+          <div className="text-xs text-slate-400 px-3 py-3">No matches.</div>
+        )}
+        {filtered.map(v => (
+          <label
+            key={v}
+            className="flex items-center gap-2 px-3 py-1 text-xs hover:bg-slate-50 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              checked={draft.has(v)}
+              onChange={() => toggleValue(v)}
+            />
+            <span className="truncate text-slate-700" title={v}>{v}</span>
+          </label>
+        ))}
+      </div>
+      <div className="flex gap-2 p-2 border-t border-slate-200 bg-slate-50">
+        <button
+          onClick={apply}
+          className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700"
+        >
+          Apply
+        </button>
+        <button
+          onClick={clearFilter}
+          className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-100"
+        >
+          Clear
+        </button>
+        <button
+          onClick={onClose}
+          className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 text-xs rounded hover:bg-slate-100"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
