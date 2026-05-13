@@ -171,7 +171,7 @@ export default function Replenishment() {
   }, [replenishment]);
 
   const tableColumns = useMemo(() => {
-    const base = [
+    const cols = [
       "model",
       "category",
       "asin",
@@ -183,15 +183,17 @@ export default function Replenishment() {
       "ampm_inventory",
       "required_units",
       "replenishment_qty",
+    ];
+    if (isNexlev) cols.push("working_value");
+    cols.push(
       "recommended_qty",
       "cartons_needed",
       "warehouse_shortfall",
       "ixd_type",
       "hazmat_type",
       "master_carton",
-    ];
-    if (isNexlev) base.push("working_value");
-    return base;
+    );
+    return cols;
   }, [isNexlev]);
 
   // Header label resolver (shared by thead + filter popover)
@@ -212,27 +214,38 @@ export default function Replenishment() {
     return map[col] || col.toUpperCase();
   }
 
-  // Unique values per column (for Excel-style filter dropdowns).
-  // Intentionally only depends on `replenishment` — Working column filter
-  // reflects saved values, not in-flight typing, to keep this memo cheap.
-  const uniqueValuesByCol = useMemo(() => {
-    const out = {};
-    tableColumns.forEach(col => {
-      const seen = new Set();
-      replenishment.forEach(row => {
-        const v = row[col];
-        seen.add(v == null || v === "" ? "(blank)" : String(v));
-      });
-      out[col] = [...seen].sort((a, b) =>
-        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
-      );
-    });
-    return out;
-  }, [replenishment, tableColumns]);
-
   function rowValueForFilter(row, col) {
     const v = row[col];
     return v == null || v === "" ? "(blank)" : String(v);
+  }
+
+  // For a column's filter dropdown: return unique values from rows that
+  // already pass all OTHER active filters. Excludes the column being edited
+  // so the user can re-check values they've previously unchecked.
+  function uniqueValuesForCol(col) {
+    const q = search.toLowerCase();
+    const others = Object.entries(columnFilters).filter(
+      ([c, s]) => c !== col && s && s.size > 0
+    );
+    const seen = new Set();
+    for (const row of replenishment) {
+      if (selectedCategories.length > 0 && !selectedCategories.includes(row.category)) continue;
+      if (selectedListingStatuses.length > 0 && !selectedListingStatuses.includes(row.listing_status)) continue;
+      if (q && !(
+        row.model?.toLowerCase().includes(q) ||
+        row.asin?.toLowerCase().includes(q) ||
+        row.sku?.toLowerCase().includes(q)
+      )) continue;
+      let pass = true;
+      for (const [c, allowed] of others) {
+        if (!allowed.has(rowValueForFilter(row, c))) { pass = false; break; }
+      }
+      if (!pass) continue;
+      seen.add(rowValueForFilter(row, col));
+    }
+    return [...seen].sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
+    );
   }
 
   function clearAllColumnFilters() {
@@ -959,7 +972,7 @@ function exportCSV() {
         <HeaderFilterPopover
           column={openFilter.col}
           columnLabel={colLabel(openFilter.col)}
-          allValues={uniqueValuesByCol[openFilter.col] || []}
+          allValues={uniqueValuesForCol(openFilter.col)}
           activeSet={columnFilters[openFilter.col]}
           anchorRect={openFilter.rect}
           onApply={(set) =>
