@@ -55,7 +55,11 @@ export default function FossilReplenishment() {
         if (res.available_weeks?.length) {
           const weeks = res.available_weeks;
           setAvailableWeeks(weeks);
-          if (!fromWeek) setFromWeek(weeks[0]);
+          if (!fromWeek) {
+            // Default to last 12 weeks (e.g. weeks 8-19 when data is 6-19)
+            const defaultFrom = weeks.length > 12 ? weeks[weeks.length - 12] : weeks[0];
+            setFromWeek(defaultFrom);
+          }
           if (!toWeek) setToWeek(weeks[weeks.length - 1]);
         }
       })
