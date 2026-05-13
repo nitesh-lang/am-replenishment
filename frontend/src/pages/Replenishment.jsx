@@ -1059,37 +1059,88 @@ function TeamExportModal({ open, onClose, rows, weekLabel }) {
     .filter(r => r._src === "vm")
     .reduce((s, r) => s + (parseFloat(r.working_value) || 0), 0);
 
+  const totalRow = ["Total", "", "", "", "", nxTotal || "", vmTotal || "", ""];
+
   function buildTSV() {
     const header = cols.join("\t");
     const lines = tableRows.map(r => r.join("\t"));
-    const total = ["Total", "", "", "", "", nxTotal || "", vmTotal || "", ""].join("\t");
-    return [header, ...lines, total].join("\n");
+    return [header, ...lines, totalRow.join("\t")].join("\n");
   }
 
-  function buildCSV() {
-    const esc = v => `"${String(v).replace(/"/g, '""')}"`;
-    const header = cols.map(esc).join(",");
-    const lines = tableRows.map(r => r.map(esc).join(","));
-    const total = ["Total", "", "", "", "", nxTotal || "", vmTotal || "", ""].map(esc).join(",");
-    return [header, ...lines, total].join("\n");
+  function escHTML(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // Excel/Sheets-friendly HTML with inline styles for bold header+footer,
+  // text wrap, and center+middle alignment.
+  function buildHTMLTable() {
+    const CELL_BASE =
+      "text-align:center;vertical-align:middle;border:1px solid #94a3b8;" +
+      "padding:6px;word-wrap:break-word;white-space:normal;";
+    const HEAD = `background:#e2e8f0;font-weight:bold;${CELL_BASE}`;
+    const BODY = CELL_BASE;
+    const FOOT = `background:#f1f5f9;font-weight:bold;${CELL_BASE}`;
+
+    const head =
+      "<tr>" +
+      cols.map(c => `<th style="${HEAD}">${escHTML(c)}</th>`).join("") +
+      "</tr>";
+    const body = tableRows
+      .map(r =>
+        "<tr>" +
+        r.map(v => `<td style="${BODY}">${escHTML(v)}</td>`).join("") +
+        "</tr>"
+      )
+      .join("");
+    const foot =
+      "<tr>" +
+      totalRow.map(v => `<td style="${FOOT}">${escHTML(v)}</td>`).join("") +
+      "</tr>";
+    return `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;"><thead>${head}</thead><tbody>${body}${foot}</tbody></table>`;
   }
 
   async function copy() {
+    const tsv = buildTSV();
+    const html = buildHTMLTable();
     try {
-      await navigator.clipboard.writeText(buildTSV());
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([tsv], { type: "text/plain" }),
+            "text/html":  new Blob([html], { type: "text/html" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(tsv);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
-      alert("Copy failed: " + e.message);
+      try {
+        await navigator.clipboard.writeText(tsv);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        alert("Copy failed: " + e.message);
+      }
     }
   }
 
   function download() {
-    const blob = new Blob([buildCSV()], { type: "text/csv;charset=utf-8;" });
+    // .xls file that's actually HTML — Excel opens it natively and keeps styles.
+    const doc =
+      `<html xmlns:o="urn:schemas-microsoft-com:office:office" ` +
+      `xmlns:x="urn:schemas-microsoft-com:office:excel"><head>` +
+      `<meta charset="utf-8"></head><body>${buildHTMLTable()}</body></html>`;
+    const blob = new Blob([doc], { type: "application/vnd.ms-excel;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `team_export_${weekLabel.replace(/\s/g, "_")}.csv`;
+    a.download = `team_export_${weekLabel.replace(/\s/g, "_")}.xls`;
     a.click();
   }
 
@@ -1124,7 +1175,7 @@ function TeamExportModal({ open, onClose, rows, weekLabel }) {
               disabled={rows.length === 0}
               className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800 disabled:opacity-40"
             >
-              Download CSV
+              Download Excel
             </button>
             <button
               onClick={onClose}
@@ -1145,13 +1196,13 @@ function TeamExportModal({ open, onClose, rows, weekLabel }) {
           </div>
         ) : (
           <div className="overflow-auto flex-1">
-            <table className="w-full text-xs">
-              <thead className="bg-slate-100 sticky top-0">
+            <table className="w-full text-xs border-collapse">
+              <thead className="bg-slate-200 sticky top-0">
                 <tr>
                   {cols.map(c => (
                     <th
                       key={c}
-                      className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-slate-600 whitespace-nowrap"
+                      className="px-3 py-2 text-center align-middle font-bold uppercase tracking-wide text-slate-700 border border-slate-400 break-words"
                     >
                       {c}
                     </th>
@@ -1160,18 +1211,26 @@ function TeamExportModal({ open, onClose, rows, weekLabel }) {
               </thead>
               <tbody>
                 {tableRows.map((r, i) => (
-                  <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
+                  <tr key={i} className="hover:bg-slate-50">
                     {r.map((v, j) => (
-                      <td key={j} className="px-3 py-1.5 whitespace-nowrap">{v}</td>
+                      <td
+                        key={j}
+                        className="px-3 py-1.5 text-center align-middle border border-slate-300 break-words"
+                      >
+                        {v}
+                      </td>
                     ))}
                   </tr>
                 ))}
-                <tr className="border-t-2 border-slate-300 font-semibold bg-slate-50">
-                  <td className="px-3 py-2">Total</td>
-                  <td colSpan={4}></td>
-                  <td className="px-3 py-2">{nxTotal || ""}</td>
-                  <td className="px-3 py-2">{vmTotal || ""}</td>
-                  <td></td>
+                <tr className="bg-slate-100 font-bold">
+                  {["Total", "", "", "", "", nxTotal || "", vmTotal || "", ""].map((v, j) => (
+                    <td
+                      key={j}
+                      className="px-3 py-2 text-center align-middle border border-slate-400 break-words"
+                    >
+                      {v}
+                    </td>
+                  ))}
                 </tr>
               </tbody>
             </table>
