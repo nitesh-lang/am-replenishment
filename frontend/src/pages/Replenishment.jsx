@@ -38,7 +38,6 @@ export default function Replenishment() {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
-  const isNexlev = account === "NEXLEV";
   const isReadOnly = weekStart !== null;
 
   // Excel-style per-column filters
@@ -170,31 +169,26 @@ export default function Replenishment() {
     return Object.keys(replenishment[0]);
   }, [replenishment]);
 
-  const tableColumns = useMemo(() => {
-    const cols = [
-      "model",
-      "category",
-      "asin",
-      "sku",
-      "sales_velocity",
-      "total_units_sold",
-      "amazon_inventory",
-      "inbound_inventory",
-      "ampm_inventory",
-      "required_units",
-      "replenishment_qty",
-    ];
-    if (isNexlev) cols.push("working_value");
-    cols.push(
-      "recommended_qty",
-      "cartons_needed",
-      "warehouse_shortfall",
-      "ixd_type",
-      "hazmat_type",
-      "master_carton",
-    );
-    return cols;
-  }, [isNexlev]);
+  const tableColumns = useMemo(() => [
+    "model",
+    "category",
+    "asin",
+    "sku",
+    "sales_velocity",
+    "total_units_sold",
+    "amazon_inventory",
+    "inbound_inventory",
+    "ampm_inventory",
+    "required_units",
+    "replenishment_qty",
+    "working_value",
+    "recommended_qty",
+    "cartons_needed",
+    "warehouse_shortfall",
+    "ixd_type",
+    "hazmat_type",
+    "master_carton",
+  ], []);
 
   // Header label resolver (shared by thead + filter popover)
   function colLabel(col) {
@@ -471,7 +465,7 @@ function exportCSV() {
         </p>
       </div>
 
-    <div className={`card grid grid-cols-1 ${isNexlev ? "md:grid-cols-3" : ""} gap-3 py-3`}>
+    <div className="card grid grid-cols-1 md:grid-cols-3 gap-3 py-3">
       <div>
         <label className="text-xs uppercase text-slate-400">Account</label>
         <select
@@ -486,7 +480,6 @@ function exportCSV() {
         </select>
       </div>
 
-      {isNexlev && (
       <div>
         <label className="text-xs uppercase text-slate-400">Working Week</label>
         <select
@@ -506,9 +499,7 @@ function exportCSV() {
           ))}
         </select>
       </div>
-      )}
 
-      {isNexlev && (
       <div className="flex flex-col justify-end">
         {!isReadOnly && !currentWeekMeta?.locked && (
           <button
@@ -538,7 +529,6 @@ function exportCSV() {
           <div className="text-xs text-slate-600 mt-1 px-1">{saveMsg}</div>
         )}
       </div>
-      )}
     </div>
 
     {/* SALES WINDOW + REPLENISH WEEKS FILTER */}
