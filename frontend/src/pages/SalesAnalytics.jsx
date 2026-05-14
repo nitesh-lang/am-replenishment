@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { getReplenishment } from "../api/replenishment";
 
 /* ============================================================
@@ -11,6 +11,7 @@ export default function SalesAnalytics() {
      STATE
   ============================================================ */
 
+  const [account, setAccount] = useState("NEXLEV");
   const [salesWindow, setSalesWindow] = useState(4);
   const [replenishWeeks, setReplenishWeeks] = useState(8);
 
@@ -24,7 +25,7 @@ export default function SalesAnalytics() {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const rowsPerPage = 10;
+  const rowsPerPage = 50;
 
   const [expandedRow, setExpandedRow] = useState(null);
 
@@ -34,13 +35,14 @@ export default function SalesAnalytics() {
 
   useEffect(() => {
     setLoading(true);
+    setCurrentPage(1);
 
-    getReplenishment(salesWindow, replenishWeeks)
+    getReplenishment(salesWindow, replenishWeeks, account)
       .then((res) => {
         setData(Array.isArray(res) ? res : []);
       })
       .finally(() => setLoading(false));
-  }, [salesWindow, replenishWeeks]);
+  }, [salesWindow, replenishWeeks, account]);
 
   /* ============================================================
      FILTER
@@ -108,7 +110,7 @@ export default function SalesAnalytics() {
         : 0;
 
     const topSKU =
-      filteredData.sort(
+      [...filteredData].sort(
         (a, b) => (b.sales_velocity || 0) - (a.sales_velocity || 0)
       )[0]?.model || "-";
 
@@ -167,20 +169,29 @@ export default function SalesAnalytics() {
   ============================================================ */
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="rounded-2xl p-8 bg-gradient-to-r from-indigo-900 via-slate-800 to-indigo-900 text-white shadow-xl">
-        <h1 className="text-3xl font-semibold">
-          Nexlev Sales Intelligence
-        </h1>
-        <p className="text-slate-300 mt-2 text-sm">
-          Sales velocity vs Amazon inventory performance analytics
-        </p>
+      <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-indigo-900 via-slate-800 to-indigo-900 text-white shadow flex items-baseline gap-3">
+        <h1 className="text-lg font-semibold">Sales Intelligence</h1>
+        <p className="text-slate-300 text-xs">Sales velocity vs Amazon inventory</p>
       </div>
 
       {/* FILTERS */}
-      <div className="card grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="card grid grid-cols-1 md:grid-cols-4 gap-3 py-3">
+        <div>
+          <label className="text-xs uppercase tracking-wider text-slate-400">Account</label>
+          <select
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+            className="mt-2 w-full px-4 py-2 border rounded-lg"
+          >
+            <option value="NEXLEV">Nexlev</option>
+            <option value="VIOMI">Viomi</option>
+            <option value="AUDIO ARRAY">Audio Array</option>
+            <option value="WHITE MULBERRY">White Mulberry</option>
+          </select>
+        </div>
         <FilterSelect
           label="Sales Window"
           value={salesWindow}
@@ -204,7 +215,7 @@ export default function SalesAnalytics() {
       </div>
 
       {/* KPI CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <MetricCard title="Total Sales" value={kpis.totalSales} />
         <MetricCard title="Total Inventory" value={kpis.totalInventory} />
         <MetricCard title="Coverage Ratio" value={kpis.coverage} />
@@ -254,9 +265,8 @@ export default function SalesAnalytics() {
                 const health = getHealth(row);
 
                 return (
-                  <>
+                  <Fragment key={row.sku || row.model || i}>
                     <tr
-                      key={i}
                       className="border-b hover:bg-slate-50 cursor-pointer"
                       onClick={() =>
                         setExpandedRow(i === expandedRow ? null : i)
@@ -306,7 +316,7 @@ export default function SalesAnalytics() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
