@@ -1,6 +1,15 @@
 from fastapi import APIRouter, Request, Query
 from typing import Optional
 from app.services.cb_replenishment import load_cb_replenishment
+from app.services import cb_replenishment_saved
+from app.services.week_helper import (
+    current_working_week_start,
+    week_end,
+    week_label,
+    is_week_locked,
+    now_ist,
+)
+from datetime import date as _date
 import psycopg2
 import os
 import json
@@ -58,6 +67,26 @@ def get_cb_replenishment(
                 df["remarks"] = df["remarks_db"].fillna("")
                 df = df.drop(columns=["remarks_db"], errors="ignore")
 
+        # ✅ MERGE WEEK-SCOPED WORKING VALUE + REMARKS (current working week)
+        try:
+            cb_replenishment_saved.ensure_table()
+            week_map = cb_replenishment_saved.load_current_week_map(current_working_week_start())
+            df["working_value"] = df["model"].map(
+                lambda m: week_map.get(str(m), {}).get("working_value", "")
+            )
+            # Week-scoped remarks override the legacy remarks if present
+            df["remarks_week"] = df["model"].map(
+                lambda m: week_map.get(str(m), {}).get("remarks", "")
+            )
+            df["remarks"] = df.apply(
+                lambda r: r["remarks_week"] if str(r.get("remarks_week", "")).strip() else r.get("remarks", ""),
+                axis=1,
+            )
+            df = df.drop(columns=["remarks_week"], errors="ignore")
+        except Exception as e:
+            print("⚠️ Could not load week-scoped CB working values:", e)
+            df["working_value"] = ""
+
         # =========================
         # FINAL RESPONSE
         # =========================
@@ -77,6 +106,7 @@ def get_cb_replenishment(
             "open_po",
             "in_transit",
             "po_requirement",
+            "working_value",
             "remarks",
             "hazmat_type"
         ]].copy()
@@ -113,6 +143,94 @@ def get_cb_replenishment(
             "total_models": 0,
             "error": str(e)
         }
+
+
+# =========================
+# WEEK-SCOPED SAVE — auto-save per row (working_value + remarks)
+# =========================
+@router.post("/save-working")
+async def cb_save_working_row(request: Request):
+    try:
+        body = await request.json()
+        model = str(body.get("model", "")).strip()
+        if not model:
+            return {"status": "error", "error": "model required"}
+
+        ws = current_working_week_start()
+        if is_week_locked(ws):
+            return {
+                "status": "locked",
+                "error":  f"Working week ({week_label(ws)}) is past Saturday 11:59 PM IST.",
+                "week_start": ws.isoformat(),
+            }
+
+        cb_replenishment_saved.ensure_table()
+        cb_replenishment_saved.save_row(
+            week_start=ws,
+            model=model,
+            working_value=body.get("working_value"),
+            remarks=body.get("remarks"),
+            snapshot=body.get("snapshot") or {},
+            saved_by=str(body.get("saved_by", "info@cambiumretail.com")),
+        )
+        return {
+            "status":     "saved",
+            "week_start": ws.isoformat(),
+            "label":      week_label(ws),
+            "saved_at":   now_ist().isoformat(),
+        }
+    except Exception as e:
+        print("⚠️ CB save-working error:", e)
+        return {"status": "error", "error": str(e)}
+
+
+# =========================
+# WEEK META + LIST PAST SAVED WEEKS
+# =========================
+@router.get("/saved-weeks")
+def cb_saved_weeks():
+    try:
+        cb_replenishment_saved.ensure_table()
+        saved = cb_replenishment_saved.list_saved_weeks()
+    except Exception as e:
+        print("⚠️ CB saved-weeks error:", e)
+        saved = []
+
+    ws = current_working_week_start()
+    current = {
+        "week_start": ws.isoformat(),
+        "week_end":   week_end(ws).isoformat(),
+        "label":      week_label(ws),
+        "locked":     is_week_locked(ws),
+    }
+
+    for w in saved:
+        wd = _date.fromisoformat(w["week_start"])
+        w["week_end"] = week_end(wd).isoformat()
+        w["label"]    = week_label(wd)
+
+    return {"current_week": current, "saved_weeks": saved}
+
+
+# =========================
+# VIEW PAST WEEK (read only frozen snapshot)
+# =========================
+@router.get("/saved-week-data")
+def cb_saved_week_data(week_start: str = Query(...)):
+    try:
+        cb_replenishment_saved.ensure_table()
+        ws = _date.fromisoformat(week_start)
+        rows = cb_replenishment_saved.load_week_snapshot(ws)
+        return {
+            "week_start": ws.isoformat(),
+            "week_end":   week_end(ws).isoformat(),
+            "label":      week_label(ws),
+            "locked":     True,
+            "rows":       rows,
+        }
+    except Exception as e:
+        print("⚠️ CB saved-week-data error:", e)
+        return {"week_start": week_start, "rows": [], "error": str(e)}
 
 
 # =========================
