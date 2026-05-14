@@ -59,25 +59,25 @@ const cbCols = [
 
 function cbColLabel(col) {
   const map = {
-    model: "Model",
+    model: "MODEL",
     asin: "ASIN",
     sku: "SKU",
-    china_in_transit: "China In-Transit",
+    china_in_transit: "CHINA IT",
     final_cb_qty: "CB SOH",
-    ampm_inventory: "Mother Warehouse",
-    cb_3m_sales: "CB Sales",
-    cambium_3m_sales: "Cambium Sales",
-    avg_weekly_sales: "Avg Weekly Sales",
-    estimated_qty: "Estimated Qty",
-    deficiency: "Stock Shortfall",
-    open_po: "Open PO",
-    in_transit: "In-Transit",
-    asin_sort_details: "ASIN Sort Details",
-    po_requirement: "PO Requirement",
-    working_value: "Working",
-    remarks: "Remarks",
+    ampm_inventory: "AMPM",
+    cb_3m_sales: "CB SALES",
+    cambium_3m_sales: "AMZ SALES",
+    avg_weekly_sales: "AVG/WK",
+    estimated_qty: "EST QTY",
+    deficiency: "SHORTFALL",
+    open_po: "OPEN PO",
+    in_transit: "IN-TRANSIT",
+    asin_sort_details: "ASIN SORT",
+    po_requirement: "PO REQ",
+    working_value: "WORKING",
+    remarks: "REMARKS",
   };
-  return map[col] || col;
+  return map[col] || col.toUpperCase();
 }
 
 function cbRowVal(row, col) {
@@ -405,14 +405,9 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
     <div className="space-y-4">
 
       {/* HEADER */}
-
-      <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
-        <h1 className="text-3xl font-semibold">
-          CB Replenishment Intelligence
-        </h1>
-        <p className="text-slate-300 mt-2 text-sm">
-          Cambium / CB Inventory Planning
-        </p>
+      <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow flex items-baseline gap-3">
+        <h1 className="text-lg font-semibold">CB Replenishment Intelligence</h1>
+        <p className="text-slate-300 text-xs">Cambium / CB Inventory Planning</p>
       </div>
 
       {/* KPI */}
@@ -588,16 +583,16 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
       {/* TABLE */}
 
       <div className="card p-0 overflow-hidden">
-        <div className="overflow-auto max-h-[75vh]">
+        <div className="overflow-auto max-h-[82vh]">
 
-          <table className="w-full text-sm">
+          <table className="w-full text-[11px] table-auto">
 
-            <thead className="bg-slate-100 text-xs uppercase sticky top-0 z-20">
+            <thead className="bg-slate-100 text-[10px] uppercase sticky top-0 z-20">
               <tr>
                 {cbCols.map((col) => {
                   const hasFilter = columnFilters[col] && columnFilters[col].size > 0;
                   return (
-                    <th key={col} className="px-4 py-3 whitespace-nowrap">
+                    <th key={col} className="px-2 py-2 whitespace-nowrap font-semibold tracking-tight">
                       <div className="flex items-center gap-1">
                         <span
                           className="cursor-pointer select-none flex items-center gap-1"
@@ -637,89 +632,67 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
 
                 <tr key={i} className="hover:bg-slate-50">
 
-                  <td className="px-4 py-3 font-medium">
+                  <td className="px-2 py-1.5 font-medium">
                     {row.model}
                   </td>
 
-                  <td className="px-4 py-3 text-slate-500">
+                  <td className="px-2 py-1.5 text-slate-500">
                     {row.asin || "-"}
                   </td>
 
-                  <td className="px-4 py-3 font-mono text-slate-500">
+                  <td className="px-2 py-1.5 font-mono text-slate-500">
                     {row.sku || "-"}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {row.china_in_transit ?? 0}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {row.final_cb_qty}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {row.ampm_inventory ?? 0}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {row.cb_3m_sales}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {row.cambium_3m_sales}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {Math.round(row.avg_weekly_sales)}
                   </td>
 
-                  <td className="px-4 py-3 font-semibold text-indigo-700">
+                  <td className="px-2 py-1.5 font-semibold text-indigo-700">
                     {Math.round(row.estimated_qty)}
                   </td>
 
-                  <td className="px-4 py-3 text-red-600 font-semibold">
+                  <td className="px-2 py-1.5 text-red-600 font-semibold">
                     {Math.round(row.deficiency)}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {row.open_po}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {row.in_transit}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {row.asin_sort_details || "-"}
                   </td>
 
-                  <td className="px-4 py-3">
-                    <input
-                      type="number"
-                      value={row.po_requirement || 0}
-                      onChange={(e) => {
-                        const value = Number(e.target.value);
-
-                        const newData = data.map(d =>
-                          d.model === row.model ? { ...d, po_requirement: value } : d
-                        );
-                        setData(newData);
-
-                        fetch(`${BASE}/api/cb-replenishment/save`, {
-                          method: "POST",
-                          headers: {"Content-Type": "application/json"},
-                          body: JSON.stringify({
-                            model: row.model,
-                            po_requirement: value,
-                            remarks: row.remarks || ""
-                          })
-                        });
-                      }}
-                      className="border rounded px-2 py-1 w-24"
-                    />
+                  <td className="px-2 py-1.5 font-semibold text-indigo-700">
+                    {Math.round(row.po_requirement ?? 0)}
                   </td>
 
-                  <td className="px-4 py-3 bg-amber-50">
+                  <td className="px-2 py-1.5 bg-amber-50">
                     {isLocked ? (
                       <span className="font-medium">
                         {workingValues[row.model] ?? row.working_value ?? ""}
@@ -733,7 +706,7 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
                           setWorkingValues(prev => ({ ...prev, [row.model]: v }));
                           scheduleAutoSave(row, v, remarksValues[row.model] ?? row.remarks ?? "");
                         }}
-                        className="border border-amber-300 px-2 py-1 rounded w-24 bg-white"
+                        className="border border-amber-300 px-1.5 py-0.5 rounded w-16 bg-white text-[11px]"
                       />
                     )}
                     {savingMap[row.model] && (
@@ -749,7 +722,7 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
                     )}
                   </td>
 
-                  <td className="px-4 py-3">
+                  <td className="px-2 py-1.5">
                     {isLocked ? (
                       <span>{remarksValues[row.model] ?? row.remarks ?? ""}</span>
                     ) : (
@@ -765,7 +738,7 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
                             v
                           );
                         }}
-                        className="border rounded px-2 py-1 w-full"
+                        className="border rounded px-1.5 py-0.5 w-full text-[11px]"
                       />
                     )}
                   </td>
