@@ -50,6 +50,45 @@ const isLocked = isReadOnly || !!currentWeekMeta?.locked;
 const [columnFilters, setColumnFilters] = useState({});
 const [openFilter, setOpenFilter] = useState(null);
 
+// Team export modal state
+const [exportOpen, setExportOpen] = useState(false);
+const [exportRows, setExportRows] = useState([]);
+const [exportWeekLabel, setExportWeekLabel] = useState("");
+const [exportLoading, setExportLoading] = useState(false);
+
+async function openCBTeamExport() {
+  const ws = weekStart || currentWeekMeta?.week_start;
+  const label = pastWeekMeta?.label || currentWeekMeta?.label || "Week";
+  if (!ws) {
+    alert("No working week available.");
+    return;
+  }
+  setExportLoading(true);
+  try {
+    const res = await fetch(
+      `${BASE}/api/cb-replenishment/saved-week-data?week_start=${ws}`
+    ).then(r => r.json());
+    const all = (res.rows || []).filter(
+      r => String(r.working_value || "").trim() !== ""
+    );
+    // Sort: Audio Array first, Tonor second, alphabetic within brand
+    const brandOrder = { "Audio Array": 0, "Tonor": 1 };
+    all.sort((a, b) => {
+      const ba = brandOrder[a.brand] ?? 99;
+      const bb = brandOrder[b.brand] ?? 99;
+      if (ba !== bb) return ba - bb;
+      return String(a.model || "").localeCompare(String(b.model || ""));
+    });
+    setExportRows(all);
+    setExportWeekLabel(label);
+    setExportOpen(true);
+  } catch (e) {
+    alert("Failed to load export: " + e.message);
+  } finally {
+    setExportLoading(false);
+  }
+}
+
 const cbCols = [
   "model", "asin", "sku", "china_in_transit", "final_cb_qty",
   "ampm_inventory", "cb_3m_sales", "cambium_3m_sales", "avg_weekly_sales",
@@ -568,6 +607,15 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
         </button>
 
         <button
+          onClick={openCBTeamExport}
+          disabled={exportLoading}
+          className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
+          title="Brand-wise PO Qty export for the team (Audio Array + Tonor)"
+        >
+          {exportLoading ? "Loading…" : "Team Export"}
+        </button>
+
+        <button
           onClick={async () => {
             if (!window.confirm("Reset all saved PO requirements and remarks? Fresh calculations will show.")) return;
             await fetch(`${BASE}/api/cb-replenishment/reset`, { method: "POST" });
@@ -781,6 +829,14 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
 
       </div>
 
+      {/* TEAM EXPORT MODAL */}
+      <CBTeamExportModal
+        open={exportOpen}
+        rows={exportRows}
+        weekLabel={exportWeekLabel}
+        onClose={() => setExportOpen(false)}
+      />
+
       {/* COLUMN FILTER POPOVER */}
       {openFilter && (
         <HeaderFilterPopover
@@ -808,6 +864,202 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
 /* ============================================================
    COMPONENTS
 ============================================================ */
+
+function CBTeamExportModal({ open, onClose, rows, weekLabel }) {
+  const [copied, setCopied] = useState(false);
+  if (!open) return null;
+
+  const cols = ["MODEL", "ASIN", "SKU", "PO QTY", "REMARKS"];
+
+  const tableRows = rows.map(r => [
+    r.model || "",
+    r.asin || "",
+    r.sku || "",
+    r.working_value || "",
+    r.remarks || "",
+  ]);
+
+  const total = rows.reduce(
+    (s, r) => s + (parseFloat(r.working_value) || 0),
+    0
+  );
+  const totalRow = ["Total", "", "", total || "", ""];
+
+  function escHTML(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function buildTSV() {
+    const header = cols.join("\t");
+    const lines = tableRows.map(r => r.join("\t"));
+    return [header, ...lines, totalRow.join("\t")].join("\n");
+  }
+
+  function buildHTMLTable() {
+    const CELL_BASE =
+      "text-align:center;vertical-align:middle;border:1px solid #94a3b8;" +
+      "padding:6px;word-wrap:break-word;white-space:normal;";
+    const HEAD = `background:#e2e8f0;font-weight:bold;${CELL_BASE}`;
+    const BODY = CELL_BASE;
+    const FOOT = `background:#f1f5f9;font-weight:bold;${CELL_BASE}`;
+
+    const head =
+      "<tr>" +
+      cols.map(c => `<th style="${HEAD}">${escHTML(c)}</th>`).join("") +
+      "</tr>";
+    const body = tableRows
+      .map(r =>
+        "<tr>" +
+        r.map(v => `<td style="${BODY}">${escHTML(v)}</td>`).join("") +
+        "</tr>"
+      )
+      .join("");
+    const foot =
+      "<tr>" +
+      totalRow.map(v => `<td style="${FOOT}">${escHTML(v)}</td>`).join("") +
+      "</tr>";
+    return `<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;"><thead>${head}</thead><tbody>${body}${foot}</tbody></table>`;
+  }
+
+  async function copy() {
+    const tsv = buildTSV();
+    const html = buildHTMLTable();
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/plain": new Blob([tsv], { type: "text/plain" }),
+            "text/html":  new Blob([html], { type: "text/html" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(tsv);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      try {
+        await navigator.clipboard.writeText(tsv);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch {
+        alert("Copy failed: " + e.message);
+      }
+    }
+  }
+
+  function download() {
+    const doc =
+      `<html xmlns:o="urn:schemas-microsoft-com:office:office" ` +
+      `xmlns:x="urn:schemas-microsoft-com:office:excel"><head>` +
+      `<meta charset="utf-8"></head><body>${buildHTMLTable()}</body></html>`;
+    const blob = new Blob([doc], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cb_team_export_${weekLabel.replace(/\s/g, "_")}.xls`;
+    a.click();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              CB Team Export — {weekLabel}
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Audio Array + Tonor · {rows.length} row{rows.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={copy}
+              disabled={rows.length === 0}
+              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 disabled:opacity-40"
+            >
+              {copied ? "Copied!" : "Copy to clipboard"}
+            </button>
+            <button
+              onClick={download}
+              disabled={rows.length === 0}
+              className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800 disabled:opacity-40"
+            >
+              Download Excel
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs rounded hover:bg-slate-200"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        {rows.length === 0 ? (
+          <div className="p-12 text-center text-slate-500">
+            <p className="text-sm">No rows to export.</p>
+            <p className="text-xs mt-2">
+              Type Working values for Audio Array and/or Tonor for this week first.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-auto flex-1">
+            <table className="w-full text-xs border-collapse">
+              <thead className="bg-slate-200 sticky top-0">
+                <tr>
+                  {cols.map(c => (
+                    <th
+                      key={c}
+                      className="px-3 py-2 text-center align-middle font-bold uppercase tracking-wide text-slate-700 border border-slate-400 break-words"
+                    >
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-50">
+                    {r.map((v, j) => (
+                      <td
+                        key={j}
+                        className="px-3 py-1.5 text-center align-middle border border-slate-300 break-words"
+                      >
+                        {v}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                <tr className="bg-slate-100 font-bold">
+                  {totalRow.map((v, j) => (
+                    <td
+                      key={j}
+                      className="px-3 py-2 text-center align-middle border border-slate-400 break-words"
+                    >
+                      {v}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function HeaderFilterPopover({ column, columnLabel, allValues, activeSet, anchorRect, onApply, onClose }) {
   const [search, setSearch] = useState("");
