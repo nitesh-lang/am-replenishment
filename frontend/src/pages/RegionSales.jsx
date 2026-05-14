@@ -344,13 +344,9 @@ export default function RegionSales() {
 
 function MetricCard({ title, value }) {
   return (
-    <div className="p-6 bg-white border rounded-xl shadow-sm hover:shadow-md transition">
-      <div className="text-xs uppercase text-slate-400">
-        {title}
-      </div>
-      <div className="text-2xl font-semibold mt-3">
-        {value ?? "-"}
-      </div>
+    <div className="px-3 py-2 bg-white border rounded-lg shadow-sm">
+      <div className="text-[10px] uppercase text-slate-400">{title}</div>
+      <div className="text-base font-semibold text-slate-800">{value ?? "-"}</div>
     </div>
   );
 }

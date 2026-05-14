@@ -802,13 +802,9 @@ function exportCSV() {
 
 function MetricCard({ title, value }) {
   return (
-    <div className="p-5 bg-white border border-slate-100 rounded-xl shadow-sm hover:shadow-md transition">
-      <div className="text-xs uppercase tracking-wider text-slate-400">
-        {title}
-      </div>
-      <div className="text-2xl font-semibold mt-1 text-slate-800">
-        {value ?? "-"}
-      </div>
+    <div className="px-3 py-2 bg-white border border-slate-100 rounded-lg shadow-sm">
+      <div className="text-[10px] uppercase tracking-wider text-slate-400">{title}</div>
+      <div className="text-base font-semibold text-slate-800">{value ?? "-"}</div>
     </div>
   );
 }

@@ -6,8 +6,6 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
-  Search,
-  Bell,
   LogOut,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
@@ -116,28 +114,9 @@ export default function Layout({ children }) {
       <div className="flex-1 flex flex-col">
 
         {/* ===== TOP NAVBAR ===== */}
-        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-12 shadow-sm">
-          
-          {/* Search */}
-          <div className="relative w-80">
-            <Search
-              size={16}
-              className="absolute left-3 top-3 text-slate-400"
-            />
-            <input
-              type="text"
-              placeholder="Search anything..."
-              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-            />
-          </div>
-
+        <header className="h-10 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-end px-8 shadow-sm">
           {/* Right Controls */}
-          <div className="flex items-center gap-6">
-            <Bell
-              size={18}
-              className="text-slate-500 hover:text-slate-800 cursor-pointer"
-            />
-
+          <div className="flex items-center gap-4">
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((v) => !v)}

@@ -424,9 +424,9 @@ export default function ChinaReorder() {
 
 function MetricCard({ title, value }) {
   return (
-    <div className="p-5 bg-white rounded-xl shadow-sm border border-slate-100">
-      <div className="text-xs uppercase tracking-wider text-slate-400">{title}</div>
-      <div className="text-2xl font-semibold mt-1 text-slate-800">{value ?? "-"}</div>
+    <div className="px-3 py-2 bg-white rounded-lg shadow-sm border border-slate-100">
+      <div className="text-[10px] uppercase tracking-wider text-slate-400">{title}</div>
+      <div className="text-base font-semibold text-slate-800">{value ?? "-"}</div>
     </div>
   );
 }
