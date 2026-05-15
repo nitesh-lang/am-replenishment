@@ -86,7 +86,7 @@ def ensure_table_and_seed():
                 "allowed_modules": [
                     "replenishment", "fc-allocation",
                     "cb-replenishment", "wm-replenishment",
-                    "fossil-replenishment",
+                    "fossil-replenishment", "china-reorder",
                 ],
             },
             {
@@ -97,7 +97,7 @@ def ensure_table_and_seed():
                 "allowed_modules": [
                     "replenishment", "fc-allocation",
                     "cb-replenishment", "wm-replenishment",
-                    "fossil-replenishment",
+                    "fossil-replenishment", "china-reorder",
                 ],
             },
             {
@@ -105,7 +105,7 @@ def ensure_table_and_seed():
                 "name":  "Zaid",
                 "password": "Zaid@123",
                 "role":  "user",
-                "allowed_modules": ["cb-replenishment"],
+                "allowed_modules": ["cb-replenishment", "china-reorder"],
             },
         ]
         for u in seed:
