@@ -2,11 +2,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 const AuthContext = createContext(null);
 
-const STORAGE_KEY = "am_repl_auth";
-
-const VALID_USERS = [
-  { email: "info@cambiumretail.com", password: "Cambium@109" },
-];
+const STORAGE_KEY = "am_repl_auth_v2";
+const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -22,18 +19,30 @@ export function AuthProvider({ children }) {
     setReady(true);
   }, []);
 
-  function login(email, password) {
-    const normEmail = (email || "").trim().toLowerCase();
-    const match = VALID_USERS.find(
-      (u) => u.email.toLowerCase() === normEmail && u.password === password
-    );
-    if (!match) {
-      return { ok: false, error: "Invalid email or password" };
+  async function login(email, password) {
+    try {
+      const res = await fetch(`${BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: (email || "").trim(), password }),
+      });
+      const j = await res.json();
+      if (j.status !== "ok" || !j.user) {
+        return { ok: false, error: j.error || "Invalid email or password" };
+      }
+      const session = {
+        email: j.user.email,
+        name:  j.user.name,
+        role:  j.user.role,
+        allowedModules: j.user.allowed_modules || [],
+        loginAt: Date.now(),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+      setUser(session);
+      return { ok: true, user: session };
+    } catch (e) {
+      return { ok: false, error: "Could not reach the server. Try again." };
     }
-    const session = { email: match.email, loginAt: Date.now() };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-    setUser(session);
-    return { ok: true };
   }
 
   function logout() {
@@ -41,20 +50,23 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  function canAccess(moduleKey) {
+    if (!user) return false;
+    if (user.role === "admin") return true;
+    return (user.allowedModules || []).includes(moduleKey);
+  }
+
   function requestPasswordReset(email) {
     const normEmail = (email || "").trim().toLowerCase();
-    const known = VALID_USERS.some((u) => u.email.toLowerCase() === normEmail);
     return {
       ok: true,
-      message: known
-        ? "If an account exists for this email, a reset link has been sent."
-        : "If an account exists for this email, a reset link has been sent.",
+      message: "If an account exists for this email, a reset link has been sent.",
     };
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, ready, login, logout, requestPasswordReset }}
+      value={{ user, ready, login, logout, canAccess, requestPasswordReset }}
     >
       {children}
     </AuthContext.Provider>

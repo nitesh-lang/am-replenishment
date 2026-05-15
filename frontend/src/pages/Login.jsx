@@ -15,17 +15,24 @@ export default function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setSubmitting(true);
-    const res = login(email, password);
-    setSubmitting(false);
-    if (!res.ok) {
-      setError(res.error);
-      return;
+    try {
+      const res = await login(email, password);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      // Land on first allowed module — Dashboard is admin-only-ish
+      const fallback = res.user?.role === "admin"
+        ? "/dashboard"
+        : `/${(res.user?.allowedModules || [])[0] || "login"}`;
+      navigate(from === "/" ? fallback : from, { replace: true });
+    } finally {
+      setSubmitting(false);
     }
-    navigate(from, { replace: true });
   }
 
   return (

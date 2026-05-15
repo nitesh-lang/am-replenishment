@@ -20,6 +20,7 @@ from app.api.cb_replenishment import router as cb_replenishment_router
 from app.api.wm_replenishment import router as wm_replenishment_router
 from app.api.fossil_replenishment import router as fossil_router
 from app.api.master_carton import router as master_carton_router
+from app.api.auth import router as auth_router
 
 
 
@@ -36,6 +37,12 @@ from app.core.models.base import Base
 @app.on_event("startup")
 def create_tables():
     Base.metadata.create_all(bind=engine)
+    try:
+        from app.services import auth_users
+        auth_users.ensure_table_and_seed()
+        print("✅ App users table ready")
+    except Exception as e:
+        print(f"⚠️ User table init warning: {e}")
     _preload_data_files()
 
 def _preload_data_files():
@@ -86,6 +93,7 @@ app.include_router(cb_replenishment_router, prefix="/api")
 app.include_router(wm_replenishment_router, prefix="/api")
 app.include_router(fossil_router)
 app.include_router(master_carton_router)
+app.include_router(auth_router)
 
 # =====================================================
 # ROOT

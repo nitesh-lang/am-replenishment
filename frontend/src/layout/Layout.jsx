@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 
@@ -15,7 +16,7 @@ export default function Layout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, canAccess } = useAuth();
 
   useEffect(() => {
     function onClick(e) {
@@ -37,18 +38,20 @@ export default function Layout({ children }) {
     .slice(0, 2)
     .toUpperCase();
 
-  const navItems = [
-    { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-    { name: "Replenishment", path: "/replenishment", icon: LayoutDashboard },
-    { name: "FC Allocation", path: "/fc-allocation", icon: Boxes },
-    { name: "China Reorder", path: "/china-reorder", icon: Boxes },   // ✅ ADD THIS
-    { name: "Sales Analytics", path: "/sales-analytics", icon: BarChart3 },
-    { name: "Region Sales", path: "/region-sales", icon: BarChart3 }, // 👈 ADD THIS
-    { name: "CB Replenishment", path: "/cb-replenishment", icon: Boxes },
-    { name: "Clicktech Replenishment", path: "/wm-replenishment", icon: Boxes },
-    { name: "China Reorder Working", path: "/china-reorder-working", icon: Boxes },
-    { name: "Fossil Replenishment", path: "/fossil-replenishment", icon: Boxes },
+  const allNavItems = [
+    { name: "Dashboard",              path: "/dashboard",              moduleKey: "dashboard",              icon: LayoutDashboard },
+    { name: "Replenishment",          path: "/replenishment",          moduleKey: "replenishment",          icon: LayoutDashboard },
+    { name: "FC Allocation",          path: "/fc-allocation",          moduleKey: "fc-allocation",          icon: Boxes },
+    { name: "China Reorder",          path: "/china-reorder",          moduleKey: "china-reorder",          icon: Boxes },
+    { name: "Sales Analytics",        path: "/sales-analytics",        moduleKey: "sales-analytics",        icon: BarChart3 },
+    { name: "Region Sales",           path: "/region-sales",           moduleKey: "region-sales",           icon: BarChart3 },
+    { name: "CB Replenishment",       path: "/cb-replenishment",       moduleKey: "cb-replenishment",       icon: Boxes },
+    { name: "Clicktech Replenishment",path: "/wm-replenishment",       moduleKey: "wm-replenishment",       icon: Boxes },
+    { name: "China Reorder Working",  path: "/china-reorder-working",  moduleKey: "china-reorder-working",  icon: Boxes },
+    { name: "Fossil Replenishment",   path: "/fossil-replenishment",   moduleKey: "fossil-replenishment",   icon: Boxes },
   ];
+
+  const navItems = allNavItems.filter(item => canAccess(item.moduleKey));
 
   return (
     <div className="min-h-screen flex bg-zinc-50">
@@ -114,6 +117,34 @@ export default function Layout({ children }) {
               </NavLink>
             );
           })}
+
+          {user?.role === "admin" && (
+            <>
+              <div className={`mt-3 mb-1 px-2.5 text-[9px] uppercase tracking-[0.12em] text-zinc-600 font-semibold ${collapsed ? "hidden" : ""}`}>
+                Admin
+              </div>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all group relative ${
+                    isActive
+                      ? "bg-zinc-800/60 text-white"
+                      : "text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100"
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] bg-gradient-to-b from-violet-500 to-indigo-600 rounded-r"></span>
+                    )}
+                    <Users size={15} className={isActive ? "text-indigo-400" : "text-zinc-500 group-hover:text-zinc-300"} />
+                    {!collapsed && <span className="truncate">User Management</span>}
+                  </>
+                )}
+              </NavLink>
+            </>
+          )}
         </nav>
 
         {/* Footer */}
