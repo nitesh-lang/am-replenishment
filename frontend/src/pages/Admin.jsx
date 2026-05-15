@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import { Users, Plus, Pencil, Trash2, X, Check, Shield, User as UserIcon } from "lucide-react";
+import { Users, Plus, Pencil, Trash2, X, Check, Shield, User as UserIcon, KeyRound, Eye, EyeOff } from "lucide-react";
 
 const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
@@ -24,6 +24,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(null); // user object or {} for new
+  const [resetting, setResetting] = useState(null); // user object for password reset
 
   const authHeader = useMemo(() => ({ "x-admin-email": user?.email || "" }), [user]);
 
@@ -180,6 +181,13 @@ export default function Admin() {
                 <td className="px-3 py-2.5 text-right">
                   <div className="inline-flex items-center gap-1">
                     <button
+                      onClick={() => setResetting(u)}
+                      className="p-1.5 rounded text-zinc-500 hover:text-indigo-600 hover:bg-indigo-50 transition"
+                      title="Reset password"
+                    >
+                      <KeyRound size={14} />
+                    </button>
+                    <button
                       onClick={() => setEditing(u)}
                       className="p-1.5 rounded text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition"
                       title="Edit"
@@ -214,6 +222,137 @@ export default function Admin() {
           onClose={() => setEditing(null)}
         />
       )}
+
+      {resetting && (
+        <PasswordResetModal
+          user={resetting}
+          onSave={async (newPassword) => {
+            const ok = await saveUser({
+              email: resetting.email,
+              name: resetting.name || "",
+              password: newPassword,
+              role: resetting.role,
+              allowed_modules: resetting.allowed_modules || [],
+            });
+            if (ok) setResetting(null);
+          }}
+          onClose={() => setResetting(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+
+function PasswordResetModal({ user, onSave, onClose }) {
+  const [pw, setPw] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr("");
+    if (pw.length < 6) {
+      setErr("Password must be at least 6 characters.");
+      return;
+    }
+    if (pw !== confirm) {
+      setErr("Passwords don't match.");
+      return;
+    }
+    setSubmitting(true);
+    await onSave(pw);
+    setSubmitting(false);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-sm flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-zinc-200">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+              <KeyRound size={14} />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-zinc-900 leading-tight">Reset password</h2>
+              <p className="text-[11px] text-zinc-500 leading-tight mt-0.5 truncate max-w-[220px]">{user.email}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-700 rounded">
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="p-4 space-y-3">
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.08em] font-semibold text-zinc-500">New password</label>
+            <div className="relative mt-1">
+              <input
+                type={show ? "text" : "password"}
+                value={pw}
+                onChange={e => setPw(e.target.value)}
+                autoFocus
+                required
+                placeholder="Min 6 characters"
+                className="w-full pl-2.5 pr-9 py-1.5 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShow(v => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 p-1"
+                tabIndex={-1}
+              >
+                {show ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.08em] font-semibold text-zinc-500">Confirm password</label>
+            <input
+              type={show ? "text" : "password"}
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              required
+              placeholder="Re-enter"
+              className="mt-1 w-full px-2.5 py-1.5 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-colors"
+            />
+          </div>
+
+          {err && (
+            <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-1.5 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
+              {err}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-1.5 text-sm bg-white text-zinc-700 border border-zinc-200 rounded-md hover:border-zinc-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="px-3 py-1.5 text-sm font-semibold bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+            >
+              <Check size={13} />
+              {submitting ? "Saving…" : "Update password"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
