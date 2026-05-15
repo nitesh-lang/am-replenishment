@@ -1117,7 +1117,7 @@ function ReplenishmentSOPModal({ open, onClose }) {
           <section>
             <h3 className="text-sm font-semibold text-slate-900 mb-1">Top controls</h3>
             <ul className="list-disc pl-5 space-y-0.5 text-xs">
-              <li><b>Sales Window</b> — recent weeks used to compute weekly sales. <b>Default 12 weeks</b> (changing this is a business-wide call)</li>
+              <li><b>Sales Window</b> — recent weeks used to compute weekly sales. <b>Default 12 weeks · maximum 12 (system cap)</b>. Changing this is a business-wide call.</li>
               <li><b>Replenish Weeks</b> — weeks of stock you want at Amazon (default 8)</li>
               <li><b>Working Week</b> — active save week. Past weeks are view-only.</li>
             </ul>
