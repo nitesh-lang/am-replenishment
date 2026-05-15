@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { Lock, Mail, Eye, EyeOff } from "lucide-react";
+import { Lock, Mail, Eye, EyeOff, ArrowRight } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 
 export default function Login() {
@@ -29,30 +29,39 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 px-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg mb-4">
-              <Lock size={22} />
-            </div>
-            <h1 className="text-2xl font-semibold text-slate-900">
-              Welcome back
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Sign in to your Nexlev Intelligence account
-            </p>
+    <div className="min-h-screen relative overflow-hidden bg-zinc-50 flex items-center justify-center px-4">
+      {/* Decorative gradient blobs — subtle */}
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-violet-200/30 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="relative w-full max-w-sm">
+
+        {/* Brand */}
+        <div className="flex items-center gap-2.5 mb-8 justify-center">
+          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-md shadow-indigo-500/30">
+            N
+          </div>
+          <div className="text-left">
+            <div className="text-sm font-semibold text-zinc-900 leading-tight tracking-tight">Nexlev</div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500 leading-tight">Intelligence Suite</div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-zinc-200 rounded-xl shadow-xl shadow-zinc-200/40 p-7">
+          <div className="mb-5">
+            <h1 className="text-lg font-semibold text-zinc-900 tracking-tight">Welcome back</h1>
+            <p className="text-xs text-zinc-500 mt-0.5">Sign in to continue to your dashboard</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3.5">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              <label className="text-[10px] uppercase tracking-[0.08em] font-semibold text-zinc-500">
                 Email
               </label>
-              <div className="relative">
+              <div className="relative mt-1">
                 <Mail
-                  size={16}
-                  className="absolute left-3 top-3 text-slate-400"
+                  size={14}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none"
                 />
                 <input
                   type="email"
@@ -61,19 +70,27 @@ export default function Login() {
                   required
                   autoFocus
                   placeholder="you@example.com"
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full pl-8 pr-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-colors placeholder:text-zinc-400"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] uppercase tracking-[0.08em] font-semibold text-zinc-500">
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  className="text-[10px] text-indigo-600 hover:text-indigo-700 font-medium"
+                >
+                  Forgot?
+                </Link>
+              </div>
+              <div className="relative mt-1">
                 <Lock
-                  size={16}
-                  className="absolute left-3 top-3 text-slate-400"
+                  size={14}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none"
                 />
                 <input
                   type={showPassword ? "text" : "password"}
@@ -81,45 +98,44 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="Enter your password"
-                  className="w-full pl-9 pr-10 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full pl-8 pr-9 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-colors placeholder:text-zinc-400"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 p-1"
                   tabIndex={-1}
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
             </div>
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+              <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-2.5 py-2 flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
                 {error}
               </div>
             )}
 
-            <div className="flex items-center justify-end text-sm">
-              <Link
-                to="/forgot-password"
-                className="text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Forgot password?
-              </Link>
-            </div>
-
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold py-2.5 rounded-lg shadow transition disabled:opacity-60"
+              className="w-full bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold py-2 rounded-md shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-1.5 group"
             >
-              {submitting ? "Signing in..." : "Sign in"}
+              {submitting ? (
+                "Signing in…"
+              ) : (
+                <>
+                  Sign in
+                  <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                </>
+              )}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-xs text-slate-500 mt-6">
+        <p className="text-center text-[10px] text-zinc-400 mt-6 uppercase tracking-[0.12em]">
           © 2026 Nexlev Intelligence Suite
         </p>
       </div>

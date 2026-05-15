@@ -51,37 +51,42 @@ export default function Layout({ children }) {
   ];
 
   return (
-    <div className="min-h-screen flex bg-[#f6f8fb]">
+    <div className="min-h-screen flex bg-zinc-50">
 
       {/* ================= SIDEBAR ================= */}
       <aside
         className={`${
-          collapsed ? "w-20" : "w-56"
-        } bg-gradient-to-b from-slate-900 to-slate-950 text-slate-200 flex flex-col transition-all duration-300 shadow-2xl`}
+          collapsed ? "w-16" : "w-56"
+        } bg-zinc-950 text-zinc-300 flex flex-col transition-all duration-300 border-r border-zinc-800`}
       >
         {/* Brand */}
-        <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800">
-          {!collapsed && (
-            <div>
-              <div className="text-lg font-semibold tracking-tight">
-                Nexlev
+        <div className="h-14 flex items-center justify-between px-3 border-b border-zinc-800/80">
+          {!collapsed ? (
+            <div className="flex items-center gap-2.5">
+              <div className="h-7 w-7 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-md shadow-indigo-500/20">
+                N
               </div>
-              <div className="text-xs text-slate-400">
-                Intelligence Suite
+              <div>
+                <div className="text-sm font-semibold text-white leading-tight tracking-tight">Nexlev</div>
+                <div className="text-[10px] uppercase tracking-[0.1em] text-zinc-500 leading-tight">Intelligence</div>
               </div>
+            </div>
+          ) : (
+            <div className="h-7 w-7 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold mx-auto">
+              N
             </div>
           )}
 
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="text-slate-400 hover:text-white transition"
+            className="text-zinc-500 hover:text-white transition"
           >
-            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-6 space-y-2">
+        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
 
@@ -90,22 +95,29 @@ export default function Layout({ children }) {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                  `flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all group relative ${
                     isActive
-                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow"
-                      : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                      ? "bg-zinc-800/60 text-white"
+                      : "text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100"
                   }`
                 }
               >
-                <Icon size={18} />
-                {!collapsed && item.name}
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] bg-gradient-to-b from-violet-500 to-indigo-600 rounded-r"></span>
+                    )}
+                    <Icon size={15} className={isActive ? "text-indigo-400" : "text-zinc-500 group-hover:text-zinc-300"} />
+                    {!collapsed && <span className="truncate">{item.name}</span>}
+                  </>
+                )}
               </NavLink>
             );
           })}
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-800 text-xs text-slate-500">
+        <div className="px-3 py-3 border-t border-zinc-800/80 text-[10px] text-zinc-500 uppercase tracking-[0.1em]">
           {!collapsed && "© 2026 Nexlev"}
         </div>
       </aside>
@@ -114,35 +126,41 @@ export default function Layout({ children }) {
       <div className="flex-1 flex flex-col">
 
         {/* ===== TOP NAVBAR ===== */}
-        <header className="h-10 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-end px-8 shadow-sm">
+        <header className="h-10 bg-white/90 backdrop-blur-md border-b border-zinc-200 flex items-center justify-end px-8">
           {/* Right Controls */}
           <div className="flex items-center gap-4">
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 hover:bg-slate-100 rounded-lg px-2 py-1 transition"
+                className="flex items-center gap-2 hover:bg-zinc-100 rounded-md px-1.5 py-1 transition group"
               >
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xs font-semibold shadow">
+                <div className="h-6 w-6 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold shadow-sm shadow-indigo-500/30">
                   {userInitials}
                 </div>
-                <div className="text-sm text-slate-600 max-w-[180px] truncate">
+                <div className="text-xs text-zinc-700 max-w-[180px] truncate font-medium">
                   {user?.email || "Admin"}
                 </div>
+                <svg className={`h-3 w-3 text-zinc-400 transition-transform ${menuOpen ? "rotate-180" : ""}`} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 4.5l3 3 3-3"/></svg>
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50">
-                  <div className="px-4 py-2 border-b border-slate-100">
-                    <div className="text-xs text-slate-400">Signed in as</div>
-                    <div className="text-sm text-slate-700 truncate">
-                      {user?.email}
+                <div className="absolute right-0 mt-1.5 w-60 bg-white border border-zinc-200 rounded-lg shadow-xl shadow-zinc-200/40 py-1 z-50 overflow-hidden">
+                  <div className="px-3 py-2.5 border-b border-zinc-100 flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-sm shadow-indigo-500/30">
+                      {userInitials}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-400 font-semibold leading-tight">Signed in as</div>
+                      <div className="text-xs text-zinc-900 truncate font-medium leading-tight mt-0.5">
+                        {user?.email}
+                      </div>
                     </div>
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-50 transition font-medium"
                   >
-                    <LogOut size={14} />
+                    <LogOut size={13} className="text-zinc-400" />
                     Sign out
                   </button>
                 </div>
@@ -152,7 +170,7 @@ export default function Layout({ children }) {
         </header>
 
         {/* ===== PAGE CONTENT ===== */}
-        <main className="flex-1 overflow-auto px-12 py-6 bg-slate-50">
+        <main className="flex-1 overflow-auto px-8 py-5 bg-zinc-50">
           <div className="w-full">
             {children}
           </div>

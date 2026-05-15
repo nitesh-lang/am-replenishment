@@ -20,32 +20,39 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 px-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg mb-4">
-              <KeyRound size={22} />
+    <div className="min-h-screen relative overflow-hidden bg-zinc-50 flex items-center justify-center px-4">
+      <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-violet-200/30 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="relative w-full max-w-sm">
+
+        <div className="flex items-center gap-2.5 mb-8 justify-center">
+          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-sm font-bold shadow-md shadow-indigo-500/30">
+            N
+          </div>
+          <div className="text-left">
+            <div className="text-sm font-semibold text-zinc-900 leading-tight tracking-tight">Nexlev</div>
+            <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500 leading-tight">Intelligence Suite</div>
+          </div>
+        </div>
+
+        <div className="bg-white border border-zinc-200 rounded-xl shadow-xl shadow-zinc-200/40 p-7">
+          <div className="mb-5 flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+              <KeyRound size={16} />
             </div>
-            <h1 className="text-2xl font-semibold text-slate-900">
-              Reset your password
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Enter your email and we'll send you a reset link
-            </p>
+            <div>
+              <h1 className="text-base font-semibold text-zinc-900 tracking-tight leading-tight">Reset password</h1>
+              <p className="text-xs text-zinc-500 leading-tight mt-0.5">We'll send a reset link to your email</p>
+            </div>
           </div>
 
           {!submitted ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3.5">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Email
-                </label>
-                <div className="relative">
-                  <Mail
-                    size={16}
-                    className="absolute left-3 top-3 text-slate-400"
-                  />
+                <label className="text-[10px] uppercase tracking-[0.08em] font-semibold text-zinc-500">Email</label>
+                <div className="relative mt-1">
+                  <Mail size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
                   <input
                     type="email"
                     value={email}
@@ -53,7 +60,7 @@ export default function ForgotPassword() {
                     required
                     autoFocus
                     placeholder="you@example.com"
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    className="w-full pl-8 pr-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-colors placeholder:text-zinc-400"
                   />
                 </div>
               </div>
@@ -61,29 +68,29 @@ export default function ForgotPassword() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-sm font-semibold py-2.5 rounded-lg shadow transition disabled:opacity-60"
+                className="w-full bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold py-2 rounded-md shadow-sm transition disabled:opacity-50"
               >
-                {submitting ? "Sending..." : "Send reset link"}
+                {submitting ? "Sending…" : "Send reset link"}
               </button>
             </form>
           ) : (
-            <div className="text-sm text-slate-700 bg-blue-50 border border-blue-100 rounded-md px-4 py-3 text-center">
+            <div className="text-xs text-zinc-700 bg-indigo-50/60 border border-indigo-100 rounded-md px-3 py-2.5 leading-relaxed">
               {message}
             </div>
           )}
 
-          <div className="mt-6 text-center">
+          <div className="mt-5 pt-4 border-t border-zinc-100 text-center">
             <Link
               to="/login"
-              className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
+              className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-900 transition"
             >
-              <ArrowLeft size={14} />
+              <ArrowLeft size={12} />
               Back to sign in
             </Link>
           </div>
         </div>
 
-        <p className="text-center text-xs text-slate-500 mt-6">
+        <p className="text-center text-[10px] text-zinc-400 mt-6 uppercase tracking-[0.12em]">
           © 2026 Nexlev Intelligence Suite
         </p>
       </div>
