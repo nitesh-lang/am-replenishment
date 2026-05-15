@@ -66,58 +66,31 @@ def ensure_table_and_seed():
     """)
     conn.commit()
 
-    # Seed initial users if table is empty
+    # Seed initial admin if the users table is empty.
+    # Passwords are NEVER hardcoded — they must be supplied via env vars.
+    # If SEED_ADMIN_PASSWORD is not set, seeding is skipped and admins must be
+    # bootstrapped manually (e.g. via a one-off psql insert) before first login.
     cur.execute("SELECT COUNT(*) FROM app_users;")
     count = cur.fetchone()[0]
     if count == 0:
-        seed = [
-            {
-                "email": "info@cambiumretail.com",
-                "name":  "Admin",
-                "password": "Cambium@109",
-                "role":  "admin",
-                "allowed_modules": ALL_MODULES,
-            },
-            {
-                "email": "nitesh@cambiumretail.com",
-                "name":  "Nitesh",
-                "password": "Naresh@123",
-                "role":  "user",
-                "allowed_modules": [
-                    "replenishment", "fc-allocation",
-                    "cb-replenishment", "wm-replenishment",
-                    "fossil-replenishment", "china-reorder",
-                ],
-            },
-            {
-                "email": "kanwal@cambiumretail.com",
-                "name":  "Kanwal",
-                "password": "Kanwal@123",
-                "role":  "user",
-                "allowed_modules": [
-                    "replenishment", "fc-allocation",
-                    "cb-replenishment", "wm-replenishment",
-                    "fossil-replenishment", "china-reorder",
-                ],
-            },
-            {
-                "email": "zaid@cambiumretail.com",
-                "name":  "Zaid",
-                "password": "Zaid@123",
-                "role":  "user",
-                "allowed_modules": ["cb-replenishment", "china-reorder"],
-            },
-        ]
-        for u in seed:
+        admin_email = os.environ.get("SEED_ADMIN_EMAIL", "").strip().lower()
+        admin_password = os.environ.get("SEED_ADMIN_PASSWORD", "")
+        if admin_email and admin_password:
             cur.execute(
                 """
                 INSERT INTO app_users (email, name, password_hash, role, allowed_modules)
-                VALUES (%s, %s, %s, %s, %s::jsonb)
+                VALUES (%s, %s, %s, 'admin', %s::jsonb)
                 ON CONFLICT (email) DO NOTHING;
                 """,
-                (u["email"], u["name"], _hash(u["password"]), u["role"], json.dumps(u["allowed_modules"])),
+                (admin_email, "Admin", _hash(admin_password), json.dumps(ALL_MODULES)),
             )
-        conn.commit()
+            conn.commit()
+            print(f"✅ Seeded admin user: {admin_email}")
+        else:
+            print(
+                "⚠️ No SEED_ADMIN_PASSWORD env var set — skipping admin seed. "
+                "Bootstrap an admin manually before first login."
+            )
 
     cur.close()
     conn.close()
