@@ -36,6 +36,9 @@ export default function FCAllocation() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
 
+  // SOP help modal
+  const [sopOpen, setSopOpen] = useState(false);
+
   const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
   // Fossil cluster mapping
@@ -372,14 +375,22 @@ function exportCSV() {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
-        <h1 className="text-3xl font-semibold">
-          Nexlev FC Allocation Intelligence
-        </h1>
-        <p className="text-slate-300 mt-2 text-sm">
-          Final distribution planning from Mother Warehouse to fulfillment centers
-        </p>
+      <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-lg font-semibold">FC Allocation Intelligence</h1>
+          <p className="text-slate-300 text-xs">Mother Warehouse → fulfillment centers</p>
+        </div>
+        <button
+          onClick={() => setSopOpen(true)}
+          className="px-3 py-1 text-xs bg-white/10 hover:bg-white/20 border border-white/20 rounded transition flex items-center gap-1.5"
+          title="Read the SOP for this page"
+        >
+          📘 How is this calculated?
+        </button>
       </div>
+
+      {/* SOP MODAL */}
+      <FCAllocationSOPModal open={sopOpen} onClose={() => setSopOpen(false)} />
 
       {/* FILTER PANEL */}
       <div className="card grid grid-cols-1 md:grid-cols-4 gap-3 py-3">
@@ -805,6 +816,109 @@ function MetricCard({ title, value }) {
     <div className="px-3 py-2 bg-white border border-slate-100 rounded-lg shadow-sm">
       <div className="text-[10px] uppercase tracking-wider text-slate-400">{title}</div>
       <div className="text-base font-semibold text-slate-800">{value ?? "-"}</div>
+    </div>
+  );
+}
+
+function FCAllocationSOPModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              How FC Allocation is Calculated
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              All 5 accounts — Nexlev, Viomi, Audio Array, White Mulberry, Fossil
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs rounded hover:bg-slate-200"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="overflow-auto p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
+
+          <p className="text-slate-600">
+            Tells you how many units to send to each Amazon FC for every SKU.
+          </p>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Top controls</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>Account</b> — Nexlev / Viomi / Audio Array / White Mulberry / Fossil</li>
+              <li><b>Replenish Weeks</b> — target weeks of cover at each FC (default 8)</li>
+              <li><b>Channel</b> — sales channel filter for velocity (default All)</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Columns</h3>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium w-36">Model / SKU / ASIN</td><td className="border border-slate-300 px-2 py-1">Identifiers</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Velocity</td><td className="border border-slate-300 px-2 py-1">Avg units/week shipped to that FC</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">FC Inventory</td><td className="border border-slate-300 px-2 py-1">Current sellable stock at that FC (from ledger)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Transfer In</td><td className="border border-slate-300 px-2 py-1">Units coming from another FC's excess (same SKU)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Target Cover</td><td className="border border-slate-300 px-2 py-1">Velocity × Replenish Weeks</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Post-Transfer Stock</td><td className="border border-slate-300 px-2 py-1">FC Inventory + Transfer In</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Adjusted Shortfall</td><td className="border border-slate-300 px-2 py-1">Target − Post-Transfer Stock (≥ 0)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium bg-amber-50">Send Qty</td><td className="border border-slate-300 px-2 py-1 bg-amber-50">Final units to ship — IST governance applied for non-Fossil</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Fill %</td><td className="border border-slate-300 px-2 py-1">Send Qty ÷ Original Required × 100 (after governance)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Mother WH (AMPM)</td><td className="border border-slate-300 px-2 py-1">Display only — not used in this calc</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Account rules</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>Nexlev / Viomi / Audio Array / White Mulberry</b> → IXD items shipped at <b>35%</b> of need (IST governance); Non-IXD at 100%. FC-to-FC transfers allowed.</li>
+              <li><b>Fossil</b> → No IST cap. Send Qty also subtracts <b>In-Transit</b> (Packing List Qty) and <b>Open PO</b> (PO Qty). <b>No transfers</b> between FCs (direct dispatch). Cluster PO computed for 6 clusters (BLR, BOM, TN, DEL, TEL, WB).</li>
+              <li>Velocity divisor = weeks spanned by the shipments file dates (not a fixed 12). Whatever the file covers, that's the window.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Flag values (non-Fossil)</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>NO_REQUIREMENT</b> — original required = 0</li>
+              <li><b>SHORT_30%+</b> — Fill % ≤ 70 (i.e. you're shipping less than 70% of need)</li>
+              <li><b>OK</b> — Fill % &gt; 70</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Example (Nexlev, IXD)</h3>
+            <p className="bg-slate-50 border border-slate-200 rounded p-2 text-xs">
+              SKU shipped 800 units over 12 weeks at MAA4 → Velocity ≈ 67/wk →
+              8-week target = 533 → FC has 100 + Transfer-In 50 → Adjusted Shortfall = 383 →
+              IXD governance × 0.35 → <b>Send 134</b>, Fill 35% → flagged SHORT_30%+
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Example (Fossil)</h3>
+            <p className="bg-slate-50 border border-slate-200 rounded p-2 text-xs">
+              Item shipped to DEL5 → Velocity 5/wk → 8-week target = 40 → FC has 10 →
+              Adjusted Shortfall = 30 → minus In-Transit 5 and Open PO 10 →
+              <b> Send 15</b> (no governance, no transfers).
+            </p>
+          </section>
+
+        </div>
+      </div>
     </div>
   );
 }
