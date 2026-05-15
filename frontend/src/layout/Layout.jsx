@@ -8,6 +8,7 @@ import {
   ChevronRight,
   LogOut,
   Users,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 
@@ -140,6 +141,26 @@ export default function Layout({ children }) {
                     )}
                     <Users size={15} className={isActive ? "text-indigo-400" : "text-zinc-500 group-hover:text-zinc-300"} />
                     {!collapsed && <span className="truncate">User Management</span>}
+                  </>
+                )}
+              </NavLink>
+              <NavLink
+                to="/usage"
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-all group relative ${
+                    isActive
+                      ? "bg-zinc-800/60 text-white"
+                      : "text-zinc-400 hover:bg-zinc-800/40 hover:text-zinc-100"
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] bg-gradient-to-b from-violet-500 to-indigo-600 rounded-r"></span>
+                    )}
+                    <Activity size={15} className={isActive ? "text-indigo-400" : "text-zinc-500 group-hover:text-zinc-300"} />
+                    {!collapsed && <span className="truncate">Usage Analytics</span>}
                   </>
                 )}
               </NavLink>

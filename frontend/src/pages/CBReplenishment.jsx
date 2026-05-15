@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
+import { logUsage } from "../auth/usage";
 
 /* ============================================================
    MAIN COMPONENT
@@ -85,6 +86,7 @@ async function openCBTeamExport() {
     setExportRows(all);
     setExportWeekLabel(label);
     setExportOpen(true);
+    logUsage("export", "cb-replenishment", { rows: all.length });
   } catch (e) {
     alert("Failed to load export: " + e.message);
   } finally {
@@ -196,6 +198,9 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
         ...prev,
         [model]: j.status === "saved" ? "saved" : "error",
       }));
+      if (j.status === "saved") {
+        logUsage("save", "cb-replenishment", { model });
+      }
       setTimeout(
         () => setSavingMap(prev => { const n = { ...prev }; delete n[model]; return n; }),
         1500

@@ -18,6 +18,7 @@ import WMReplenishment from "./pages/WMReplenishment";
 import FossilReplenishment from "./pages/FossilReplenishment";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
+import UsageAnalytics from "./pages/UsageAnalytics";
 
 function Gated({ moduleKey, children }) {
   return (
@@ -72,6 +73,7 @@ function App() {
 
           {/* Admin-only */}
           <Route path="/admin" element={<AdminOnly><Admin /></AdminOnly>} />
+          <Route path="/usage" element={<AdminOnly><UsageAnalytics /></AdminOnly>} />
 
           {/* Catch-all */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

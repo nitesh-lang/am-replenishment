@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getReplenishment, getKPIs } from "../api/replenishment";
+import { logUsage } from "../auth/usage";
 
 
 /* ============================================================
@@ -109,6 +110,7 @@ export default function Replenishment() {
       setExportRows(rows);
       setExportWeekLabel(label);
       setExportOpen(true);
+      logUsage("export", "replenishment", { account, format: fmt, rows: rows.length });
     } catch (e) {
       alert("Failed to load export: " + e.message);
     } finally {
@@ -202,6 +204,7 @@ export default function Replenishment() {
       if (j.status === "saved") {
         setSaveMsg(`Saved ${j.rows} rows · ${j.label}`);
         setDirty(false);
+        logUsage("save", "replenishment", { account, rows: j.rows, week_start: j.week_start });
         // refresh saved-weeks list so the new save shows up immediately
         fetch(`${BASE}/replenishment/saved-weeks?account=${account}`)
           .then(res => res.json())

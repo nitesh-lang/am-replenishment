@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { logUsage } from "./usage";
 
 const AuthContext = createContext(null);
 
@@ -68,6 +69,7 @@ export function AuthProvider({ children }) {
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
       setUser(session);
+      logUsage("login", null, { role: session.role });
       return { ok: true, user: session };
     } catch (e) {
       return { ok: false, error: "Could not reach the server. Try again." };
