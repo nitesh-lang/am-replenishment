@@ -536,27 +536,28 @@ function exportCSV() {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-white border border-slate-200 rounded-md shadow-sm">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-sm font-semibold text-slate-900 tracking-tight">Replenishment</h1>
-          <p className="text-xs text-slate-400">Coverage &amp; replenishment analytics</p>
+          <span className="h-2 w-2 rounded-full bg-indigo-500 mr-1"></span>
+          <h1 className="text-base font-semibold text-slate-900 tracking-tight">Replenishment Intelligence</h1>
+          <p className="text-xs text-slate-500">Coverage &amp; replenishment analytics</p>
         </div>
         <button
           onClick={() => setSopOpen(true)}
-          className="text-xs text-slate-500 hover:text-slate-900 transition"
+          className="px-2.5 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md hover:bg-indigo-100 transition"
           title="Read the SOP for this page"
         >
-          How is this calculated? <span className="text-slate-300">›</span>
+          📘 How is this calculated?
         </button>
       </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-3 py-2.5 bg-white border border-slate-200 rounded-md shadow-sm">
       <div>
-        <label className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Account</label>
+        <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Account</label>
         <select
           value={account}
           onChange={(e) => { setAccount(e.target.value); setWeekStart(null); }}
-          className="mt-1.5 w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+          className="mt-1 w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
         >
           <option value="NEXLEV">Nexlev</option>
           <option value="VIOMI">Viomi</option>
@@ -566,11 +567,11 @@ function exportCSV() {
       </div>
 
       <div>
-        <label className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Working Week</label>
+        <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Working Week</label>
         <select
           value={weekStart ?? ""}
           onChange={(e) => setWeekStart(e.target.value || null)}
-          className="mt-1.5 w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+          className="mt-1 w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
         >
           <option value="">
             {currentWeekMeta
@@ -590,10 +591,10 @@ function exportCSV() {
           <button
             onClick={saveWeek}
             disabled={saving}
-            className={`px-3 py-1.5 text-sm font-medium rounded-md transition disabled:opacity-50 ${
+            className={`px-3 py-1.5 text-sm font-semibold rounded-md transition disabled:opacity-50 shadow-sm ${
               dirty
-                ? "bg-slate-900 text-white hover:bg-slate-800"
-                : "bg-white text-slate-700 border border-slate-200 hover:border-slate-300"
+                ? "bg-indigo-600 text-white hover:bg-indigo-700 ring-2 ring-indigo-200"
+                : "bg-white text-slate-700 border border-slate-200 hover:border-slate-400"
             }`}
           >
             {saving
@@ -617,20 +618,20 @@ function exportCSV() {
     </div>
 
     {/* SALES WINDOW + REPLENISH WEEKS FILTER */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-3 py-2.5 bg-white border border-slate-200 rounded-md shadow-sm">
   <div>
-  <label className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">
+  <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
     Sales Window (Range)
   </label>
 
-  <div className="grid grid-cols-2 gap-2 mt-1.5">
+  <div className="grid grid-cols-2 gap-2 mt-1">
     <select
       value={fromWeek}
       onChange={(e) => {
         setCurrentPage(1);
         setFromWeek(Number(e.target.value));
       }}
-      className="px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+      className="px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
     >
       {[...Array(12)].map((_, i) => (
         <option key={i+1} value={i+1}>
@@ -645,7 +646,7 @@ function exportCSV() {
         setCurrentPage(1);
         setToWeek(Number(e.target.value));
       }}
-      className="px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+      className="px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
     >
       {[...Array(12)].map((_, i) => (
         <option key={i+1} value={i+1}>
@@ -657,7 +658,7 @@ function exportCSV() {
 </div>
 
   <div>
-    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">
+    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
       Replenish Weeks
     </label>
     <select
@@ -666,7 +667,7 @@ function exportCSV() {
         setCurrentPage(1);
         setReplenishWeeks(Number(e.target.value));
       }}
-      className="mt-1.5 w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900"
+      className="mt-1 w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
     >
       {[1,2,3,4,5,6,7,8,9,10,11,12].map((w) => (
         <option key={w} value={w}>
@@ -677,12 +678,12 @@ function exportCSV() {
   </div>
 </div>
       {/* EXPORT + SEARCH */}
-      <div className="flex justify-between items-center gap-3 flex-wrap">
+      <div className="flex justify-between items-center gap-3 flex-wrap px-3 py-2 bg-white border border-slate-200 rounded-md shadow-sm">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search model, ASIN or SKU..."
-          className="px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 min-w-[240px]"
+          className="px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 min-w-[240px]"
         />
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Category</span>
@@ -694,7 +695,7 @@ function exportCSV() {
               )}
               className={`px-2.5 py-1 text-xs rounded-md border transition ${
                 selectedCategories.includes(cat)
-                  ? "bg-slate-900 text-white border-slate-900"
+                  ? "bg-indigo-600 text-white border-indigo-600"
                   : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
               }`}
             >
@@ -748,21 +749,21 @@ function exportCSV() {
         {activeFilterCount > 0 && (
           <button
             onClick={clearAllColumnFilters}
-            className="text-xs text-slate-500 hover:text-slate-900"
+            className="px-2.5 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md hover:bg-indigo-100"
           >
             {activeFilterCount} column filter{activeFilterCount > 1 ? "s" : ""} · clear
           </button>
         )}
         <button
           onClick={exportCSV}
-          className="px-3 py-1.5 text-sm font-medium bg-white text-slate-700 border border-slate-200 rounded-md hover:border-slate-300"
+          className="px-3 py-1.5 text-sm font-medium bg-slate-900 text-white border border-slate-900 rounded-md hover:bg-slate-800 shadow-sm transition"
         >
           Export CSV
         </button>
         <button
           onClick={openTeamExport}
           disabled={exportLoading}
-          className="px-3 py-1.5 text-sm font-medium bg-slate-900 text-white rounded-md hover:bg-slate-800 transition disabled:opacity-50"
+          className="px-3 py-1.5 text-sm font-semibold bg-emerald-600 text-white rounded-md hover:bg-emerald-700 shadow-sm transition disabled:opacity-50"
           title="Pre-formatted export of saved Working values for the current account"
         >
           {exportLoading ? "Loading…" : teamExportButtonLabel(account)}
@@ -774,7 +775,7 @@ function exportCSV() {
             setMasterCartons({});
             window.location.reload();
           }}
-          className="px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-red-600 transition"
+          className="px-3 py-1.5 text-sm font-medium bg-white text-red-600 border border-red-200 rounded-md hover:bg-red-50 transition"
         >
           Reset
         </button>
@@ -818,7 +819,7 @@ function exportCSV() {
                             );
                           }}
                           className={`ml-auto px-1 rounded hover:bg-slate-200 ${
-                            hasFilter ? "text-slate-900" : "text-slate-300"
+                            hasFilter ? "text-indigo-600" : "text-slate-400"
                           }`}
                           title={hasFilter ? "Filter active — click to edit" : "Filter"}
                         >
@@ -838,20 +839,25 @@ function exportCSV() {
                   <React.Fragment key={i}>
                     <tr
                       key={i}
-                      className={`${getRowColor(status)} border-b border-slate-100/80 hover:bg-slate-50/60 ${status === "CRITICAL" ? "shadow-[inset_2px_0_0_0_theme(colors.red.500)]" : ""}`}
+                      className={`border-b border-slate-100 hover:bg-slate-50 ${
+                        status === "CRITICAL"
+                          ? "bg-red-50/50 shadow-[inset_3px_0_0_0_theme(colors.red.500)]"
+                          : status === "LOW COVER"
+                          ? "bg-amber-50/40 shadow-[inset_3px_0_0_0_theme(colors.amber.400)]"
+                          : ""
+                      }`}
                       onClick={() => setExpandedRow(i === expandedRow ? null : i)}
                     >
                       {tableColumns.map((col) => {
                         if (col === "listing_status") {
                           const ls = row.listing_status ?? "-";
-                          const dot =
-                            ls === "Active" ? "bg-emerald-500" :
-                            ls === "EOL"    ? "bg-red-500" :
-                                             "bg-slate-300";
+                          const badge =
+                            ls === "Active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            ls === "EOL"    ? "bg-red-50 text-red-700 border-red-200" :
+                                             "bg-slate-50 text-slate-500 border-slate-200";
                           return (
                             <td key={col} className="px-2 py-1.5">
-                              <span className="inline-flex items-center gap-1.5 text-slate-600">
-                                <span className={`h-1.5 w-1.5 rounded-full ${dot}`}></span>
+                              <span className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium border rounded ${badge}`}>
                                 {ls}
                               </span>
                             </td>
@@ -954,12 +960,16 @@ function exportCSV() {
                             return <td key={col} className="px-2 py-1.5 text-slate-300">—</td>;
 
                           return (
-                            <td key={col} className="px-2 py-1.5 text-right text-slate-600 tabular-nums">
+                            <td key={col} className="px-2 py-1.5">
                               <span
+                                className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium border rounded tabular-nums ${
+                                  row.ixd_type === "IXD"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-slate-50 text-slate-600 border-slate-200"
+                                }`}
                                 title={row.ixd_type === "IXD" ? "IXD — full cartons mandatory" : "Non-IXD — carton break allowed"}
                               >
-                                {cartons}
-                                <span className="text-slate-400 ml-1">{cartons !== 1 ? "ctns" : "ctn"}</span>
+                                {cartons} {cartons !== 1 ? "ctns" : "ctn"}
                               </span>
                             </td>
                           );
@@ -1376,14 +1386,14 @@ function TeamExportModal({ open, onClose, rows, format, weekLabel }) {
             <button
               onClick={copy}
               disabled={rows.length === 0}
-              className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800 disabled:opacity-40"
+              className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 disabled:opacity-40"
             >
               {copied ? "Copied!" : "Copy to clipboard"}
             </button>
             <button
               onClick={download}
               disabled={rows.length === 0}
-              className="px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800 disabled:opacity-40"
+              className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700 disabled:opacity-40"
             >
               Download Excel
             </button>
@@ -1556,7 +1566,7 @@ function HeaderFilterPopover({ column, columnLabel, allValues, activeSet, anchor
       <div className="flex gap-2 p-2 border-t border-slate-200 bg-slate-50">
         <button
           onClick={apply}
-          className="flex-1 px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded hover:bg-slate-800"
+          className="flex-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded hover:bg-indigo-700"
         >
           Apply
         </button>
