@@ -38,6 +38,7 @@ export default function FossilReplenishment() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 50;
+  const [sopOpen, setSopOpen] = useState(false);
 
   /* LOAD DATA */
   useEffect(() => {
@@ -214,10 +215,22 @@ export default function FossilReplenishment() {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
-        <h1 className="text-3xl font-semibold">Fossil Replenishment Intelligence</h1>
-        <p className="text-slate-300 mt-2 text-sm">Fossil FCY Inventory Planning</p>
+      <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-lg font-semibold">Fossil Replenishment Intelligence</h1>
+          <p className="text-slate-300 text-xs">Fossil FCY Inventory Planning</p>
+        </div>
+        <button
+          onClick={() => setSopOpen(true)}
+          className="px-3 py-1 text-xs bg-white/10 hover:bg-white/20 border border-white/20 rounded transition flex items-center gap-1.5"
+          title="Read the SOP for this page"
+        >
+          📘 How is this calculated?
+        </button>
       </div>
+
+      {/* SOP MODAL */}
+      <FossilSOPModal open={sopOpen} onClose={() => setSopOpen(false)} />
 
       {/* KPI */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -527,6 +540,140 @@ function MetricCard({ title, value }) {
     <div className="px-3 py-2 bg-white rounded-lg shadow-sm border border-slate-100">
       <div className="text-[10px] uppercase tracking-wider text-slate-400">{title}</div>
       <div className="text-base font-semibold text-slate-800">{value ?? "-"}</div>
+    </div>
+  );
+}
+
+function FossilSOPModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              How Fossil Replenishment is Calculated
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Brands: Fossil · Armani Exchange · Michael Kors · Emporio Armani · Diesel · Skagen
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs rounded hover:bg-slate-200"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="overflow-auto p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
+
+          <p className="text-slate-600">
+            Tells you how many units to send from Fossil's dispatch warehouse to Amazon FBA for each SKU. Math respects Assortment Type, Brand-specific Weeks of Cover, and a Fossil SOH cap.
+          </p>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Top controls</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>Sales Window (From / To)</b> — Range from available weeks (default: last 12 weeks)</li>
+              <li><b>Cover Weeks</b> — Override the brand × assortment matrix value (leave on default to use the matrix)</li>
+              <li><b>Assortment Type</b> filter (FP / Discount / VD), then <b>Brand</b> filter, plus Search</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Weeks of Cover matrix (per Brand × Assortment Type)</h3>
+            <div className="overflow-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead className="bg-slate-100">
+                  <tr>
+                    <th className="border border-slate-300 px-2 py-1.5 text-left font-semibold">Brand</th>
+                    <th className="border border-slate-300 px-2 py-1.5 text-center font-semibold">FP</th>
+                    <th className="border border-slate-300 px-2 py-1.5 text-center font-semibold">Discount</th>
+                    <th className="border border-slate-300 px-2 py-1.5 text-center font-semibold">VD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td className="border border-slate-300 px-2 py-1 font-medium">Fossil</td><td className="border border-slate-300 px-2 py-1 text-center">9</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">6</td></tr>
+                  <tr><td className="border border-slate-300 px-2 py-1 font-medium">Armani Exchange</td><td className="border border-slate-300 px-2 py-1 text-center">6</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">6</td></tr>
+                  <tr><td className="border border-slate-300 px-2 py-1 font-medium">Michael Kors</td><td className="border border-slate-300 px-2 py-1 text-center">6</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">6</td></tr>
+                  <tr><td className="border border-slate-300 px-2 py-1 font-medium">Emporio Armani</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">6</td></tr>
+                  <tr><td className="border border-slate-300 px-2 py-1 font-medium">Diesel</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">6</td></tr>
+                  <tr><td className="border border-slate-300 px-2 py-1 font-medium">Skagen</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">4</td><td className="border border-slate-300 px-2 py-1 text-center">6</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-slate-500 mt-2">
+              <b>Core SKUs always get 12 weeks</b> — overrides BOTH the matrix and any manual Cover Weeks override.<br/>
+              Core SKUs: FBA66963, FBA66636, FBA69595, FBA79633, FBA79527, FBA79882
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Columns</h3>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium w-44">Total Units Sold</td><td className="border border-slate-300 px-2 py-1">Units sold in the selected window (Amazon channel only)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Fossil Weekly Sales</td><td className="border border-slate-300 px-2 py-1">Total Sold ÷ window weeks</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Last 4 Weeks Top Avg</td><td className="border border-slate-300 px-2 py-1">Avg of the most recent <b>4 weeks of data</b> (independent of your window). Shown only for FP / Discount.</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Cambium SOH</td><td className="border border-slate-300 px-2 py-1">Cambium warehouse stock (from master)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Andheri/Goregaon</td><td className="border border-slate-300 px-2 py-1">Sellable stock at those locations (from master)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">In Transit PO</td><td className="border border-slate-300 px-2 py-1">PO units in transit (from master)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Open PO</td><td className="border border-slate-300 px-2 py-1">Open PO units (from master)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Total Inventory</td><td className="border border-slate-300 px-2 py-1">Cambium SOH + Andheri/Goregaon + In Transit PO + Open PO</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Fossil SOH</td><td className="border border-slate-300 px-2 py-1">Stock available at Fossil's dispatch warehouse</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Required Inventory</td><td className="border border-slate-300 px-2 py-1">Effective Weekly Sales × Weeks of Cover</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium bg-amber-50">PO Qty (Replenishment)</td><td className="border border-slate-300 px-2 py-1 bg-amber-50">Required − Total Inventory, <b>capped at Fossil SOH</b>. Forced to 0 if Fossil SOH = 0.</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Effective Weekly Sales rule</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>FP / Discount</b> → use the <b>higher</b> of Fossil Weekly Sales vs Last 4 Weeks Top Avg (recent demand spikes flow through)</li>
+              <li><b>VD</b> → use Fossil Weekly Sales only (the Last 4 Weeks Top Avg column shows "-" for VD rows)</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Filter rules</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li>Sales counted: brand = <b>Fossil</b>, channel = <b>Amazon</b> only</li>
+              <li>Inventory fields: all sourced from the master xlsx (Cambium SOH, Andheri/Goregaon, In Transit PO, Open PO, Fossil SOH)</li>
+              <li>Amazon Inventory (computed from FBA file) is read but <b>not</b> in Total Inventory — Total uses Cambium SOH + 3 master columns only</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Example (Fossil FP, non-core)</h3>
+            <p className="bg-slate-50 border border-slate-200 rounded p-2 text-xs">
+              FBA12345: sold 108 over 12 weeks → Fossil Weekly = 9 →
+              Last 4 Weeks Top Avg = 12 → <b>Effective = max(9, 12) = 12</b> →
+              Fossil FP cover = 9 weeks → Required = 108 →
+              Total Inventory = 60 → Replen need = 48 →
+              Fossil SOH = 40 → <b>PO Qty = 40</b> (capped at Fossil SOH).
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Example (Core SKU)</h3>
+            <p className="bg-slate-50 border border-slate-200 rounded p-2 text-xs">
+              FBA66636 (core, FP): Fossil Weekly = 6.92, Last 4 Avg = 9 →
+              Effective = 9 → Core override forces 12 weeks of cover →
+              Required = 9 × 12 = 108 → Total Inventory = 88 → PO need = 20 →
+              Fossil SOH = 97 → <b>PO Qty = 20</b>.
+            </p>
+          </section>
+
+        </div>
+      </div>
     </div>
   );
 }
