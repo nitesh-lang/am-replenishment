@@ -459,6 +459,24 @@ export default function Replenishment() {
   }, [sortedData]);
 
   /* ============================================================
+     HERO KPIS — the four numbers a planner actually cares about
+  ============================================================ */
+  const heroKpis = useMemo(() => {
+    let toShip = 0;
+    let chinaGap = 0;
+    let modelsNeeding = 0;
+    let totalCartons = 0;
+    sortedData.forEach((r) => {
+      const q = r.recommended_qty || r.replenishment_qty || 0;
+      toShip += q;
+      chinaGap += (r.warehouse_shortfall || 0);
+      if (q > 0) modelsNeeding += 1;
+      totalCartons += (r.cartons_needed || 0);
+    });
+    return { toShip, chinaGap, modelsNeeding, totalCartons };
+  }, [sortedData]);
+
+  /* ============================================================
      CSV EXPORT
   ============================================================ */
 function exportCSV() {
@@ -545,26 +563,6 @@ function exportCSV() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Quick stats — at-a-glance health */}
-          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-zinc-200 rounded-md shadow-sm">
-            <span className="flex items-center gap-1 text-[11px]">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-              <span className="font-semibold text-zinc-900 tabular-nums">{healthStats.critical}</span>
-              <span className="text-zinc-500">critical</span>
-            </span>
-            <span className="text-zinc-200">·</span>
-            <span className="flex items-center gap-1 text-[11px]">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-              <span className="font-semibold text-zinc-900 tabular-nums">{healthStats.low}</span>
-              <span className="text-zinc-500">low cover</span>
-            </span>
-            <span className="text-zinc-200">·</span>
-            <span className="flex items-center gap-1 text-[11px]">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-              <span className="font-semibold text-zinc-900 tabular-nums">{healthStats.healthy}</span>
-              <span className="text-zinc-500">healthy</span>
-            </span>
-          </div>
           <button
             onClick={() => setSopOpen(true)}
             className="px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition"
@@ -573,6 +571,34 @@ function exportCSV() {
             How is this calculated?
           </button>
         </div>
+      </div>
+
+      {/* HERO KPI ROW */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <KpiTile
+          label="Units to Ship"
+          value={heroKpis.toShip}
+          accent="indigo"
+          hint={`${heroKpis.modelsNeeding} model${heroKpis.modelsNeeding !== 1 ? "s" : ""} need stock`}
+        />
+        <KpiTile
+          label="China PO Gap"
+          value={heroKpis.chinaGap}
+          accent="amber"
+          hint={heroKpis.chinaGap > 0 ? "Raise a new China PO" : "Warehouse covers full need"}
+        />
+        <KpiTile
+          label="Critical SKUs"
+          value={healthStats.critical}
+          accent="red"
+          hint={healthStats.critical > 0 ? "Below 1-week cover" : "Nothing critical"}
+        />
+        <KpiTile
+          label="Cartons Needed"
+          value={heroKpis.totalCartons}
+          accent="zinc"
+          hint={`${healthStats.healthy} SKUs healthy`}
+        />
       </div>
 
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-3 py-2.5 bg-white border border-zinc-200 rounded-lg">
@@ -817,10 +843,11 @@ function exportCSV() {
                 {tableColumns.map((col) => {
                   const hasFilter = columnFilters[col] && columnFilters[col].size > 0;
                   const isNum = NUMERIC_COLS.has(col) || col === "recommended_qty";
+                  const isWorking = col === "working_value";
                   return (
                     <th
                       key={col}
-                      className={`px-2 py-2 whitespace-nowrap font-semibold tracking-[0.06em] text-zinc-600 ${isNum ? "text-right" : "text-left"}`}
+                      className={`px-2 py-2 whitespace-nowrap font-semibold tracking-[0.06em] ${isWorking ? "text-amber-700 bg-amber-50/60 shadow-[inset_2px_0_0_0_theme(colors.amber.400)]" : "text-zinc-600"} ${isNum ? "text-right" : "text-left"}`}
                     >
                       <div className={`flex items-center gap-1 ${isNum ? "justify-end" : ""}`}>
                         <span
@@ -866,11 +893,13 @@ function exportCSV() {
                   <React.Fragment key={i}>
                     <tr
                       key={i}
-                      className={`border-b border-slate-100 hover:bg-slate-50 ${
+                      className={`border-b border-zinc-100 hover:bg-indigo-50/30 transition-colors ${
                         status === "CRITICAL"
                           ? "bg-red-50/50 shadow-[inset_3px_0_0_0_theme(colors.red.500)]"
                           : status === "LOW COVER"
                           ? "bg-amber-50/40 shadow-[inset_3px_0_0_0_theme(colors.amber.400)]"
+                          : i % 2 === 1
+                          ? "bg-zinc-50/40"
                           : ""
                       }`}
                       onClick={() => setExpandedRow(i === expandedRow ? null : i)}
@@ -1005,15 +1034,16 @@ function exportCSV() {
 
                         if (col === "working_value") {
                           const val = workingValues[row.sku] ?? row.working_value ?? "";
+                          const hasVal = String(val).trim() !== "";
                           if (isReadOnly || currentWeekMeta?.locked) {
                             return (
-                              <td key={col} className="px-2 py-1.5 bg-amber-50/40 text-right tabular-nums font-semibold text-slate-900">
-                                {val || <span className="text-slate-300 font-normal">—</span>}
+                              <td key={col} className="px-2 py-1.5 bg-amber-50/60 text-right tabular-nums font-semibold text-zinc-900 shadow-[inset_2px_0_0_0_theme(colors.amber.400)]">
+                                {hasVal ? val : <span className="text-zinc-300 font-normal">—</span>}
                               </td>
                             );
                           }
                           return (
-                            <td key={col} className="px-2 py-1.5 bg-amber-50/40 text-right">
+                            <td className="px-2 py-1 bg-amber-50/60 text-right shadow-[inset_2px_0_0_0_theme(colors.amber.400)]">
                               <input
                                 type="text"
                                 value={val}
@@ -1024,7 +1054,7 @@ function exportCSV() {
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                                 placeholder="—"
-                                className="w-14 px-1 py-0.5 text-[11px] text-right tabular-nums font-semibold bg-transparent border-0 border-b border-amber-200 hover:border-amber-400 focus:border-slate-900 focus:bg-white focus:outline-none rounded-none placeholder:text-slate-300 placeholder:font-normal"
+                                className={`w-16 px-1.5 py-1 text-[12px] text-right tabular-nums font-bold bg-white/70 border border-amber-200/70 rounded shadow-sm hover:border-amber-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 focus:bg-white focus:outline-none placeholder:text-zinc-300 placeholder:font-normal transition-colors ${hasVal ? "text-amber-900" : "text-zinc-400"}`}
                               />
                             </td>
                           );
@@ -1617,6 +1647,27 @@ function HeaderFilterPopover({ column, columnLabel, allValues, activeSet, anchor
 /* ============================================================
    COMPONENTS
 ============================================================ */
+
+function KpiTile({ label, value, accent = "indigo", hint }) {
+  const accentMap = {
+    indigo: { bar: "bg-indigo-500", num: "text-zinc-900", tile: "from-indigo-50/40" },
+    amber:  { bar: "bg-amber-500",  num: value > 0 ? "text-amber-700" : "text-zinc-400", tile: "from-amber-50/40" },
+    red:    { bar: "bg-red-500",    num: value > 0 ? "text-red-700"   : "text-zinc-400", tile: "from-red-50/40" },
+    zinc:   { bar: "bg-zinc-400",   num: "text-zinc-900", tile: "from-zinc-50/40" },
+  };
+  const c = accentMap[accent] || accentMap.zinc;
+  const display = typeof value === "number" ? value.toLocaleString() : value;
+  return (
+    <div className={`relative bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden bg-gradient-to-br ${c.tile} to-transparent`}>
+      <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${c.bar}`}></div>
+      <div className="px-3.5 py-2.5">
+        <div className="text-[10px] uppercase tracking-[0.08em] font-semibold text-zinc-500">{label}</div>
+        <div className={`tabular-nums text-2xl font-semibold mt-0.5 leading-tight ${c.num}`}>{display}</div>
+        {hint && <div className="text-[10.5px] text-zinc-500 mt-0.5">{hint}</div>}
+      </div>
+    </div>
+  );
+}
 
 function AnimatedMetric({ title, value }) {
   const [display, setDisplay] = useState(0);
