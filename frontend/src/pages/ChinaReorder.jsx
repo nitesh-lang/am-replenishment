@@ -35,6 +35,8 @@ export default function ChinaReorder() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 50;
 
+  const [sopOpen, setSopOpen] = useState(false);
+
   const l0Options = useMemo(() => {
     return [...new Set(data.map(r => r.category_l0).filter(Boolean))].sort();
   }, [data]);
@@ -215,14 +217,22 @@ export default function ChinaReorder() {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="rounded-2xl p-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl">
-        <h1 className="text-3xl font-semibold">
-          China Reorder Intelligence
-        </h1>
-        <p className="text-indigo-200 mt-2 text-sm">
-          12-Week Sales vs Inventory Based Production Planning
-        </p>
+      <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-lg font-semibold">China Reorder Intelligence</h1>
+          <p className="text-indigo-200 text-xs">12-week sales vs inventory based production planning</p>
+        </div>
+        <button
+          onClick={() => setSopOpen(true)}
+          className="px-3 py-1 text-xs bg-white/10 hover:bg-white/20 border border-white/20 rounded transition flex items-center gap-1.5"
+          title="Read the SOP for this page"
+        >
+          📘 How is this calculated?
+        </button>
       </div>
+
+      {/* SOP MODAL */}
+      <ChinaReorderSOPModal open={sopOpen} onClose={() => setSopOpen(false)} />
 
       {/* KPI SECTION */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -427,6 +437,112 @@ function MetricCard({ title, value }) {
     <div className="px-3 py-2 bg-white rounded-lg shadow-sm border border-slate-100">
       <div className="text-[10px] uppercase tracking-wider text-slate-400">{title}</div>
       <div className="text-base font-semibold text-slate-800">{value ?? "-"}</div>
+    </div>
+  );
+}
+
+function ChinaReorderSOPModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              How China Reorder is Calculated
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Brands: Nexlev · Audio Array · Tonor · White Mulberry
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs rounded hover:bg-slate-200"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="overflow-auto p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
+
+          <p className="text-slate-600">
+            Tells you how many units to order from China for each model, based on recent weekly sales and what's already in inventory + on order + in pipeline.
+          </p>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Top controls</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>Brand</b> — Nexlev / Audio Array / Tonor / White Mulberry (each uses its own inventory snapshot file)</li>
+              <li><b>Months</b> — Cover horizon. Target weeks = Months × 4 (default 3 months → 12 weeks)</li>
+              <li><b>Sales Window (From / To)</b> — Range from the last 12 available weeks</li>
+              <li><b>Category L0 / L1</b> filters and Search</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Where the numbers come from</h3>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium w-44">Sales</td><td className="border border-slate-300 px-2 py-1"><code>weekly_sales_snapshot - ChinaReorder.csv</code> · filtered to the selected brand</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Nexlev inventory</td><td className="border border-slate-300 px-2 py-1"><code>inventory_snapshot_nexlev.xlsx</code></td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Audio Array inventory</td><td className="border border-slate-300 px-2 py-1"><code>Inventory_snapshot_audio_array.xlsx</code></td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Tonor inventory</td><td className="border border-slate-300 px-2 py-1"><code>Inventory_snapshot_tonor.xlsx</code></td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">White Mulberry inventory</td><td className="border border-slate-300 px-2 py-1"><code>Inventory_snapshot_WM.xlsx</code></td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Inventory split (by channel column)</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><code>open order</code> rows → <b>Open Order Qty</b></li>
+              <li><code>pipeline</code> rows → <b>Pipeline Qty</b> (units already in transit from China)</li>
+              <li>Everything else (AMPM / 1P / other) → <b>Current Inventory</b></li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Columns</h3>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium w-44">Last 12W Sales</td><td className="border border-slate-300 px-2 py-1">Total units sold in the selected window</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Avg Weekly Sales</td><td className="border border-slate-300 px-2 py-1">Last 12W Sales ÷ window weeks</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Current Inventory</td><td className="border border-slate-300 px-2 py-1">Sum of non-open-order, non-pipeline channel rows</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Open Order Qty</td><td className="border border-slate-300 px-2 py-1">Sum of <code>open order</code> rows</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Pipeline Qty</td><td className="border border-slate-300 px-2 py-1">Sum of <code>pipeline</code> rows (in-transit from China)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Weeks Cover</td><td className="border border-slate-300 px-2 py-1">Current Inventory ÷ Avg Weekly Sales (how long current stock lasts)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">Target Stock</td><td className="border border-slate-300 px-2 py-1">Avg Weekly Sales × (Months × 4)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium bg-amber-50">Suggested Reorder</td><td className="border border-slate-300 px-2 py-1 bg-amber-50">max(0, Target Stock − Current Inventory − Open Order − Pipeline)</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Other notes</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li>All sales channels are counted (no channel filter on this page)</li>
+              <li>Model auto-normalization: <code>ETC-07-WH</code> matches <code>ETC-07</code> in inventory; bundle names like <code>UB-01 (AI-04...)</code> match by base <code>UB-01</code></li>
+              <li>Available weeks: most recent 12 weeks in the sales file (older weeks ignored)</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Example</h3>
+            <p className="bg-slate-50 border border-slate-200 rounded p-2 text-xs">
+              AA-01: sold 240 units over 12 weeks → Avg Weekly = 20 →
+              3-month target = 20 × 12 = 240 → Current Inventory = 80 →
+              Open Order = 50, Pipeline = 30 → <b>Suggested Reorder = 240 − 80 − 50 − 30 = 80</b>.
+            </p>
+          </section>
+
+        </div>
+      </div>
     </div>
   );
 }
