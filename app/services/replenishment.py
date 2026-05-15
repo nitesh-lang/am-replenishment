@@ -268,8 +268,13 @@ def calculate_replenishment(
         elif account.upper() == "WHITE MULBERRY":
             sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "White Mulberry"]
 
+    # Channel filter:
+    # - Audio Array → Amazon only (no 1p Sales)
+    # - Nexlev / Viomi / White Mulberry → Amazon + 1p Sales (other channels excluded)
     if account.upper() == "AUDIO ARRAY":
         sales_n = sales_n[sales_n["channel"] == "Amazon"]
+    elif account.upper() in ("NEXLEV", "VIOMI", "WHITE MULBERRY"):
+        sales_n = sales_n[sales_n["channel"].isin(["Amazon", "1p Sales"])]
 
     # ---------------------------------------------
     # AGGREGATE SALES

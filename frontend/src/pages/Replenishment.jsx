@@ -15,7 +15,7 @@ export default function Replenishment() {
   ============================================================ */
 
   const [fromWeek, setFromWeek] = useState(1);
-  const [toWeek, setToWeek] = useState(8);
+  const [toWeek, setToWeek] = useState(12);
   const [replenishWeeks, setReplenishWeeks] = useState(8);
   const [account, setAccount] = useState("NEXLEV");
 
@@ -1117,7 +1117,7 @@ function ReplenishmentSOPModal({ open, onClose }) {
           <section>
             <h3 className="text-sm font-semibold text-slate-900 mb-1">Top controls</h3>
             <ul className="list-disc pl-5 space-y-0.5 text-xs">
-              <li><b>Sales Window</b> — recent weeks used to compute weekly sales (default 4)</li>
+              <li><b>Sales Window</b> — recent weeks used to compute weekly sales. <b>Default 12 weeks</b> (changing this is a business-wide call)</li>
               <li><b>Replenish Weeks</b> — weeks of stock you want at Amazon (default 8)</li>
               <li><b>Working Week</b> — active save week. Past weeks are view-only.</li>
             </ul>
@@ -1136,7 +1136,7 @@ function ReplenishmentSOPModal({ open, onClose }) {
                 <tr><td className="border border-slate-300 px-2 py-1 font-medium">REPLEN</td><td className="border border-slate-300 px-2 py-1">Units to ship. <b>Never exceeds Mother WH stock.</b></td></tr>
                 <tr><td className="border border-slate-300 px-2 py-1 font-medium bg-amber-50">WORKING</td><td className="border border-slate-300 px-2 py-1 bg-amber-50">Your editable cell — pre-fills from REPLEN</td></tr>
                 <tr><td className="border border-slate-300 px-2 py-1 font-medium">RECOMMENDED</td><td className="border border-slate-300 px-2 py-1">REPLEN rounded to full Master Cartons</td></tr>
-                <tr><td className="border border-slate-300 px-2 py-1 font-medium">SHORTFALL</td><td className="border border-slate-300 px-2 py-1">Gap when Mother WH is short → raise a China PO</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">SHORTFALL</td><td className="border border-slate-300 px-2 py-1">Gap when Mother WH is short</td></tr>
               </tbody>
             </table>
           </section>
@@ -1144,8 +1144,8 @@ function ReplenishmentSOPModal({ open, onClose }) {
           <section>
             <h3 className="text-sm font-semibold text-slate-900 mb-1">Account rules</h3>
             <ul className="list-disc pl-5 space-y-0.5 text-xs">
-              <li><b>Nexlev / Viomi / White Mulberry</b> → all sales channels count</li>
-              <li><b>Audio Array</b> → <b>only Amazon channel</b> counts (1P, B2B, D2C, Blinkit etc. are excluded)</li>
+              <li><b>Nexlev / Viomi / White Mulberry</b> → counts <b>Amazon + 1p Sales</b> only</li>
+              <li><b>Audio Array</b> → counts <b>Amazon only</b> (1p Sales excluded)</li>
               <li>Nexlev and Viomi <b>share the same sales</b> (both tagged "Nexlev" brand)</li>
               <li>Models in sales but missing from the master file are silently dropped</li>
             </ul>

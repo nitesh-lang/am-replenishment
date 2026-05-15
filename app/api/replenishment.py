@@ -32,7 +32,7 @@ router = APIRouter(
 # =================================================
 @router.get("/replenishment")
 def get_replenishment(
-    sales_window: int = Query(default=4, ge=1),
+    sales_window: int = Query(default=12, ge=1),
     replenish_weeks: int = Query(default=8, ge=1),
     account: str = Query(default="NEXLEV"),
 ):
