@@ -409,10 +409,16 @@ export default function Replenishment() {
   }
 
   function getRowColor(status) {
-    if (status === "CRITICAL") return "bg-red-50";
-    if (status === "LOW COVER") return "bg-yellow-50";
-    return "bg-emerald-50/40";
+    // Subtle row tint — strong row colors were noisy across 50 rows.
+    // Critical SKUs are already surfaced via SHORTFALL and required_units styling.
+    if (status === "CRITICAL") return "bg-red-50/40";
+    return "";
   }
+
+  const NUMERIC_COLS = new Set([
+    "sales_velocity", "total_units_sold", "amazon_inventory", "inbound_inventory",
+    "ampm_inventory", "required_units", "replenishment_qty", "warehouse_shortfall",
+  ]);
 
   function getStatusBadge(status) {
     if (status === "CRITICAL")
@@ -782,12 +788,13 @@ function exportCSV() {
               <tr>
                 {tableColumns.map((col) => {
                   const hasFilter = columnFilters[col] && columnFilters[col].size > 0;
+                  const isNum = NUMERIC_COLS.has(col) || col === "recommended_qty";
                   return (
                     <th
                       key={col}
-                      className="px-2 py-2 whitespace-nowrap font-semibold tracking-tight"
+                      className={`px-2 py-2 whitespace-nowrap font-semibold tracking-tight ${isNum ? "text-right" : "text-left"}`}
                     >
-                      <div className="flex items-center gap-1">
+                      <div className={`flex items-center gap-1 ${isNum ? "justify-end" : ""}`}>
                         <span
                           className="cursor-pointer select-none flex items-center gap-1"
                           onClick={() => toggleSort(col)}
@@ -850,16 +857,30 @@ function exportCSV() {
 
                         if (col === "required_units" && row[col] > 0)
                           return (
-                            <td key={col} className="px-2 py-1.5 font-bold text-red-600">
+                            <td key={col} className="px-2 py-1.5 text-right tabular-nums font-semibold text-red-600">
                               {row[col]}
                             </td>
                           );
 
+                        if (col === "replenishment_qty")
+                          return (
+                            <td key={col} className="px-2 py-1.5 text-right tabular-nums font-bold text-slate-900">
+                              {row[col] > 0 ? row[col] : <span className="text-slate-300">—</span>}
+                            </td>
+                          );
+
+                        if (col === "warehouse_shortfall")
+                          return (
+                            <td key={col} className={`px-2 py-1.5 text-right tabular-nums ${row[col] > 0 ? "font-semibold text-orange-600" : "text-slate-400"}`}>
+                              {row[col] > 0 ? row[col] : "—"}
+                            </td>
+                          );
+
                         if (col === "ixd_type")
-                          return <td key={col} className="px-2 py-1.5">{row.ixd_type}</td>;
+                          return <td key={col} className="px-2 py-1.5 text-slate-600">{row.ixd_type}</td>;
 
                         if (col === "hazmat_type")
-                          return <td key={col} className="px-2 py-1.5">{row.hazmat_type}</td>;
+                          return <td key={col} className="px-2 py-1.5 text-slate-600">{row.hazmat_type}</td>;
 
                         if (col === "master_carton")
                           return (
@@ -900,9 +921,9 @@ function exportCSV() {
                             );
 
                           return (
-                            <td key={col} className="px-2 py-1.5">
+                            <td key={col} className="px-2 py-1.5 text-right tabular-nums">
                               <span
-                                className={`font-semibold ${breakFlag ? "text-orange-600" : row.ixd_type === "IXD" ? "text-blue-700" : "text-slate-700"}`}
+                                className={`font-bold ${breakFlag ? "text-orange-600" : row.ixd_type === "IXD" ? "text-blue-700" : "text-slate-900"}`}
                                 title={`Raw replenishment: ${rawQty} → Rounded up to ${recQty}`}
                               >
                                 {recQty}
@@ -969,7 +990,15 @@ function exportCSV() {
                           );
                         }
 
-                        return <td key={col} className="px-2 py-1.5">{row[col]}</td>;
+                        if (NUMERIC_COLS.has(col)) {
+                          return (
+                            <td key={col} className="px-2 py-1.5 text-right tabular-nums text-slate-700">
+                              {row[col]}
+                            </td>
+                          );
+                        }
+
+                        return <td key={col} className="px-2 py-1.5 text-slate-700">{row[col]}</td>;
                       })}
                     </tr>
 
@@ -1088,7 +1117,7 @@ function ReplenishmentSOPModal({ open, onClose }) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
@@ -1108,7 +1137,7 @@ function ReplenishmentSOPModal({ open, onClose }) {
           </button>
         </div>
 
-        <div className="overflow-auto p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
+        <div className="overflow-auto flex-1 min-h-0 p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
 
           <p className="text-slate-600">
             Tells you how many units to send from your <b>Mother Warehouse</b> to Amazon FBA. Math runs live on the latest files.

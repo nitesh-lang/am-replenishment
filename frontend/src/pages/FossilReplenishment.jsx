@@ -552,7 +552,7 @@ function FossilSOPModal({ open, onClose }) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[88vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
@@ -572,7 +572,7 @@ function FossilSOPModal({ open, onClose }) {
           </button>
         </div>
 
-        <div className="overflow-auto p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
+        <div className="overflow-auto flex-1 min-h-0 p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
 
           <p className="text-slate-600">
             Tells you how many units to send from Fossil's dispatch warehouse to Amazon FBA for each SKU. Math respects Assortment Type, Brand-specific Weeks of Cover, and a Fossil SOH cap.
