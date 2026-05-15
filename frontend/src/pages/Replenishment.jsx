@@ -1108,104 +1108,73 @@ function ReplenishmentSOPModal({ open, onClose }) {
           </button>
         </div>
 
-        <div className="overflow-auto p-5 text-sm text-slate-700 space-y-5 leading-relaxed">
+        <div className="overflow-auto p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
+
+          <p className="text-slate-600">
+            Tells you how many units to send from your <b>Mother Warehouse</b> to Amazon FBA. Math runs live on the latest files.
+          </p>
 
           <section>
-            <h3 className="text-sm font-semibold text-slate-900 mb-1">What this page does</h3>
-            <p>
-              Tells you how many units to ship from the <b>Mother Warehouse</b> to
-              Amazon FBA for each model. The math runs automatically every time
-              you open the page, using the latest sales and inventory files.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">Settings at the top</h3>
-            <ul className="list-disc pl-5 space-y-1">
-              <li><b>Account</b> — Which catalog you're working on (Nexlev, Viomi, Audio Array, White Mulberry)</li>
-              <li><b>Sales Window</b> — Which past weeks count as "recent sales" (default: last 4 weeks)</li>
-              <li><b>Replenish Weeks</b> — How many weeks of stock you want sitting at Amazon (default: 8)</li>
-              <li><b>Working Week</b> — Active week you're saving Working values for (Sun–Sat). Past weeks shown as view-only.</li>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Top controls</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>Sales Window</b> — recent weeks used to compute weekly sales (default 4)</li>
+              <li><b>Replenish Weeks</b> — weeks of stock you want at Amazon (default 8)</li>
+              <li><b>Working Week</b> — active save week. Past weeks are view-only.</li>
             </ul>
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">What each column means</h3>
-            <div className="overflow-auto">
-              <table className="w-full text-xs border-collapse">
-                <thead className="bg-slate-100">
-                  <tr>
-                    <th className="border border-slate-300 px-2 py-1.5 text-left font-semibold w-32">Column</th>
-                    <th className="border border-slate-300 px-2 py-1.5 text-left font-semibold">Plain meaning</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">MODEL</td><td className="border border-slate-300 px-2 py-1.5">Product model code</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">CATEGORY / ASIN / SKU</td><td className="border border-slate-300 px-2 py-1.5">Identifiers from the master file</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">AVG/WK</td><td className="border border-slate-300 px-2 py-1.5">Average units sold per week (Total Sold ÷ weeks in window)</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">TOTAL</td><td className="border border-slate-300 px-2 py-1.5">Units sold in the selected sales window</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">AZ INV</td><td className="border border-slate-300 px-2 py-1.5">Sellable units sitting at Amazon FBA right now</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">INBOUND</td><td className="border border-slate-300 px-2 py-1.5">Units already shipped to Amazon but not yet received</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">MOTHER WH</td><td className="border border-slate-300 px-2 py-1.5">Units in your Mother Warehouse — what you can actually ship</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">REQ UNITS</td><td className="border border-slate-300 px-2 py-1.5">Target stock at Amazon = AVG/WK × Replenish Weeks</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">REPLEN</td><td className="border border-slate-300 px-2 py-1.5">Units to ship: Required − Amazon. <b>Capped at Mother Warehouse</b> stock — can't ship more than you have.</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium bg-amber-50">WORKING</td><td className="border border-slate-300 px-2 py-1.5 bg-amber-50">Your editable cell — type the final qty you want to send. Pre-fills with REPLEN.</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">RECOMMENDED</td><td className="border border-slate-300 px-2 py-1.5">REPLEN rounded to nearest full Master Carton (IXD = mandatory; Non-IXD = advisory)</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">CARTONS</td><td className="border border-slate-300 px-2 py-1.5">How many full master cartons that equals</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">SHORTFALL</td><td className="border border-slate-300 px-2 py-1.5">How short the Mother Warehouse is of the full need. If &gt; 0, raise a new China PO for that gap.</td></tr>
-                  <tr><td className="border border-slate-300 px-2 py-1.5 font-medium">IXD / HAZMAT / MC</td><td className="border border-slate-300 px-2 py-1.5">Classifications that affect carton packing rules</td></tr>
-                </tbody>
-              </table>
-            </div>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Columns</h3>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium w-32">AVG/WK</td><td className="border border-slate-300 px-2 py-1">Avg units sold per week (Total ÷ weeks in window)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">TOTAL</td><td className="border border-slate-300 px-2 py-1">Units sold in the window</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">AZ INV</td><td className="border border-slate-300 px-2 py-1">Stock sitting at Amazon FBA (sellable)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">INBOUND</td><td className="border border-slate-300 px-2 py-1">Already shipped to Amazon, not yet received</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">MOTHER WH</td><td className="border border-slate-300 px-2 py-1">Stock at your warehouse — what you can ship</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">REQ UNITS</td><td className="border border-slate-300 px-2 py-1">Target stock at Amazon = AVG/WK × Replenish Weeks</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">REPLEN</td><td className="border border-slate-300 px-2 py-1">Units to ship. <b>Never exceeds Mother WH stock.</b></td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium bg-amber-50">WORKING</td><td className="border border-slate-300 px-2 py-1 bg-amber-50">Your editable cell — pre-fills from REPLEN</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">RECOMMENDED</td><td className="border border-slate-300 px-2 py-1">REPLEN rounded to full Master Cartons</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">SHORTFALL</td><td className="border border-slate-300 px-2 py-1">Gap when Mother WH is short → raise a China PO</td></tr>
+              </tbody>
+            </table>
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">How a number flows — worked example</h3>
-            <div className="bg-slate-50 border border-slate-200 rounded p-3 text-xs leading-relaxed">
-              <b>Model AA-01:</b> sold 80 units in last 4 weeks → <b>AVG/WK = 20</b> →
-              Target for 8 weeks = <b>160</b> → Amazon has 50 → Raw need = 110 →
-              Mother Warehouse has 200 → <b>REPLEN = 110</b> (no shortfall).<br/>
-              <span className="text-slate-500">If Mother Warehouse only had 70, REPLEN would be 70 and SHORTFALL would show 40 — meaning 40 units still need to be ordered from China.</span>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">Working column rules</h3>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Pre-fills automatically with the calculated REPLEN</li>
-              <li>Saves to the system as you type</li>
-              <li>Each working week runs <b>Sunday → Saturday</b></li>
-              <li><b>Locks at Saturday 11:59 PM IST</b> — week becomes read-only after that</li>
-              <li>Past weeks are accessible via the Working Week dropdown (view only)</li>
-              <li>SKU, ASIN, Model and every number you saw at save time is frozen with the week</li>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Account rules</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>Nexlev / Viomi / White Mulberry</b> → all sales channels count</li>
+              <li><b>Audio Array</b> → <b>only Amazon channel</b> counts (1P, B2B, D2C, Blinkit etc. are excluded)</li>
+              <li>Nexlev and Viomi <b>share the same sales</b> (both tagged "Nexlev" brand)</li>
+              <li>Models in sales but missing from the master file are silently dropped</li>
             </ul>
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">Excel-style filters</h3>
-            <p>
-              Every column header has a small filter icon (▽). Click it to pick which
-              values to show — multi-select checkboxes with search. Filters cascade
-              like Excel: filter one column, the others' dropdowns only show values
-              that still fit the visible rows.
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Example</h3>
+            <p className="bg-slate-50 border border-slate-200 rounded p-2 text-xs">
+              Sold 80 in last 4 weeks → AVG/WK = 20 → 8-week target = 160 → Amazon has 50 → need 110 → Mother WH has 200 → <b>SHIP 110</b>.
+              <br/>
+              If Mother WH only had 70 → SHIP 70, SHORTFALL 40 (raise a China PO for 40).
             </p>
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">Team Export</h3>
-            <p>
-              After typing Working values, click the green <b>Team Export</b> button.
-              For Nexlev + Viomi, one paste-ready table combines both accounts. For
-              Audio Array and White Mulberry, the export uses each account's own
-              format. <b>Copy to clipboard</b> pastes into email / Sheets / Excel with
-              the formatting intact (bold header + total, centered, wrapped). Or
-              download the <b>.xls</b> file.
-            </p>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Working column</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li>Auto-saves as you type</li>
+              <li>Week runs Sun → Sat; <b>locks at Saturday 11:59 PM IST</b></li>
+              <li>Past weeks are view-only via the dropdown</li>
+            </ul>
           </section>
 
-          <section className="text-xs text-slate-500 border-t border-slate-200 pt-3">
-            Questions or numbers look off? Ping the build owner — every calculation
-            here can be traced back to a specific input file row.
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Filters &amp; Team Export</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li>Click <b>▽</b> on any column header to filter like Excel</li>
+              <li>Green <b>Team Export</b> button → paste-ready table for your team (formatting carries over to Sheets/Excel/email)</li>
+            </ul>
           </section>
 
         </div>
