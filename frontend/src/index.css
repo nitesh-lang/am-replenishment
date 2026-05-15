@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -19,12 +21,19 @@
 
   body {
     margin: 0;
-    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    font-family: "Geist", system-ui, -apple-system, BlinkMacSystemFont,
       "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #f8fafc; /* softer SaaS gray */
-    color: #0f172a; /* slate-900 */
+    background-color: #fafaf9; /* warm neutral surface */
+    color: #18181b; /* zinc-900 */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "ss01", "cv11";
+  }
+
+  .font-mono,
+  .tabular-nums {
+    font-family: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
   }
 
   a {

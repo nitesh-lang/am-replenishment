@@ -536,28 +536,52 @@ function exportCSV() {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-white border border-slate-200 rounded-md shadow-sm">
-        <div className="flex items-baseline gap-3">
-          <span className="h-2 w-2 rounded-full bg-indigo-500 mr-1"></span>
-          <h1 className="text-base font-semibold text-slate-900 tracking-tight">Replenishment Intelligence</h1>
-          <p className="text-xs text-slate-500">Coverage &amp; replenishment analytics</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-md bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-sm shadow-indigo-500/20">R</div>
+          <div>
+            <h1 className="text-[15px] font-semibold text-zinc-900 tracking-tight leading-tight">Replenishment Intelligence</h1>
+            <p className="text-[11px] text-zinc-500">Coverage &amp; replenishment analytics</p>
+          </div>
         </div>
-        <button
-          onClick={() => setSopOpen(true)}
-          className="px-2.5 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md hover:bg-indigo-100 transition"
-          title="Read the SOP for this page"
-        >
-          📘 How is this calculated?
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Quick stats — at-a-glance health */}
+          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-zinc-200 rounded-md shadow-sm">
+            <span className="flex items-center gap-1 text-[11px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+              <span className="font-semibold text-zinc-900 tabular-nums">{healthStats.critical}</span>
+              <span className="text-zinc-500">critical</span>
+            </span>
+            <span className="text-zinc-200">·</span>
+            <span className="flex items-center gap-1 text-[11px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+              <span className="font-semibold text-zinc-900 tabular-nums">{healthStats.low}</span>
+              <span className="text-zinc-500">low cover</span>
+            </span>
+            <span className="text-zinc-200">·</span>
+            <span className="flex items-center gap-1 text-[11px]">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+              <span className="font-semibold text-zinc-900 tabular-nums">{healthStats.healthy}</span>
+              <span className="text-zinc-500">healthy</span>
+            </span>
+          </div>
+          <button
+            onClick={() => setSopOpen(true)}
+            className="px-2.5 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition"
+            title="Read the SOP for this page"
+          >
+            How is this calculated?
+          </button>
+        </div>
       </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-3 py-2.5 bg-white border border-slate-200 rounded-md shadow-sm">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-3 py-2.5 bg-white border border-zinc-200 rounded-lg">
       <div>
-        <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Account</label>
+        <label className="text-[10px] uppercase tracking-[0.08em] text-zinc-500 font-semibold">Account</label>
         <select
           value={account}
           onChange={(e) => { setAccount(e.target.value); setWeekStart(null); }}
-          className="mt-1 w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
+          className="mt-1 w-full px-2.5 py-1.5 text-sm bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 hover:border-zinc-300 transition-colors"
         >
           <option value="NEXLEV">Nexlev</option>
           <option value="VIOMI">Viomi</option>
@@ -567,11 +591,11 @@ function exportCSV() {
       </div>
 
       <div>
-        <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Working Week</label>
+        <label className="text-[10px] uppercase tracking-[0.08em] text-zinc-500 font-semibold">Working Week</label>
         <select
           value={weekStart ?? ""}
           onChange={(e) => setWeekStart(e.target.value || null)}
-          className="mt-1 w-full px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400"
+          className="mt-1 w-full px-2.5 py-1.5 text-sm bg-white border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 hover:border-zinc-300 transition-colors"
         >
           <option value="">
             {currentWeekMeta
@@ -618,9 +642,9 @@ function exportCSV() {
     </div>
 
     {/* SALES WINDOW + REPLENISH WEEKS FILTER */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-3 py-2.5 bg-white border border-slate-200 rounded-md shadow-sm">
+<div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-3 py-2.5 bg-white border border-zinc-200 rounded-lg">
   <div>
-  <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+  <label className="text-[10px] uppercase tracking-[0.08em] text-zinc-500 font-semibold">
     Sales Window (Range)
   </label>
 
@@ -658,7 +682,7 @@ function exportCSV() {
 </div>
 
   <div>
-    <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+    <label className="text-[10px] uppercase tracking-[0.08em] text-zinc-500 font-semibold">
       Replenish Weeks
     </label>
     <select
@@ -678,13 +702,16 @@ function exportCSV() {
   </div>
 </div>
       {/* EXPORT + SEARCH */}
-      <div className="flex justify-between items-center gap-3 flex-wrap px-3 py-2 bg-white border border-slate-200 rounded-md shadow-sm">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search model, ASIN or SKU..."
-          className="px-2.5 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 min-w-[240px]"
-        />
+      <div className="flex justify-between items-center gap-3 flex-wrap px-3 py-2 bg-white border border-zinc-200 rounded-lg">
+        <div className="relative min-w-[260px]">
+          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400 pointer-events-none" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="7" cy="7" r="5"/><path d="m11 11 3 3"/></svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search model, ASIN or SKU…"
+            className="w-full pl-8 pr-3 py-1.5 text-sm bg-zinc-50 border border-zinc-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-400 focus:bg-white transition-colors placeholder:text-zinc-400"
+          />
+        </div>
         <div className="flex flex-wrap gap-2 items-center">
           <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">Category</span>
           {categories.map(cat => (
@@ -782,10 +809,10 @@ function exportCSV() {
       </div>
 
       {/* TABLE */}
-      <div className="border border-slate-200 rounded-md overflow-hidden bg-white">
-        <div className="overflow-auto max-h-[82vh]">
+      <div className="border border-zinc-200 rounded-lg overflow-hidden bg-white shadow-sm">
+        <div className="overflow-auto max-h-[78vh]">
           <table className="w-full text-[11px] table-auto">
-            <thead className="bg-slate-50 text-[10px] uppercase sticky top-0 z-20 border-b border-slate-200">
+            <thead className="bg-zinc-50/80 backdrop-blur text-[10px] uppercase sticky top-0 z-20 border-b border-zinc-200">
               <tr>
                 {tableColumns.map((col) => {
                   const hasFilter = columnFilters[col] && columnFilters[col].size > 0;
@@ -793,11 +820,11 @@ function exportCSV() {
                   return (
                     <th
                       key={col}
-                      className={`px-2 py-2 whitespace-nowrap font-semibold tracking-tight ${isNum ? "text-right" : "text-left"}`}
+                      className={`px-2 py-2 whitespace-nowrap font-semibold tracking-[0.06em] text-zinc-600 ${isNum ? "text-right" : "text-left"}`}
                     >
                       <div className={`flex items-center gap-1 ${isNum ? "justify-end" : ""}`}>
                         <span
-                          className="cursor-pointer select-none flex items-center gap-1"
+                          className="cursor-pointer select-none flex items-center gap-1 hover:text-zinc-900 transition-colors"
                           onClick={() => toggleSort(col)}
                         >
                           {colLabel(col)}
@@ -818,8 +845,8 @@ function exportCSV() {
                               prev && prev.col === col ? null : { col, rect }
                             );
                           }}
-                          className={`ml-auto px-1 rounded hover:bg-slate-200 ${
-                            hasFilter ? "text-indigo-600" : "text-slate-400"
+                          className={`ml-auto px-1 rounded hover:bg-zinc-200 transition-colors ${
+                            hasFilter ? "text-indigo-600" : "text-zinc-400"
                           }`}
                           title={hasFilter ? "Filter active — click to edit" : "Filter"}
                         >
