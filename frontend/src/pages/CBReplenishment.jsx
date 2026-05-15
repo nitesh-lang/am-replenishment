@@ -50,6 +50,9 @@ const isLocked = isReadOnly || !!currentWeekMeta?.locked;
 const [columnFilters, setColumnFilters] = useState({});
 const [openFilter, setOpenFilter] = useState(null);
 
+// SOP help modal
+const [sopOpen, setSopOpen] = useState(false);
+
 // Team export modal state
 const [exportOpen, setExportOpen] = useState(false);
 const [exportRows, setExportRows] = useState([]);
@@ -444,10 +447,22 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
     <div className="space-y-4">
 
       {/* HEADER */}
-      <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow flex items-baseline gap-3">
-        <h1 className="text-lg font-semibold">CB Replenishment Intelligence</h1>
-        <p className="text-slate-300 text-xs">Cambium / CB Inventory Planning</p>
+      <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow flex items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-lg font-semibold">CB Replenishment Intelligence</h1>
+          <p className="text-slate-300 text-xs">Cambium / CB Inventory Planning</p>
+        </div>
+        <button
+          onClick={() => setSopOpen(true)}
+          className="px-3 py-1 text-xs bg-white/10 hover:bg-white/20 border border-white/20 rounded transition flex items-center gap-1.5"
+          title="Read the SOP for this page"
+        >
+          📘 How is this calculated?
+        </button>
       </div>
+
+      {/* SOP MODAL */}
+      <CBSOPModal open={sopOpen} onClose={() => setSopOpen(false)} />
 
       {/* KPI */}
 
@@ -1168,6 +1183,118 @@ function MetricCard({ title, value }) {
     <div className="px-3 py-2 bg-white rounded-lg shadow-sm border border-slate-100">
       <div className="text-[10px] uppercase tracking-wider text-slate-400">{title}</div>
       <div className="text-base font-semibold text-slate-800">{value ?? "-"}</div>
+    </div>
+  );
+}
+
+function CBSOPModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-200">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">
+              How CB Replenishment is Calculated
+            </h2>
+            <p className="text-xs text-slate-500 mt-1">
+              Brands covered: Audio Array + Tonor
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs rounded hover:bg-slate-200"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="overflow-auto p-5 text-sm text-slate-700 space-y-4 leading-relaxed">
+
+          <p className="text-slate-600">
+            Tells you how many units to ship from the <b>Mother Warehouse</b> to <b>CB (Cambium)</b> for each model, based on CB's recent sales and what's already on order.
+          </p>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Top controls</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li><b>Sales Window (From / To)</b> — Range from the last 12 available weeks (default: full last 12)</li>
+              <li><b>Cover Weeks</b> — Weeks of stock you want at CB (default 8)</li>
+              <li><b>Working Week</b> — Active save week. Past weeks view-only.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Columns</h3>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium w-36">CB SALES</td><td className="border border-slate-300 px-2 py-1">Units sold via <b>1p Sales</b> channel in the window</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">AMZ SALES</td><td className="border border-slate-300 px-2 py-1">Units sold via <b>Amazon</b> channel in the window (Cambium's Amazon)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">AVG/WK</td><td className="border border-slate-300 px-2 py-1">(CB Sales + AMZ Sales) ÷ window weeks</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">EST QTY</td><td className="border border-slate-300 px-2 py-1">Target stock at CB = AVG/WK × Cover Weeks</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">CB SOH</td><td className="border border-slate-300 px-2 py-1">Current CB stock (1P channel from inventory snapshots)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">AMPM (Mother WH)</td><td className="border border-slate-300 px-2 py-1">Stock at your warehouse — what you can ship to CB</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">CHINA IT</td><td className="border border-slate-300 px-2 py-1">Pipeline rows from inventory snapshot (units coming from China)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">OPEN PO</td><td className="border border-slate-300 px-2 py-1">Open POs already raised (status = Open PO)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">IN-TRANSIT</td><td className="border border-slate-300 px-2 py-1">In-transit PO units (status = In-Transit)</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">SHORTFALL</td><td className="border border-slate-300 px-2 py-1">EST QTY − CB SOH (≥ 0). The gap to fill.</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">PO REQ</td><td className="border border-slate-300 px-2 py-1">Shortfall − (Open PO + In-Transit), then <b>capped at Mother Warehouse stock</b>. Read-only.</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium bg-amber-50">WORKING</td><td className="border border-slate-300 px-2 py-1 bg-amber-50">Editable. Pre-fills from PO REQ. Your final call. Auto-saves.</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium">REMARKS</td><td className="border border-slate-300 px-2 py-1">Free-form notes, also week-scoped</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Filter rules</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li>Brands counted: <b>Audio Array + Tonor</b> only</li>
+              <li>Sales channels counted: <b>1p Sales + Amazon</b> only (B2B, Blinkit, D2C, BI Worldwide, CRED, Flipkart, POP — all excluded ~18% of sales)</li>
+              <li>Inventory channels read: <code>1p</code> → CB SOH, <code>ampm</code> → Mother Warehouse, <code>pipeline</code> → China In-Transit</li>
+              <li>PO file rows used: <b>Open PO</b> and <b>In-Transit</b> delivery statuses</li>
+              <li>Master models with bundle names like <code>UB-01 (AI-04...)</code> match by base <code>UB-01</code></li>
+              <li>Models in sales but missing from master are dropped (current known drops: zero — TC40S and AM-Mix8 were added recently)</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Example</h3>
+            <p className="bg-slate-50 border border-slate-200 rounded p-2 text-xs">
+              ETC-04: sold 60 units over 12 weeks → AVG/WK = 5 →
+              8-week target (EST QTY) = 40 → CB has 10 → SHORTFALL = 30 →
+              Open PO 5 + In-Transit 10 → PO REQ = 30 − 15 = <b>15</b>
+              (Mother WH has 50, no cap kicks in).
+              <br/>
+              <span className="text-slate-500">If Mother WH only had 8, PO REQ would be capped at 8.</span>
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Working column</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li>Auto-saves as you type</li>
+              <li>Week runs Sun → Sat; <b>locks at Saturday 11:59 PM IST</b></li>
+              <li>Past weeks are view-only via the dropdown</li>
+              <li>The full row at save time is frozen (SKU, ASIN, Model, every number)</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-slate-900 mb-1">Filters &amp; Team Export</h3>
+            <ul className="list-disc pl-5 space-y-0.5 text-xs">
+              <li>Click <b>▽</b> on any column header to filter like Excel</li>
+              <li>Green <b>Team Export</b> button → brand-wise paste-ready table (Model · ASIN · SKU · PO Qty · Remarks). Audio Array rows first, then Tonor, with total. Bold + center align carries over to Sheets/Excel.</li>
+            </ul>
+          </section>
+
+        </div>
+      </div>
     </div>
   );
 }
