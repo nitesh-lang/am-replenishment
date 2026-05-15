@@ -13,10 +13,15 @@ async def post_event(request: Request):
     except Exception:
         body = {}
     email = body.get("user_email") or request.headers.get("x-user-email") or None
+
+    # Coerce module carefully — str(None) would store "None" as a string
+    raw_module = body.get("module")
+    module = raw_module.strip() if isinstance(raw_module, str) and raw_module.strip() else None
+
     usage_log.log_event(
         user_email=email,
         event_type=str(body.get("event_type", "")).strip(),
-        module=str(body.get("module", "")).strip() or None,
+        module=module,
         detail=body.get("detail") or {},
     )
     return {"status": "ok"}

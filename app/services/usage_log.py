@@ -102,7 +102,7 @@ def summary() -> dict:
           COUNT(DISTINCT user_email)    AS users,
           MAX(created_at)               AS last_activity
         FROM app_usage_log
-        WHERE module IS NOT NULL
+        WHERE module IS NOT NULL AND module <> '' AND module <> 'None'
         GROUP BY module
         ORDER BY total DESC;
     """)
