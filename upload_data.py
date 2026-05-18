@@ -1,14 +1,21 @@
-import pandas as pd
-from sqlalchemy import create_engine
 import os
+import sys
+
+import pandas as pd
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
 
 # ==========================================
-# DATABASE CONNECTION (Use ENV if available)
+# DATABASE CONNECTION
 # ==========================================
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://am_replenishment_db_user:4M8xsThJDkrNgaL0siQaGN0kbx9ZPqhR@dpg-d6e55uv5r7bs73belrm0-a.virginia-postgres.render.com/am_replenishment_db"
-)
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    sys.exit(
+        "DATABASE_URL is not set. "
+        "Configure it in your environment or .env file before running this script."
+    )
 
 engine = create_engine(DATABASE_URL)
 
