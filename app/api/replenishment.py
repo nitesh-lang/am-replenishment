@@ -12,10 +12,10 @@ from app.services.week_helper import (
     now_ist,
 )
 from datetime import date as _date
-import psycopg2
-import os
 import json
 import pandas as pd
+
+from app.services.db import get_conn
 
 
 # =================================================
@@ -197,24 +197,23 @@ def get_fc_final(
     # ── Fossil: load remarks + master_carton from DB only, send_qty always fresh ──
     if account.lower() == "fossil":
         try:
-            conn = psycopg2.connect(os.environ["DATABASE_URL"])
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS fossil_fc_inputs (
-                    sku TEXT,
-                    fulfillment_center TEXT,
-                    po_requirement INTEGER DEFAULT 0,
-                    master_carton INTEGER DEFAULT 24,
-                    remarks TEXT DEFAULT '',
-                    PRIMARY KEY (sku, fulfillment_center)
-                )
-            """)
-            conn.commit()
+            with get_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS fossil_fc_inputs (
+                            sku TEXT,
+                            fulfillment_center TEXT,
+                            po_requirement INTEGER DEFAULT 0,
+                            master_carton INTEGER DEFAULT 24,
+                            remarks TEXT DEFAULT '',
+                            PRIMARY KEY (sku, fulfillment_center)
+                        )
+                    """)
+                    conn.commit()
 
-            # Load only remarks from DB — master_carton always from input sheet/default
-            cursor.execute("SELECT sku, fulfillment_center, remarks FROM fossil_fc_inputs")
-            saved = cursor.fetchall()
-            conn.close()
+                    # Load only remarks from DB — master_carton always from input sheet/default
+                    cursor.execute("SELECT sku, fulfillment_center, remarks FROM fossil_fc_inputs")
+                    saved = cursor.fetchall()
 
             if saved:
                 saved_df = pd.DataFrame(saved, columns=["sku", "fulfillment_center", "remarks_db"])
@@ -288,20 +287,19 @@ def get_fc_final(
 
             # load saved cluster PO overrides — only use DB value if it differs from calc
             # (i.e. user deliberately edited it)
-            conn2 = psycopg2.connect(os.environ["DATABASE_URL"])
-            cursor2 = conn2.cursor()
-            cursor2.execute("""
-                CREATE TABLE IF NOT EXISTS fossil_cluster_po (
-                    sku TEXT,
-                    cluster TEXT,
-                    cluster_po INTEGER DEFAULT 0,
-                    PRIMARY KEY (sku, cluster)
-                )
-            """)
-            conn2.commit()
-            cursor2.execute("SELECT sku, cluster, cluster_po FROM fossil_cluster_po")
-            cluster_saved = cursor2.fetchall()
-            conn2.close()
+            with get_conn() as conn2:
+                with conn2.cursor() as cursor2:
+                    cursor2.execute("""
+                        CREATE TABLE IF NOT EXISTS fossil_cluster_po (
+                            sku TEXT,
+                            cluster TEXT,
+                            cluster_po INTEGER DEFAULT 0,
+                            PRIMARY KEY (sku, cluster)
+                        )
+                    """)
+                    conn2.commit()
+                    cursor2.execute("SELECT sku, cluster, cluster_po FROM fossil_cluster_po")
+                    cluster_saved = cursor2.fetchall()
 
             # Always default to fresh calc; only use DB if it was manually overridden
             df["cluster_po"] = df["cluster_po_calc"].fillna(0).astype(int)
@@ -351,12 +349,11 @@ def get_fc_final(
 @router.post("/fc-final-allocation/fossil-reset")
 async def reset_fossil_fc_inputs():
     try:
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM fossil_fc_inputs")
-        cursor.execute("DELETE FROM fossil_cluster_po")
-        conn.commit()
-        conn.close()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM fossil_fc_inputs")
+                cursor.execute("DELETE FROM fossil_cluster_po")
+            conn.commit()
         return {"status": "reset"}
     except Exception as e:
         print("⚠️ Fossil FC reset error:", e)
@@ -375,36 +372,34 @@ async def save_fossil_fc_inputs(request: Request):
         if isinstance(data, dict):
             data = [data]
 
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        cursor = conn.cursor()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS fossil_fc_inputs (
+                        sku TEXT,
+                        fulfillment_center TEXT,
+                        po_requirement INTEGER DEFAULT 0,
+                        remarks TEXT DEFAULT '',
+                        PRIMARY KEY (sku, fulfillment_center)
+                    )
+                """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS fossil_fc_inputs (
-                sku TEXT,
-                fulfillment_center TEXT,
-                po_requirement INTEGER DEFAULT 0,
-                remarks TEXT DEFAULT '',
-                PRIMARY KEY (sku, fulfillment_center)
-            )
-        """)
+                for row in data:
+                    sku            = str(row.get("sku", "")).strip().upper()
+                    fc             = str(row.get("fulfillment_center", "")).strip().upper()
+                    po_requirement = int(row.get("po_requirement", 0))
+                    remarks        = str(row.get("remarks", ""))
 
-        for row in data:
-            sku            = str(row.get("sku", "")).strip().upper()
-            fc             = str(row.get("fulfillment_center", "")).strip().upper()
-            po_requirement = int(row.get("po_requirement", 0))
-            remarks        = str(row.get("remarks", ""))
+                    cursor.execute("""
+                        INSERT INTO fossil_fc_inputs (sku, fulfillment_center, po_requirement, remarks)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (sku, fulfillment_center)
+                        DO UPDATE SET
+                            po_requirement = EXCLUDED.po_requirement,
+                            remarks        = EXCLUDED.remarks;
+                    """, (sku, fc, po_requirement, remarks))
 
-            cursor.execute("""
-                INSERT INTO fossil_fc_inputs (sku, fulfillment_center, po_requirement, remarks)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT (sku, fulfillment_center)
-                DO UPDATE SET
-                    po_requirement = EXCLUDED.po_requirement,
-                    remarks        = EXCLUDED.remarks;
-            """, (sku, fc, po_requirement, remarks))
-
-        conn.commit()
-        conn.close()
+            conn.commit()
         return {"status": "saved", "rows": len(data)}
 
     except Exception as e:
@@ -424,32 +419,30 @@ async def save_fossil_cluster_po(request: Request):
         if isinstance(data, dict):
             data = [data]
 
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        cursor = conn.cursor()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS fossil_cluster_po (
+                        sku TEXT,
+                        cluster TEXT,
+                        cluster_po INTEGER DEFAULT 0,
+                        PRIMARY KEY (sku, cluster)
+                    )
+                """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS fossil_cluster_po (
-                sku TEXT,
-                cluster TEXT,
-                cluster_po INTEGER DEFAULT 0,
-                PRIMARY KEY (sku, cluster)
-            )
-        """)
+                for row in data:
+                    sku        = str(row.get("sku", "")).strip().upper()
+                    cluster    = str(row.get("cluster", "")).strip().upper()
+                    cluster_po = int(row.get("cluster_po", 0))
 
-        for row in data:
-            sku        = str(row.get("sku", "")).strip().upper()
-            cluster    = str(row.get("cluster", "")).strip().upper()
-            cluster_po = int(row.get("cluster_po", 0))
+                    cursor.execute("""
+                        INSERT INTO fossil_cluster_po (sku, cluster, cluster_po)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (sku, cluster)
+                        DO UPDATE SET cluster_po = EXCLUDED.cluster_po;
+                    """, (sku, cluster, cluster_po))
 
-            cursor.execute("""
-                INSERT INTO fossil_cluster_po (sku, cluster, cluster_po)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (sku, cluster)
-                DO UPDATE SET cluster_po = EXCLUDED.cluster_po;
-            """, (sku, cluster, cluster_po))
-
-        conn.commit()
-        conn.close()
+            conn.commit()
         return {"status": "saved", "rows": len(data)}
 
     except Exception as e:

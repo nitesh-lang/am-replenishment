@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Request, Query
 from typing import Optional
 from app.services.wm_replenishment import load_wm_replenishment
-import psycopg2
-import os
+from app.services.db import get_conn
 import json
 import pandas as pd
 
@@ -40,13 +39,10 @@ def get_wm_replenishment(
         # =========================
         # FETCH SAVED DATA FROM DB
         # =========================
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT model, po_requirement, remarks FROM wm_inputs")
-        saved_data = cursor.fetchall()
-
-        conn.close()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT model, po_requirement, remarks FROM wm_inputs")
+                saved_data = cursor.fetchall()
 
         saved_df = pd.DataFrame(
             saved_data,
@@ -133,36 +129,34 @@ async def save_wm_inputs(request: Request):
         if isinstance(data, dict):
             data = [data]
 
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        cursor = conn.cursor()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS wm_inputs (
+                        model TEXT PRIMARY KEY,
+                        po_requirement INTEGER DEFAULT 0,
+                        remarks TEXT DEFAULT ''
+                    )
+                """)
+                cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
+                cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
+                conn.commit()
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS wm_inputs (
-                model TEXT PRIMARY KEY,
-                po_requirement INTEGER DEFAULT 0,
-                remarks TEXT DEFAULT ''
-            )
-        """)
-        cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
-        cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
-        conn.commit()
+                for row in data:
+                    model = row.get("model")
+                    po_requirement = int(row.get("po_requirement", 0))
+                    remarks = row.get("remarks", "")
 
-        for row in data:
-            model = row.get("model")
-            po_requirement = int(row.get("po_requirement", 0))
-            remarks = row.get("remarks", "")
+                    cursor.execute("""
+                        INSERT INTO wm_inputs (model, po_requirement, remarks)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (model)
+                        DO UPDATE SET
+                            po_requirement = EXCLUDED.po_requirement,
+                            remarks = EXCLUDED.remarks;
+                    """, (model, po_requirement, remarks))
 
-            cursor.execute("""
-                INSERT INTO wm_inputs (model, po_requirement, remarks)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (model)
-                DO UPDATE SET
-                    po_requirement = EXCLUDED.po_requirement,
-                    remarks = EXCLUDED.remarks;
-            """, (model, po_requirement, remarks))
-
-        conn.commit()
-        conn.close()
+            conn.commit()
 
         return {"status": "saved"}
 
@@ -176,11 +170,10 @@ async def save_wm_inputs(request: Request):
 @router.post("/reset")
 async def reset_wm_inputs():
     try:
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM wm_inputs")
-        conn.commit()
-        conn.close()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM wm_inputs")
+            conn.commit()
         return {"status": "reset"}
     except Exception as e:
         print("WM RESET ERROR:", str(e))

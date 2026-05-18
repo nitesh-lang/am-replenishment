@@ -249,25 +249,23 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # DB MERGE (remarks only)
         # =========================
 
-        import psycopg2, os
+        from app.services.db import get_conn
 
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        cursor = conn.cursor()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS cb_inputs (
+                        model TEXT PRIMARY KEY,
+                        po_requirement INTEGER DEFAULT 0,
+                        remarks TEXT DEFAULT ''
+                    )
+                """)
+                cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
+                cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
+            conn.commit()
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS cb_inputs (
-                model TEXT PRIMARY KEY,
-                po_requirement INTEGER DEFAULT 0,
-                remarks TEXT DEFAULT ''
-            )
-        """)
-        cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
-        cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
-        conn.commit()
-
-        # Load po_requirement and remarks — DB value wins if user saved it
-        db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM cb_inputs", conn)
-        conn.close()
+            # Load po_requirement and remarks — DB value wins if user saved it
+            db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM cb_inputs", conn)
 
         if not db_df.empty and "model" in db_df.columns:
             df = df.merge(

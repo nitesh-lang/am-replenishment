@@ -172,24 +172,23 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         # DB MERGE (remarks only)
         # =========================
 
-        import psycopg2, os
+        from app.services.db import get_conn
 
-        conn = psycopg2.connect(os.environ["DATABASE_URL"])
-        cursor = conn.cursor()
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS wm_inputs (
+                        model TEXT PRIMARY KEY,
+                        po_requirement INTEGER DEFAULT 0,
+                        remarks TEXT DEFAULT ''
+                    )
+                """)
+                cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
+                cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
+            conn.commit()
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS wm_inputs (
-                model TEXT PRIMARY KEY,
-                po_requirement INTEGER DEFAULT 0,
-                remarks TEXT DEFAULT ''
-            )
-        """)
-        cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
-        cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
-        conn.commit()
-
-        # Load po_requirement and remarks — DB value wins if user saved it
-        db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM wm_inputs", conn)
+            # Load po_requirement and remarks — DB value wins if user saved it
+            db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM wm_inputs", conn)
 
         if not db_df.empty and "model" in db_df.columns:
             df = df.merge(
