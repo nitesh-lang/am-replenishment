@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, HTTPException
 from app.services import auth_users
+from app.services.auth_tokens import make_token, require_admin
 
 
 router = APIRouter(tags=["auth"])
@@ -18,7 +19,8 @@ async def login(request: Request):
     user = auth_users.authenticate(email, password)
     if not user:
         return {"status": "error", "error": "Invalid email or password"}
-    return {"status": "ok", "user": user}
+    token = make_token(user["email"], user["role"])
+    return {"status": "ok", "user": user, "token": token}
 
 
 @router.get("/auth/me")
@@ -31,13 +33,12 @@ def me(email: str):
 
 # =========================================================
 # Admin — user management
-# Auth via X-Admin-Email header. Header must belong to a
-# user with role=admin. Mirrors the existing simple model.
+# Auth via Authorization: Bearer <token>. Token is issued at
+# login, HMAC-signed, and role is re-verified against the DB
+# on every admin call (see app/services/auth_tokens.py).
 # =========================================================
 def _require_admin(request: Request):
-    email = request.headers.get("x-admin-email", "").strip()
-    if not email or not auth_users.is_admin(email):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    require_admin(request)
 
 
 @router.get("/admin/users")

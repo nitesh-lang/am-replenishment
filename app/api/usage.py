@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Request, HTTPException
-from app.services import usage_log, auth_users
+from fastapi import APIRouter, Request
+from app.services import usage_log
+from app.services.auth_tokens import require_admin
 
 
 router = APIRouter(tags=["usage"])
@@ -30,7 +31,5 @@ async def post_event(request: Request):
 @router.get("/usage/summary")
 def get_summary(request: Request):
     """Admin-only aggregated analytics."""
-    email = request.headers.get("x-admin-email", "").strip()
-    if not email or not auth_users.is_admin(email):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    require_admin(request)
     return {"status": "ok", **usage_log.summary()}

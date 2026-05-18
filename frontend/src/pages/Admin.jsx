@@ -26,7 +26,10 @@ export default function Admin() {
   const [editing, setEditing] = useState(null); // user object or {} for new
   const [resetting, setResetting] = useState(null); // user object for password reset
 
-  const authHeader = useMemo(() => ({ "x-admin-email": user?.email || "" }), [user]);
+  const authHeader = useMemo(
+    () => (user?.token ? { Authorization: `Bearer ${user.token}` } : {}),
+    [user]
+  );
 
   async function load() {
     setLoading(true);

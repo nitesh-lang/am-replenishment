@@ -25,6 +25,9 @@ export function AuthProvider({ children }) {
         if (session.expiresAt && session.expiresAt <= Date.now()) {
           // Session crossed midnight while user was away — clear it
           localStorage.removeItem(STORAGE_KEY);
+        } else if (!session.token) {
+          // Pre-token session from before the auth upgrade — force re-login
+          localStorage.removeItem(STORAGE_KEY);
         } else {
           setUser(session);
         }
@@ -56,7 +59,7 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({ email: (email || "").trim(), password }),
       });
       const j = await res.json();
-      if (j.status !== "ok" || !j.user) {
+      if (j.status !== "ok" || !j.user || !j.token) {
         return { ok: false, error: j.error || "Invalid email or password" };
       }
       const session = {
@@ -64,6 +67,7 @@ export function AuthProvider({ children }) {
         name:  j.user.name,
         role:  j.user.role,
         allowedModules: j.user.allowed_modules || [],
+        token: j.token,
         loginAt: Date.now(),
         expiresAt: nextLocalMidnight(),
       };
