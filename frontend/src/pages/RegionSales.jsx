@@ -220,10 +220,10 @@ export default function RegionSales() {
     <option value="VIOMI">Viomi</option>
   </select>
 </div>
-        <div className="flex items-end">
+        <div className="flex items-end justify-end">
           <button
             onClick={exportCSV}
-            className="px-4 py-2 bg-slate-900 text-white rounded-lg"
+            className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
           >
             Export CSV
           </button>

@@ -447,10 +447,10 @@ function exportCSV() {
   </select>
 </div>
 
-<div className="flex items-end gap-2">
+<div className="flex items-end justify-end gap-2 md:col-span-4">
   <button
     onClick={exportCSV}
-    className="px-4 py-2 bg-slate-900 text-white rounded-lg"
+    className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
   >
     Export CSV
   </button>

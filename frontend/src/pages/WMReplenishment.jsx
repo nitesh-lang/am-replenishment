@@ -170,7 +170,7 @@ export default function WMReplenishment() {
       </div>
 
       {/* FILTER */}
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4 items-center">
         <select
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
@@ -184,19 +184,23 @@ export default function WMReplenishment() {
           placeholder="Search model..."
           className="px-4 py-2 border rounded-lg w-64"
         />
-        <button onClick={exportCSV} className="px-4 py-2 bg-slate-900 text-white rounded-lg">
-          Export CSV
-        </button>
-        <button
-          onClick={async () => {
-            if (!window.confirm("Reset all saved PO requirements and remarks? Fresh calculations will show.")) return;
-            await fetch(`${BASE}/api/wm-replenishment/reset`, { method: "POST" });
-            window.location.reload();
-          }}
-          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-        >
-          Reset
-        </button>
+
+        {/* Actions — pushed to the right */}
+        <div className="ml-auto flex gap-3">
+          <button onClick={exportCSV} className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition">
+            Export CSV
+          </button>
+          <button
+            onClick={async () => {
+              if (!window.confirm("Reset all saved PO requirements and remarks? Fresh calculations will show.")) return;
+              await fetch(`${BASE}/api/wm-replenishment/reset`, { method: "POST" });
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+          >
+            Reset
+          </button>
+        </div>
       </div>
 
       {/* TABLE */}
