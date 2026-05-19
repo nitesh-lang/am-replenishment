@@ -50,6 +50,7 @@ export default function Layout({ children }) {
     { name: "Clicktech Replenishment",path: "/wm-replenishment",       moduleKey: "wm-replenishment",       icon: Boxes },
     { name: "China Reorder Working",  path: "/china-reorder-working",  moduleKey: "china-reorder-working",  icon: Boxes },
     { name: "Fossil Replenishment",   path: "/fossil-replenishment",   moduleKey: "fossil-replenishment",   icon: Boxes },
+    { name: "Blinkit Replenishment",  path: "/blinkit-replenishment",  moduleKey: "blinkit-replenishment",  icon: Boxes },
   ];
 
   const navItems = allNavItems.filter(item => canAccess(item.moduleKey));

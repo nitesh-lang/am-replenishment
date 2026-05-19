@@ -22,6 +22,7 @@ ALL_MODULES = [
     "cb-replenishment",
     "wm-replenishment",
     "fossil-replenishment",
+    "blinkit-replenishment",
 ]
 
 

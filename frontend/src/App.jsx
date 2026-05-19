@@ -16,6 +16,7 @@ import ChinaReorderWorking from "./pages/ChinaReorderWorking";
 import CBReplenishment from "./pages/CBReplenishment";
 import WMReplenishment from "./pages/WMReplenishment";
 import FossilReplenishment from "./pages/FossilReplenishment";
+import BlinkitReplenishment from "./pages/BlinkitReplenishment";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import UsageAnalytics from "./pages/UsageAnalytics";
@@ -70,6 +71,7 @@ function App() {
           <Route path="/cb-replenishment"      element={<Gated moduleKey="cb-replenishment"><CBReplenishment /></Gated>} />
           <Route path="/wm-replenishment"      element={<Gated moduleKey="wm-replenishment"><WMReplenishment /></Gated>} />
           <Route path="/fossil-replenishment"  element={<Gated moduleKey="fossil-replenishment"><FossilReplenishment /></Gated>} />
+          <Route path="/blinkit-replenishment" element={<Gated moduleKey="blinkit-replenishment"><BlinkitReplenishment /></Gated>} />
 
           {/* Admin-only */}
           <Route path="/admin" element={<AdminOnly><Admin /></AdminOnly>} />

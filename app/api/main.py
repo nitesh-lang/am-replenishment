@@ -19,6 +19,7 @@ from app.api.china_reorder_working import router as china_reorder_working_router
 from app.api.cb_replenishment import router as cb_replenishment_router
 from app.api.wm_replenishment import router as wm_replenishment_router
 from app.api.fossil_replenishment import router as fossil_router
+from app.api.blinkit_replenishment import router as blinkit_router
 from app.api.master_carton import router as master_carton_router
 from app.api.auth import router as auth_router
 from app.api.usage import router as usage_router
@@ -99,6 +100,7 @@ app.include_router(china_reorder_working_router)
 app.include_router(cb_replenishment_router, prefix="/api")
 app.include_router(wm_replenishment_router, prefix="/api")
 app.include_router(fossil_router)
+app.include_router(blinkit_router, prefix="/api")
 app.include_router(master_carton_router)
 app.include_router(auth_router)
 app.include_router(usage_router)

@@ -15,6 +15,7 @@ const MODULE_LABELS = {
   "cb-replenishment":       "CB Replenishment",
   "wm-replenishment":       "Clicktech Replenishment",
   "fossil-replenishment":   "Fossil Replenishment",
+  "blinkit-replenishment":  "Blinkit Replenishment",
 };
 
 export default function Admin() {
