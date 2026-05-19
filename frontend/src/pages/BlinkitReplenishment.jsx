@@ -198,8 +198,8 @@ export default function BlinkitReplenishment() {
     { key: "state_share_pct",      label: "Share %", numeric: true },
     { key: "state_avg_weekly",     label: "Avg Wk Sales", numeric: true },
     { key: "state_required",       label: "Required", numeric: true, highlight: true },
-    { key: "blinkit_soh",          label: "Blinkit SOH (Total)", numeric: true },
-    { key: "state_soh_estimate",   label: "State SOH (est.)", numeric: true },
+    { key: "state_soh",            label: "State SOH", numeric: true },
+    { key: "blinkit_soh",          label: "Total Blinkit SOH", numeric: true },
     { key: "state_deficiency",     label: "Deficiency", numeric: true, highlight: "primary" },
     { key: "ampm_inv",             label: "AMPM Inv", numeric: true },
   ];

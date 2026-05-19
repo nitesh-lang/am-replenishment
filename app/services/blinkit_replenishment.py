@@ -225,6 +225,65 @@ BLINKIT_MONTHLY_FILES = [
     ("Blinkit/Sales/May 2026.xlsx",   "Sales Report"),
 ]
 
+# Fixed denominator for state-wise avg_weekly_sales (= total_state_sales / 12).
+# Independent of the selected sales window — planning convention.
+STATEWISE_VELOCITY_DIVISOR = 12
+
+# Map a Blinkit warehouse name to its state by matching the leading city
+# token (so "Bengaluru B3", "Bengaluru B4" both -> Karnataka without listing
+# every variant). Sorted longest-first to avoid false prefix matches.
+_WAREHOUSE_CITY_TO_STATE = {
+    "Lucknow":     "Uttar Pradesh",
+    "Pune":        "Maharashtra",
+    "Bengaluru":   "Karnataka",
+    "Kundli":      "Haryana",
+    "Mumbai":      "Maharashtra",
+    "Nagpur":      "Maharashtra",
+    "Surat":       "Gujarat",
+    "Noida":       "Uttar Pradesh",
+    "Coimbatore":  "Tamil Nadu",
+    "Varanasi":    "Uttar Pradesh",
+    "Hyderabad":   "Telangana",
+    "Chennai":     "Tamil Nadu",
+    "Faridabad":   "Haryana",
+    "Farukhnagar": "Haryana",
+}
+
+
+def _warehouse_to_state(name: str) -> str | None:
+    if not isinstance(name, str):
+        return None
+    head = name.strip()
+    # Try longest-prefix first to avoid 'Lucknow' eating 'LucknowX' etc.
+    for city in sorted(_WAREHOUSE_CITY_TO_STATE, key=len, reverse=True):
+        if head.lower().startswith(city.lower()):
+            return _WAREHOUSE_CITY_TO_STATE[city]
+    return None
+
+
+def _load_blinkit_soh_by_state() -> pd.DataFrame:
+    """Per (Item ID, State) SOH summed across the warehouses sitting in that state.
+
+    SOH per warehouse = Incoming scheduled inventory + Total sellable
+    (same definition as the per-SKU view; just split by warehouse state).
+    """
+    df = get_excel_sheet("Blinkit/Inventory/InventoryData.xlsx", "Stock On Hand", header=2)
+    df = df.copy()
+    df["Item ID"] = pd.to_numeric(df["Item ID"], errors="coerce").astype("Int64")
+    df["Incoming scheduled inventory"] = pd.to_numeric(df["Incoming scheduled inventory"], errors="coerce").fillna(0)
+    df["Total sellable"]               = pd.to_numeric(df["Total sellable"],               errors="coerce").fillna(0)
+    df["soh"] = df["Incoming scheduled inventory"] + df["Total sellable"]
+
+    df["state"] = df["Warehouse Facility Name"].apply(_warehouse_to_state)
+
+    out = (
+        df.dropna(subset=["Item ID", "state"])
+          .groupby(["Item ID", "state"], as_index=False)["soh"].sum()
+          .rename(columns={"Item ID": "item_id", "state": "customer_state", "soh": "state_soh"})
+    )
+    out["state_soh"] = out["state_soh"].astype(int)
+    return out
+
 
 def _load_monthly_orders(
     from_week: int | None = None,
@@ -289,25 +348,27 @@ def load_blinkit_statewise(
     """Per-SKU × per-Customer-State replenishment view.
 
     For each (active SKU, Customer State that bought from it) row:
-      state_sales         — units delivered to this state in the window
-      state_share         — state_sales / total_sales_for_sku
-      state_avg_weekly    — state_sales / weeks_in_window
-      state_required      — state_avg_weekly × cover_weeks
-      blinkit_soh         — total SOH across all Blinkit warehouses (per-SKU,
-                            same on every state row — Blinkit fulfils any state
-                            from any warehouse, so a state-pure SOH doesn't
-                            exist in their model)
-      state_soh_estimate  — blinkit_soh × state_share (rough allocation
-                            proportional to historical state demand)
-      state_deficiency    — max(0, state_required - state_soh_estimate)
-      ampm_inv            — same shared mother-warehouse pool per SKU
+      state_sales       — units delivered to this state in the window
+      state_share_pct   — state_sales / total_sales_for_sku  (display only)
+      state_avg_weekly  — state_sales / 12  (fixed denominator — planning
+                          convention, independent of the sales window)
+      state_required    — state_avg_weekly × cover_weeks
+      blinkit_soh       — total SOH across all Blinkit warehouses (per-SKU,
+                          shown on every state row of the same SKU for context)
+      state_soh         — EXACT sum of SOH across warehouses physically
+                          located in that customer state (warehouses are
+                          mapped to states by leading city token). States
+                          without a local Blinkit warehouse get state_soh=0
+      state_deficiency  — max(0, state_required − state_soh)
+      ampm_inv          — same shared mother-warehouse pool per SKU
     """
     if cover_weeks <= 0:
         cover_weeks = 8
 
-    master = _load_master()
-    soh    = _load_blinkit_soh()       # per Item ID, total across warehouses
-    ampm   = _load_ampm()              # per Model, total AMPM
+    master    = _load_master()
+    soh_total = _load_blinkit_soh()             # per Item ID — total across warehouses
+    soh_state = _load_blinkit_soh_by_state()    # per (Item ID, State) — exact
+    ampm      = _load_ampm()                    # per Model
     orders, window = _load_monthly_orders(from_week=from_week, to_week=to_week)
 
     if orders.empty:
@@ -319,7 +380,7 @@ def load_blinkit_statewise(
               .rename(columns={"units": "state_sales"})
     )
 
-    # Total sales per SKU (for share calc)
+    # Total sales per SKU (for share% display only)
     total_by_sku = (
         orders.groupby("item_id", as_index=False)["units"].sum()
               .rename(columns={"units": "total_sales_window"})
@@ -330,26 +391,32 @@ def load_blinkit_statewise(
     # Join master so we get brand/model/sku/etc. + drop inactive SKUs
     df = df.merge(master, on="item_id", how="inner")
 
-    # Join SOH (per item_id) and AMPM (per model)
-    df = df.merge(soh,  on="item_id", how="left")
-    df = df.merge(ampm, on="model",   how="left")
+    # Total SOH (per item_id) and AMPM (per model) — for context columns
+    df = df.merge(soh_total, on="item_id", how="left")
+    df = df.merge(ampm,      on="model",   how="left")
+
+    # EXACT state SOH (per item_id × state) — left-join so states without
+    # a local warehouse just get NaN -> 0
+    df = df.merge(soh_state, on=["item_id", "customer_state"], how="left")
 
     df["blinkit_soh"]        = df["blinkit_soh"].fillna(0).astype(int)
     df["ampm_inv"]           = df["ampm_inv"].fillna(0).astype(int)
     df["state_sales"]        = df["state_sales"].astype(int)
     df["total_sales_window"] = df["total_sales_window"].astype(int)
+    df["state_soh"]          = df["state_soh"].fillna(0).astype(int)
 
-    df["state_share"] = (df["state_sales"] / df["total_sales_window"]).fillna(0)
-
-    df["state_avg_weekly"] = (df["state_sales"] / max(window, 1)).round(0).astype(int)
+    # Velocity uses a fixed /12 divisor (planning convention)
+    df["state_avg_weekly"] = (
+        df["state_sales"] / STATEWISE_VELOCITY_DIVISOR
+    ).round(0).astype(int)
     df["state_required"]   = (df["state_avg_weekly"] * cover_weeks).astype(int)
 
-    df["state_soh_estimate"] = (df["blinkit_soh"] * df["state_share"]).round(0).astype(int)
-    df["state_deficiency"]   = (df["state_required"] - df["state_soh_estimate"]).clip(lower=0).astype(int)
+    df["state_deficiency"] = (df["state_required"] - df["state_soh"]).clip(lower=0).astype(int)
 
-    # state_share as percentage for display
-    df["state_share_pct"] = (df["state_share"] * 100).round(1)
-    df = df.drop(columns=["state_share"])
+    # Demand-share % for display (no calculation depends on it)
+    df["state_share_pct"] = (
+        df["state_sales"] / df["total_sales_window"] * 100
+    ).fillna(0).round(1)
 
     # Sort: brand, then sku, then state by state_sales desc
     df = df.sort_values(
