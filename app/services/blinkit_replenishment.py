@@ -51,6 +51,15 @@ def _load_master() -> pd.DataFrame:
     df["model"] = df["model"].astype(str).str.strip()
     df["brand"] = df["brand"].astype(str).str.strip()
     df["item_id"] = pd.to_numeric(df["item_id"], errors="coerce").astype("Int64")
+
+    # EAN is the 13-digit barcode (a.k.a. Product ID). Keep as a string so it
+    # doesn't render in scientific notation on the wire.
+    if "ean" in df.columns:
+        ean_num = pd.to_numeric(df["ean"], errors="coerce").astype("Int64")
+        df["product_id"] = ean_num.astype("string").fillna("")
+    else:
+        df["product_id"] = ""
+
     return df
 
 

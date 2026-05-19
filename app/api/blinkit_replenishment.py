@@ -51,9 +51,11 @@ def get_blinkit_replenishment(
                 "message": "No data returned from service",
             }
 
-        # Final column order for the frontend
+        # Final column order for the frontend.
+        # Note: 'asin' is kept in the payload so it shows up in the CSV export
+        # even though the UI table hides it.
         cols = [
-            "brand", "model", "sku", "asin", "item_id", "expansion_level",
+            "brand", "model", "sku", "item_id", "product_id", "asin", "expansion_level",
             "category_l1", "category_l2",
             "master_carton",
             "blinkit_soh", "ampm_inv",
