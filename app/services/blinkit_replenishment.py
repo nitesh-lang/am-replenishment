@@ -229,6 +229,34 @@ BLINKIT_MONTHLY_FILES = [
 # Independent of the selected sales window — planning convention.
 STATEWISE_VELOCITY_DIVISOR = 12
 
+# Customer-state normalisation. Delhi orders are fulfilled by Blinkit from
+# Haryana warehouses (NCR flow), so for replenishment purposes we treat the
+# two as one combined demand pool.
+_STATE_ALIASES = {
+    "Delhi":   "Delhi + Haryana",
+    "Haryana": "Delhi + Haryana",
+}
+
+
+def _normalise_state(s) -> str:
+    if not isinstance(s, str):
+        return s
+    return _STATE_ALIASES.get(s.strip(), s.strip())
+
+# Customer-state normalisation. Delhi orders are fulfilled by Blinkit from
+# Haryana warehouses (NCR flow), so for replenishment purposes we treat the
+# two as one combined demand pool.
+_STATE_ALIASES = {
+    "Delhi":   "Delhi + Haryana",
+    "Haryana": "Delhi + Haryana",
+}
+
+
+def _normalise_state(s: str) -> str:
+    if not isinstance(s, str):
+        return s
+    return _STATE_ALIASES.get(s.strip(), s.strip())
+
 # Map a Blinkit warehouse name to its state by matching the leading city
 # token (so "Bengaluru B3", "Bengaluru B4" both -> Karnataka without listing
 # every variant). Sorted longest-first to avoid false prefix matches.
@@ -275,6 +303,9 @@ def _load_blinkit_soh_by_state() -> pd.DataFrame:
     df["soh"] = df["Incoming scheduled inventory"] + df["Total sellable"]
 
     df["state"] = df["Warehouse Facility Name"].apply(_warehouse_to_state)
+    # Normalise warehouse-state so Haryana stock pools with the Delhi+Haryana
+    # combined customer-state row.
+    df["state"] = df["state"].apply(_normalise_state)
 
     out = (
         df.dropna(subset=["Item ID", "state"])
@@ -306,7 +337,7 @@ def _load_monthly_orders(
         if not {"Item Id", "Customer State", "Quantity", "Order Date"} <= set(d.columns):
             continue
         d["item_id"]         = pd.to_numeric(d["Item Id"], errors="coerce").astype("Int64")
-        d["customer_state"]  = d["Customer State"].astype(str).str.strip()
+        d["customer_state"]  = d["Customer State"].astype(str).str.strip().map(_normalise_state)
         d["units"]           = pd.to_numeric(d["Quantity"], errors="coerce").fillna(0)
         d["order_date"]      = pd.to_datetime(d["Order Date"], errors="coerce")
         d["week_num"]        = d["order_date"].dt.isocalendar().week.astype("Int64")
