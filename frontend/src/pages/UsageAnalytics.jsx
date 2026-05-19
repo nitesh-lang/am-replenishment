@@ -11,7 +11,6 @@ const MODULE_LABELS = {
   "sales-analytics":        "Sales Analytics",
   "region-sales":           "Region Sales",
   "china-reorder":          "China Reorder",
-  "china-reorder-working":  "China Reorder Working",
   "cb-replenishment":       "CB Replenishment",
   "wm-replenishment":       "Clicktech Replenishment",
   "fossil-replenishment":   "Fossil Replenishment",

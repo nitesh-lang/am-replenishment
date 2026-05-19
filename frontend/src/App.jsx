@@ -12,7 +12,6 @@ import FCAllocation from "./pages/FCAllocation";
 import SalesAnalytics from "./pages/SalesAnalytics";
 import RegionSales from "./pages/RegionSales";
 import ChinaReorder from "./pages/ChinaReorder";
-import ChinaReorderWorking from "./pages/ChinaReorderWorking";
 import CBReplenishment from "./pages/CBReplenishment";
 import WMReplenishment from "./pages/WMReplenishment";
 import FossilReplenishment from "./pages/FossilReplenishment";
@@ -67,7 +66,6 @@ function App() {
           <Route path="/sales-analytics"       element={<Gated moduleKey="sales-analytics"><SalesAnalytics /></Gated>} />
           <Route path="/region-sales"          element={<Gated moduleKey="region-sales"><RegionSales /></Gated>} />
           <Route path="/china-reorder"         element={<Gated moduleKey="china-reorder"><ChinaReorder /></Gated>} />
-          <Route path="/china-reorder-working" element={<Gated moduleKey="china-reorder-working"><ChinaReorderWorking /></Gated>} />
           <Route path="/cb-replenishment"      element={<Gated moduleKey="cb-replenishment"><CBReplenishment /></Gated>} />
           <Route path="/wm-replenishment"      element={<Gated moduleKey="wm-replenishment"><WMReplenishment /></Gated>} />
           <Route path="/fossil-replenishment"  element={<Gated moduleKey="fossil-replenishment"><FossilReplenishment /></Gated>} />

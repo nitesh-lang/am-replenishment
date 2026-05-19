@@ -48,7 +48,6 @@ export default function Layout({ children }) {
     { name: "Region Sales",           path: "/region-sales",           moduleKey: "region-sales",           icon: BarChart3 },
     { name: "CB Replenishment",       path: "/cb-replenishment",       moduleKey: "cb-replenishment",       icon: Boxes },
     { name: "Clicktech Replenishment",path: "/wm-replenishment",       moduleKey: "wm-replenishment",       icon: Boxes },
-    { name: "China Reorder Working",  path: "/china-reorder-working",  moduleKey: "china-reorder-working",  icon: Boxes },
     { name: "Fossil Replenishment",   path: "/fossil-replenishment",   moduleKey: "fossil-replenishment",   icon: Boxes },
     { name: "Blinkit Replenishment",  path: "/blinkit-replenishment",  moduleKey: "blinkit-replenishment",  icon: Boxes },
   ];

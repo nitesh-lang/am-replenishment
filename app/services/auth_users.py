@@ -18,7 +18,6 @@ ALL_MODULES = [
     "sales-analytics",
     "region-sales",
     "china-reorder",
-    "china-reorder-working",
     "cb-replenishment",
     "wm-replenishment",
     "fossil-replenishment",
