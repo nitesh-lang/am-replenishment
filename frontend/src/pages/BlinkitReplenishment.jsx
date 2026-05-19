@@ -9,10 +9,15 @@ export default function BlinkitReplenishment() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // View mode — toggle between per-SKU and per-State
+  const [viewMode, setViewMode] = useState("sku");   // "sku" | "state"
+
   const [coverWeeks, setCoverWeeks] = useState(8);
   const coverWeeksOptions = [2, 4, 6, 8, 10, 12];
 
-  // Sales window — last 12 available weeks, populated from API response
+  // Sales window — populated from API response. The available weeks are
+  // different per view (weekly snapshot for SKU view, ISO weeks from monthly
+  // order exports for State view), so we reset when viewMode flips.
   const [availableWeeks, setAvailableWeeks] = useState([]);
   const [fromWeek, setFromWeek] = useState(null);
   const [toWeek,   setToWeek]   = useState(null);
@@ -25,6 +30,13 @@ export default function BlinkitReplenishment() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 50;
 
+  // Reset week selectors when the view mode flips (different week sets)
+  useEffect(() => {
+    setFromWeek(null);
+    setToWeek(null);
+    setAvailableWeeks([]);
+  }, [viewMode]);
+
   // ─── LOAD ─────────────────────────────────────────────────────────────
   useEffect(() => {
     setLoading(true);
@@ -33,7 +45,11 @@ export default function BlinkitReplenishment() {
     if (fromWeek != null) params.append("from_week", fromWeek);
     if (toWeek   != null) params.append("to_week",   toWeek);
 
-    fetch(`${BASE}/api/blinkit-replenishment/?${params}`)
+    const endpoint = viewMode === "state"
+      ? `${BASE}/api/blinkit-replenishment/statewise?${params}`
+      : `${BASE}/api/blinkit-replenishment/?${params}`;
+
+    fetch(endpoint)
       .then((res) => res.json())
       .then((res) => {
         if (res.error) {
@@ -64,7 +80,7 @@ export default function BlinkitReplenishment() {
         setData([]);
       })
       .finally(() => setLoading(false));
-  }, [coverWeeks, fromWeek, toWeek]);
+  }, [viewMode, coverWeeks, fromWeek, toWeek]);
 
   // ─── DERIVED ─────────────────────────────────────────────────────────
   const brands = useMemo(() => {
@@ -81,6 +97,7 @@ export default function BlinkitReplenishment() {
         return (
           (r.model || "").toLowerCase().includes(q) ||
           (r.sku || "").toLowerCase().includes(q) ||
+          (r.customer_state || "").toLowerCase().includes(q) ||
           String(r.item_id || "").toLowerCase().includes(q) ||
           String(r.product_id || "").toLowerCase().includes(q)
         );
@@ -114,17 +131,24 @@ export default function BlinkitReplenishment() {
   }, [sorted, currentPage]);
 
   const kpis = useMemo(() => {
-    const totalDef     = sorted.reduce((s, r) => s + (Number(r.deficiency) || 0), 0);
-    const totalSend    = sorted.reduce((s, r) => s + (Number(r.send_qty) || 0), 0);
-    const totalShortf  = sorted.reduce((s, r) => s + (Number(r.warehouse_shortfall) || 0), 0);
-    const avgVel       = sorted.length
+    if (viewMode === "state") {
+      const totalReq = sorted.reduce((s, r) => s + (Number(r.state_required) || 0), 0);
+      const totalDef = sorted.reduce((s, r) => s + (Number(r.state_deficiency) || 0), 0);
+      const skus     = new Set(sorted.map((r) => r.sku)).size;
+      const states   = new Set(sorted.map((r) => r.customer_state)).size;
+      return { totalReq, totalDef, skus, states };
+    }
+    const totalDef    = sorted.reduce((s, r) => s + (Number(r.deficiency) || 0), 0);
+    const totalSend   = sorted.reduce((s, r) => s + (Number(r.send_qty) || 0), 0);
+    const totalShortf = sorted.reduce((s, r) => s + (Number(r.warehouse_shortfall) || 0), 0);
+    const avgVel      = sorted.length
       ? sorted.reduce((s, r) => s + (Number(r.avg_weekly_sales) || 0), 0) / sorted.length
       : 0;
     return {
       totalDef, totalSend, totalShortf, avgVel: Math.round(avgVel * 10) / 10,
       skus: sorted.length,
     };
-  }, [sorted]);
+  }, [sorted, viewMode]);
 
   // ─── EXPORT ──────────────────────────────────────────────────────────
   function exportCSV() {
@@ -140,13 +164,13 @@ export default function BlinkitReplenishment() {
     const blob = new Blob([headers + "\n" + rows], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `blinkit_replenishment_${coverWeeks}w.csv`;
+    link.download = `blinkit_${viewMode === "state" ? "statewise_" : ""}replenishment_${coverWeeks}w.csv`;
     link.click();
     logUsage("export", "blinkit-replenishment", { rows: sorted.length });
   }
 
   // ─── COLUMN DEFS ─────────────────────────────────────────────────────
-  const columns = [
+  const skuColumns = [
     { key: "brand",                label: "Brand" },
     { key: "model",                label: "Model" },
     { key: "sku",                  label: "SKU" },
@@ -165,6 +189,23 @@ export default function BlinkitReplenishment() {
     { key: "warehouse_shortfall",  label: "WH Shortfall", numeric: true },
   ];
 
+  const stateColumns = [
+    { key: "brand",                label: "Brand" },
+    { key: "model",                label: "Model" },
+    { key: "sku",                  label: "SKU" },
+    { key: "customer_state",       label: "State", highlight: true },
+    { key: "state_sales",          label: `Sales (${windowSize}w)`, numeric: true },
+    { key: "state_share_pct",      label: "Share %", numeric: true },
+    { key: "state_avg_weekly",     label: "Avg Wk Sales", numeric: true },
+    { key: "state_required",       label: "Required", numeric: true, highlight: true },
+    { key: "blinkit_soh",          label: "Blinkit SOH (Total)", numeric: true },
+    { key: "state_soh_estimate",   label: "State SOH (est.)", numeric: true },
+    { key: "state_deficiency",     label: "Deficiency", numeric: true, highlight: "primary" },
+    { key: "ampm_inv",             label: "AMPM Inv", numeric: true },
+  ];
+
+  const columns = viewMode === "state" ? stateColumns : skuColumns;
+
   return (
     <div className="space-y-4">
 
@@ -172,21 +213,58 @@ export default function BlinkitReplenishment() {
       <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-emerald-900 via-slate-800 to-slate-900 text-white shadow flex items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
           <h1 className="text-lg font-semibold">Blinkit Replenishment Intelligence</h1>
-          <p className="text-slate-300 text-xs">Per-SKU replenishment across 17 dark stores</p>
+          <p className="text-slate-300 text-xs">
+            {viewMode === "state"
+              ? "Per-state demand split across 11 customer states"
+              : "Per-SKU replenishment across 17 dark stores"}
+          </p>
         </div>
       </div>
 
-      {/* KPI CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <KpiTile label="Active SKUs"          value={kpis.skus} />
-        <KpiTile label="Total Deficiency"     value={kpis.totalDef}    tone="amber" />
-        <KpiTile label="Send Qty (capped)"    value={kpis.totalSend}   tone="emerald" />
-        <KpiTile label="Warehouse Shortfall"  value={kpis.totalShortf} tone="red" />
-        <KpiTile label={`Avg Weekly Sales`}   value={kpis.avgVel} />
-      </div>
+      {/* KPI CARDS — different metrics per view */}
+      {viewMode === "state" ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiTile label="SKUs Selling"            value={kpis.skus} />
+          <KpiTile label="States Covered"          value={kpis.states} />
+          <KpiTile label="Total Required Units"    value={kpis.totalReq} />
+          <KpiTile label="Total Deficiency"        value={kpis.totalDef} tone="amber" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <KpiTile label="Active SKUs"          value={kpis.skus} />
+          <KpiTile label="Total Deficiency"     value={kpis.totalDef}    tone="amber" />
+          <KpiTile label="Send Qty (capped)"    value={kpis.totalSend}   tone="emerald" />
+          <KpiTile label="Warehouse Shortfall"  value={kpis.totalShortf} tone="red" />
+          <KpiTile label={`Avg Weekly Sales`}   value={kpis.avgVel} />
+        </div>
+      )}
 
-      {/* CONTROL ROW — sales window + cover weeks + filters + export */}
+      {/* CONTROL ROW — view toggle + sales window + cover weeks + filters + export */}
       <div className="flex flex-wrap gap-3 items-center px-3 py-2 bg-white border border-slate-200 rounded-lg">
+
+        {/* View toggle */}
+        <div className="inline-flex rounded-md border border-slate-200 overflow-hidden">
+          <button
+            onClick={() => { setCurrentPage(1); setViewMode("sku"); }}
+            className={`px-3 py-1.5 text-xs font-medium transition ${
+              viewMode === "sku"
+                ? "bg-slate-900 text-white"
+                : "bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Per-SKU
+          </button>
+          <button
+            onClick={() => { setCurrentPage(1); setViewMode("state"); }}
+            className={`px-3 py-1.5 text-xs font-medium transition ${
+              viewMode === "state"
+                ? "bg-slate-900 text-white"
+                : "bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Per-State
+          </button>
+        </div>
 
         {/* Sales Window */}
         <div className="flex items-center gap-2">
@@ -237,7 +315,9 @@ export default function BlinkitReplenishment() {
         <input
           value={search}
           onChange={(e) => { setCurrentPage(1); setSearch(e.target.value); }}
-          placeholder="Search model / SKU / Item ID / Product ID..."
+          placeholder={viewMode === "state"
+            ? "Search model / SKU / State..."
+            : "Search model / SKU / Item ID / Product ID..."}
           className="px-3 py-1.5 text-sm border border-slate-200 rounded-md w-64"
         />
 

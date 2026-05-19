@@ -88,6 +88,10 @@ def preload():
         # Blinkit module
         ("Blinkit/Input/Nexlev Product Master.xlsx", "Blinkit", 0),
         ("Blinkit/Inventory/InventoryData.xlsx", "Stock On Hand", 2),
+        # Monthly order exports — used by the state-wise Blinkit view
+        ("Blinkit/Sales/March 2026.xlsx", "Sales Report", 0),
+        ("Blinkit/Sales/April 2026.xlsx", "Sales Report", 0),
+        ("Blinkit/Sales/May 2026.xlsx",   "Sales Report", 0),
     ]
 
     # Load sheet files first

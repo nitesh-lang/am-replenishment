@@ -212,6 +212,154 @@ def _load_sales(
     return agg, weeks_in_window
 
 
+# ─────────────────────────────────────────────────────────────────────
+# STATE-WISE SUPPORT
+# ─────────────────────────────────────────────────────────────────────
+
+# Monthly Blinkit order-export files — these are the only source carrying
+# Customer State at order grain. The weekly snapshot used by the per-SKU
+# view does not have any state column.
+BLINKIT_MONTHLY_FILES = [
+    ("Blinkit/Sales/March 2026.xlsx", "Sales Report"),
+    ("Blinkit/Sales/April 2026.xlsx", "Sales Report"),
+    ("Blinkit/Sales/May 2026.xlsx",   "Sales Report"),
+]
+
+
+def _load_monthly_orders(
+    from_week: int | None = None,
+    to_week: int | None = None,
+) -> tuple[pd.DataFrame, int]:
+    """Load order-level Blinkit data, filter to DELIVERED, map dates to ISO weeks.
+
+    Returns (df, weeks_in_window). df columns: item_id, customer_state, units, week_num.
+    """
+    parts = []
+    for path, sheet in BLINKIT_MONTHLY_FILES:
+        try:
+            d = get_excel_sheet(path, sheet)
+        except Exception as e:
+            print(f"⚠️  Monthly Blinkit file not loaded ({path}): {e}")
+            continue
+        d = d.copy()
+        if "Order Status" in d.columns:
+            d = d[d["Order Status"].astype(str).str.strip().str.upper() == "DELIVERED"]
+        if not {"Item Id", "Customer State", "Quantity", "Order Date"} <= set(d.columns):
+            continue
+        d["item_id"]         = pd.to_numeric(d["Item Id"], errors="coerce").astype("Int64")
+        d["customer_state"]  = d["Customer State"].astype(str).str.strip()
+        d["units"]           = pd.to_numeric(d["Quantity"], errors="coerce").fillna(0)
+        d["order_date"]      = pd.to_datetime(d["Order Date"], errors="coerce")
+        d["week_num"]        = d["order_date"].dt.isocalendar().week.astype("Int64")
+        parts.append(d[["item_id", "customer_state", "units", "week_num"]])
+
+    if not parts:
+        return pd.DataFrame(columns=["item_id","customer_state","units","week_num"]), 0
+
+    df = pd.concat(parts, ignore_index=True).dropna(subset=["item_id"])
+
+    # Apply sales window (defaults to most recent DEFAULT_SALES_WINDOW_WEEKS)
+    if from_week is not None and to_week is not None:
+        lo, hi = sorted([int(from_week), int(to_week)])
+        df = df[(df["week_num"] >= lo) & (df["week_num"] <= hi)]
+        weeks_in_window = max(1, hi - lo + 1)
+    else:
+        available = sorted(df["week_num"].dropna().unique().tolist(), reverse=True)
+        selected  = available[:DEFAULT_SALES_WINDOW_WEEKS]
+        df = df[df["week_num"].isin(selected)]
+        weeks_in_window = max(1, len(selected))
+
+    return df, weeks_in_window
+
+
+def get_available_monthly_weeks() -> list[int]:
+    """ISO-week numbers present in the monthly Blinkit order files, desc order."""
+    df, _ = _load_monthly_orders(from_week=None, to_week=None)
+    if df.empty:
+        return []
+    weeks = df["week_num"].dropna().unique().tolist()
+    return sorted({int(w) for w in weeks}, reverse=True)
+
+
+def load_blinkit_statewise(
+    cover_weeks: int = 8,
+    from_week: int | None = None,
+    to_week: int | None = None,
+) -> tuple[pd.DataFrame, int]:
+    """Per-SKU × per-Customer-State replenishment view.
+
+    For each (active SKU, Customer State that bought from it) row:
+      state_sales         — units delivered to this state in the window
+      state_share         — state_sales / total_sales_for_sku
+      state_avg_weekly    — state_sales / weeks_in_window
+      state_required      — state_avg_weekly × cover_weeks
+      blinkit_soh         — total SOH across all Blinkit warehouses (per-SKU,
+                            same on every state row — Blinkit fulfils any state
+                            from any warehouse, so a state-pure SOH doesn't
+                            exist in their model)
+      state_soh_estimate  — blinkit_soh × state_share (rough allocation
+                            proportional to historical state demand)
+      state_deficiency    — max(0, state_required - state_soh_estimate)
+      ampm_inv            — same shared mother-warehouse pool per SKU
+    """
+    if cover_weeks <= 0:
+        cover_weeks = 8
+
+    master = _load_master()
+    soh    = _load_blinkit_soh()       # per Item ID, total across warehouses
+    ampm   = _load_ampm()              # per Model, total AMPM
+    orders, window = _load_monthly_orders(from_week=from_week, to_week=to_week)
+
+    if orders.empty:
+        return pd.DataFrame(), window
+
+    # State sales per (item_id, state)
+    state_sales = (
+        orders.groupby(["item_id", "customer_state"], as_index=False)["units"].sum()
+              .rename(columns={"units": "state_sales"})
+    )
+
+    # Total sales per SKU (for share calc)
+    total_by_sku = (
+        orders.groupby("item_id", as_index=False)["units"].sum()
+              .rename(columns={"units": "total_sales_window"})
+    )
+
+    df = state_sales.merge(total_by_sku, on="item_id", how="left")
+
+    # Join master so we get brand/model/sku/etc. + drop inactive SKUs
+    df = df.merge(master, on="item_id", how="inner")
+
+    # Join SOH (per item_id) and AMPM (per model)
+    df = df.merge(soh,  on="item_id", how="left")
+    df = df.merge(ampm, on="model",   how="left")
+
+    df["blinkit_soh"]        = df["blinkit_soh"].fillna(0).astype(int)
+    df["ampm_inv"]           = df["ampm_inv"].fillna(0).astype(int)
+    df["state_sales"]        = df["state_sales"].astype(int)
+    df["total_sales_window"] = df["total_sales_window"].astype(int)
+
+    df["state_share"] = (df["state_sales"] / df["total_sales_window"]).fillna(0)
+
+    df["state_avg_weekly"] = (df["state_sales"] / max(window, 1)).round(0).astype(int)
+    df["state_required"]   = (df["state_avg_weekly"] * cover_weeks).astype(int)
+
+    df["state_soh_estimate"] = (df["blinkit_soh"] * df["state_share"]).round(0).astype(int)
+    df["state_deficiency"]   = (df["state_required"] - df["state_soh_estimate"]).clip(lower=0).astype(int)
+
+    # state_share as percentage for display
+    df["state_share_pct"] = (df["state_share"] * 100).round(1)
+    df = df.drop(columns=["state_share"])
+
+    # Sort: brand, then sku, then state by state_sales desc
+    df = df.sort_values(
+        ["brand", "sku", "state_sales"],
+        ascending=[True, True, False],
+    ).reset_index(drop=True)
+
+    return df, window
+
+
 def load_blinkit_replenishment(
     cover_weeks: int = 8,
     from_week: int | None = None,
