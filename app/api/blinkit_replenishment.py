@@ -1,6 +1,11 @@
+from typing import Optional
+
 from fastapi import APIRouter, Query
 
-from app.services.blinkit_replenishment import load_blinkit_replenishment
+from app.services.blinkit_replenishment import (
+    get_available_blinkit_weeks,
+    load_blinkit_replenishment,
+)
 
 
 router = APIRouter(
@@ -16,15 +21,33 @@ COVER_WEEKS_OPTIONS = [2, 4, 6, 8, 10, 12]
 @router.get("/")
 def get_blinkit_replenishment(
     cover_weeks: int = Query(default=8, ge=1, le=52),
+    from_week:   Optional[int] = Query(default=None, ge=1, le=53),
+    to_week:     Optional[int] = Query(default=None, ge=1, le=53),
 ):
     try:
-        df = load_blinkit_replenishment(cover_weeks=cover_weeks)
+        df, window = load_blinkit_replenishment(
+            cover_weeks=cover_weeks,
+            from_week=from_week,
+            to_week=to_week,
+        )
+
+        available_weeks = get_available_blinkit_weeks()
+
+        meta = {
+            "cover_weeks_options": COVER_WEEKS_OPTIONS,
+            "available_weeks":     available_weeks,
+            "selected_window":     {
+                "from_week": from_week,
+                "to_week":   to_week,
+                "weeks_in_window": window,
+            },
+        }
 
         if df is None or df.empty:
             return {
                 "data": [],
                 "total_skus": 0,
-                "cover_weeks_options": COVER_WEEKS_OPTIONS,
+                **meta,
                 "message": "No data returned from service",
             }
 
@@ -34,7 +57,7 @@ def get_blinkit_replenishment(
             "category_l1", "category_l2",
             "master_carton",
             "blinkit_soh", "ampm_inv",
-            "total_sales_3m", "avg_weekly_sales",
+            "total_sales_window", "avg_weekly_sales",
             "required_units", "deficiency", "warehouse_shortfall", "send_qty",
         ]
         cols = [c for c in cols if c in df.columns]
@@ -50,7 +73,7 @@ def get_blinkit_replenishment(
         return {
             "data": response_df.to_dict(orient="records"),
             "total_skus": len(response_df),
-            "cover_weeks_options": COVER_WEEKS_OPTIONS,
+            **meta,
         }
 
     except Exception as e:
@@ -59,5 +82,6 @@ def get_blinkit_replenishment(
             "data": [],
             "total_skus": 0,
             "cover_weeks_options": COVER_WEEKS_OPTIONS,
+            "available_weeks": [],
             "error": str(e),
         }

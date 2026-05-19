@@ -12,6 +12,12 @@ export default function BlinkitReplenishment() {
   const [coverWeeks, setCoverWeeks] = useState(8);
   const coverWeeksOptions = [2, 4, 6, 8, 10, 12];
 
+  // Sales window — last 12 available weeks, populated from API response
+  const [availableWeeks, setAvailableWeeks] = useState([]);
+  const [fromWeek, setFromWeek] = useState(null);
+  const [toWeek,   setToWeek]   = useState(null);
+  const [windowSize, setWindowSize] = useState(12);
+
   const [search, setSearch] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("All");
 
@@ -24,6 +30,9 @@ export default function BlinkitReplenishment() {
     setLoading(true);
     setError("");
     const params = new URLSearchParams({ cover_weeks: coverWeeks });
+    if (fromWeek != null) params.append("from_week", fromWeek);
+    if (toWeek   != null) params.append("to_week",   toWeek);
+
     fetch(`${BASE}/api/blinkit-replenishment/?${params}`)
       .then((res) => res.json())
       .then((res) => {
@@ -33,13 +42,29 @@ export default function BlinkitReplenishment() {
         } else {
           setData(res.data || []);
         }
+        // Hydrate the week dropdowns from the response on first load
+        if (Array.isArray(res.available_weeks) && res.available_weeks.length) {
+          // API returns descending — sort ascending for the dropdowns
+          const weeksAsc = [...res.available_weeks].sort((a, b) => a - b);
+          setAvailableWeeks(weeksAsc);
+          if (fromWeek == null || toWeek == null) {
+            // Default: last 12 available weeks (most recent at the top)
+            const sortedDesc = [...res.available_weeks].sort((a, b) => b - a);
+            const last12 = sortedDesc.slice(0, 12);
+            setFromWeek(Math.min(...last12));
+            setToWeek(Math.max(...last12));
+          }
+        }
+        if (res.selected_window?.weeks_in_window) {
+          setWindowSize(res.selected_window.weeks_in_window);
+        }
       })
       .catch((e) => {
         setError(e.message || "Failed to load");
         setData([]);
       })
       .finally(() => setLoading(false));
-  }, [coverWeeks]);
+  }, [coverWeeks, fromWeek, toWeek]);
 
   // ─── DERIVED ─────────────────────────────────────────────────────────
   const brands = useMemo(() => {
@@ -130,7 +155,7 @@ export default function BlinkitReplenishment() {
     { key: "master_carton",        label: "Carton", numeric: true },
     { key: "blinkit_soh",          label: "Blinkit SOH", numeric: true },
     { key: "ampm_inv",             label: "AMPM Inv", numeric: true },
-    { key: "total_sales_3m",       label: "Sales 3m", numeric: true },
+    { key: "total_sales_window",   label: `Sales (${windowSize}w)`, numeric: true },
     { key: "avg_weekly_sales",     label: "Avg Wk Sales", numeric: true },
     { key: "required_units",       label: "Required", numeric: true, highlight: true },
     { key: "deficiency",           label: "Deficiency", numeric: true, highlight: true },
@@ -158,8 +183,30 @@ export default function BlinkitReplenishment() {
         <KpiTile label={`Avg Weekly Sales`}   value={kpis.avgVel} />
       </div>
 
-      {/* CONTROL ROW — cover weeks + filters + export */}
+      {/* CONTROL ROW — sales window + cover weeks + filters + export */}
       <div className="flex flex-wrap gap-3 items-center px-3 py-2 bg-white border border-slate-200 rounded-lg">
+
+        {/* Sales Window */}
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Sales Window</label>
+          <select
+            value={fromWeek ?? ""}
+            onChange={(e) => { setCurrentPage(1); setFromWeek(Number(e.target.value)); }}
+            disabled={!availableWeeks.length}
+            className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-md bg-white disabled:opacity-50"
+          >
+            {availableWeeks.map((w) => <option key={`f-${w}`} value={w}>Week {w}</option>)}
+          </select>
+          <span className="text-slate-400 text-xs">→</span>
+          <select
+            value={toWeek ?? ""}
+            onChange={(e) => { setCurrentPage(1); setToWeek(Number(e.target.value)); }}
+            disabled={!availableWeeks.length}
+            className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-md bg-white disabled:opacity-50"
+          >
+            {availableWeeks.map((w) => <option key={`t-${w}`} value={w}>Week {w}</option>)}
+          </select>
+        </div>
 
         {/* Cover Weeks */}
         <div className="flex items-center gap-2">

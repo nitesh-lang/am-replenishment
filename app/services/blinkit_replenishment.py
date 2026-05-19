@@ -10,8 +10,12 @@ ACTIVE_EXPANSION_LEVELS = {"Level 1", "Level 2", "Level 4", "Trial"}
 # Channel value in AMPM snapshot files that represents the mother warehouse
 AMPM_CHANNEL = "AMPM"
 
-# Approx weeks in the 3-month sales window we ship today
-SALES_WINDOW_WEEKS = 13
+# Source weekly sales file + channel value used by the China Reorder export
+BLINKIT_SALES_FILE    = "weekly_sales_snapshot - ChinaReorder.csv"
+BLINKIT_SALES_CHANNEL = "Blinkit Sales"
+
+# Default sales window size in weeks (used when from/to not specified)
+DEFAULT_SALES_WINDOW_WEEKS = 12
 
 
 def _load_master() -> pd.DataFrame:
@@ -112,38 +116,105 @@ def _load_ampm() -> pd.DataFrame:
     )
 
 
-def _load_sales_3m() -> pd.DataFrame:
-    """Total Blinkit sales units per Item Id across the 3-month window."""
-    months = ["March 2026.xlsx", "April 2026.xlsx", "May 2026.xlsx"]
-    parts = []
-    for m in months:
-        try:
-            d = get_excel_sheet(f"Blinkit/Sales/{m}", "Sales Report")
-        except Exception as e:
-            print(f"⚠️  Sales file not loaded ({m}): {e}")
-            continue
-        d = d.copy()
-        if "Item Id" not in d.columns or "Quantity" not in d.columns:
-            continue
-        d["Item Id"]  = pd.to_numeric(d["Item Id"],  errors="coerce").astype("Int64")
-        d["Quantity"] = pd.to_numeric(d["Quantity"], errors="coerce").fillna(0)
-        parts.append(d[["Item Id", "Quantity"]])
-
-    if not parts:
-        return pd.DataFrame(columns=["item_id", "total_sales_3m"])
-
+def _normalize_week(series: pd.Series) -> pd.Series:
+    """Extract integer week number from values like 'Week 12', 'W12', '12'."""
     return (
-        pd.concat(parts, ignore_index=True)
-          .dropna(subset=["Item Id"])
-          .groupby("Item Id", as_index=False)["Quantity"].sum()
-          .rename(columns={"Item Id": "item_id", "Quantity": "total_sales_3m"})
+        series.astype(str)
+              .str.extract(r"(\d+)")[0]
+              .pipe(pd.to_numeric, errors="coerce")
     )
 
 
-def load_blinkit_replenishment(cover_weeks: int = 8) -> pd.DataFrame:
+def get_available_blinkit_weeks() -> list[int]:
+    """Distinct week numbers present for channel=Blinkit in weekly_sales_snapshot.
+
+    Returned descending (most recent first), so the frontend can present
+    "last N weeks" by default.
+    """
+    try:
+        df = get(BLINKIT_SALES_FILE)
+    except Exception:
+        return []
+    if "channel" not in df.columns or "week" not in df.columns:
+        return []
+    df = df[df["channel"].astype(str).str.strip() == BLINKIT_SALES_CHANNEL].copy()
+    if df.empty:
+        return []
+    weeks = _normalize_week(df["week"]).dropna().unique().tolist()
+    return sorted({int(w) for w in weeks}, reverse=True)
+
+
+def _load_sales(
+    from_week: int | None = None,
+    to_week: int | None = None,
+) -> tuple[pd.DataFrame, int]:
+    """Blinkit sales per SKU within the chosen week range.
+
+    Source: data/input/weekly_sales_snapshot.csv, filtered to channel=Blinkit.
+    Defaults to the most recent DEFAULT_SALES_WINDOW_WEEKS weeks if neither
+    bound is supplied.
+
+    Returns (df, weeks_in_window) where df has columns [sku, total_sales_window].
+    """
+    try:
+        df = get(BLINKIT_SALES_FILE)
+    except Exception as e:
+        print(f"⚠️  {BLINKIT_SALES_FILE} not loaded: {e}")
+        return pd.DataFrame(columns=["sku", "total_sales_window"]), 0
+
+    if "channel" not in df.columns:
+        print(f"⚠️  {BLINKIT_SALES_FILE} has no 'channel' column")
+        return pd.DataFrame(columns=["sku", "total_sales_window"]), 0
+
+    df = df[df["channel"].astype(str).str.strip() == BLINKIT_SALES_CHANNEL].copy()
+
+    if df.empty:
+        # No Blinkit data in the snapshot yet — return zero with the requested
+        # window size (or default) so velocity becomes 0 rather than NaN.
+        if from_week is not None and to_week is not None:
+            window = max(1, abs(int(to_week) - int(from_week)) + 1)
+        else:
+            window = DEFAULT_SALES_WINDOW_WEEKS
+        return pd.DataFrame(columns=["sku", "total_sales_window"]), window
+
+    df["week_num"] = _normalize_week(df["week"])
+
+    if from_week is not None and to_week is not None:
+        lo, hi = sorted([int(from_week), int(to_week)])
+        df = df[(df["week_num"] >= lo) & (df["week_num"] <= hi)]
+        weeks_in_window = max(1, hi - lo + 1)
+    else:
+        # Default: most recent DEFAULT_SALES_WINDOW_WEEKS available weeks
+        available = sorted(df["week_num"].dropna().unique().tolist(), reverse=True)
+        selected = available[:DEFAULT_SALES_WINDOW_WEEKS]
+        df = df[df["week_num"].isin(selected)]
+        weeks_in_window = max(1, len(selected))
+
+    if "sku" not in df.columns or "units_sold" not in df.columns:
+        return pd.DataFrame(columns=["sku", "total_sales_window"]), weeks_in_window
+
+    df["sku"] = df["sku"].astype(str).str.strip()
+    df["units_sold"] = pd.to_numeric(df["units_sold"], errors="coerce").fillna(0)
+
+    agg = (
+        df.groupby("sku", as_index=False)["units_sold"].sum()
+          .rename(columns={"units_sold": "total_sales_window"})
+    )
+    return agg, weeks_in_window
+
+
+def load_blinkit_replenishment(
+    cover_weeks: int = 8,
+    from_week: int | None = None,
+    to_week: int | None = None,
+) -> tuple[pd.DataFrame, int]:
     """Core Blinkit replenishment calc — per-SKU aggregation.
 
     cover_weeks ∈ {2, 4, 6, 8, 10, 12} — weeks of target cover.
+    from_week / to_week — sales window (week numbers). If both omitted,
+    defaults to the most recent DEFAULT_SALES_WINDOW_WEEKS weeks.
+
+    Returns (df, weeks_in_window).
     """
     if cover_weeks <= 0:
         cover_weeks = 8
@@ -151,17 +222,17 @@ def load_blinkit_replenishment(cover_weeks: int = 8) -> pd.DataFrame:
     master = _load_master()
     soh    = _load_blinkit_soh()
     ampm   = _load_ampm()
-    sales  = _load_sales_3m()
+    sales, window = _load_sales(from_week=from_week, to_week=to_week)
 
     df = master.merge(soh,   on="item_id", how="left")
     df = df.merge(ampm,      on="model",   how="left")
-    df = df.merge(sales,     on="item_id", how="left")
+    df = df.merge(sales,     on="sku",     how="left")
 
-    df["blinkit_soh"]    = df["blinkit_soh"].fillna(0).astype(int)
-    df["ampm_inv"]       = df["ampm_inv"].fillna(0).astype(int)
-    df["total_sales_3m"] = df["total_sales_3m"].fillna(0).astype(int)
+    df["blinkit_soh"]        = df["blinkit_soh"].fillna(0).astype(int)
+    df["ampm_inv"]           = df["ampm_inv"].fillna(0).astype(int)
+    df["total_sales_window"] = df["total_sales_window"].fillna(0).astype(int)
 
-    df["avg_weekly_sales"] = (df["total_sales_3m"] / SALES_WINDOW_WEEKS).round(0).astype(int)
+    df["avg_weekly_sales"] = (df["total_sales_window"] / max(window, 1)).round(0).astype(int)
     df["required_units"]   = (df["avg_weekly_sales"] * cover_weeks).astype(int)
     df["deficiency"]       = (df["required_units"] - df["blinkit_soh"]).clip(lower=0).astype(int)
 
@@ -173,4 +244,4 @@ def load_blinkit_replenishment(cover_weeks: int = 8) -> pd.DataFrame:
 
     df["master_carton"] = pd.to_numeric(df.get("master_carton", 0), errors="coerce").fillna(0).astype(int)
 
-    return df
+    return df, window
