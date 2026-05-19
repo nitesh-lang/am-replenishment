@@ -15,7 +15,8 @@ export default function ChinaReorder() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const [selectedBrand, setSelectedBrand] = useState("Nexlev");
+  const BRAND_OPTIONS = ["Nexlev", "Audio Array", "Tonor", "White Mulberry"];
+  const [selectedBrands, setSelectedBrands] = useState(["Nexlev"]);
   const [selectedMonths, setSelectedMonths] = useState(3);
   const [fromWeek, setFromWeek] = useState(null);
   const [toWeek, setToWeek] = useState(null);
@@ -53,8 +54,13 @@ export default function ChinaReorder() {
   ============================================================ */
 
   useEffect(() => {
+    if (selectedBrands.length === 0) {
+      setData([]);
+      return;
+    }
     setLoading(true);
-    const params = new URLSearchParams({ brand: selectedBrand, months: selectedMonths });
+    const params = new URLSearchParams({ months: selectedMonths });
+    selectedBrands.forEach((b) => params.append("brand", b));
     if (fromWeek) params.append("from_week", fromWeek);
     if (toWeek) params.append("to_week", toWeek);
     fetch(`${BASE}/china-reorder/?${params}`)
@@ -69,7 +75,7 @@ export default function ChinaReorder() {
         }
       })
       .finally(() => setLoading(false));
-  }, [selectedBrand, selectedMonths, fromWeek, toWeek]);
+  }, [selectedBrands, selectedMonths, fromWeek, toWeek]);
 
   /* ============================================================
      FILTER
@@ -219,7 +225,7 @@ export default function ChinaReorder() {
       {/* HEADER */}
       <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow flex items-center justify-between gap-3">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-lg font-semibold">China Reorder Intelligence</h1>
+          <h1 className="text-lg font-semibold">Reorder Intelligence</h1>
           <p className="text-indigo-200 text-xs">12-week sales vs inventory based production planning</p>
         </div>
         <button
@@ -273,24 +279,47 @@ export default function ChinaReorder() {
       {/* FILTERS */}
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap gap-3 items-center">
-          <select
-            value={selectedBrand}
-            onChange={(e) => {
-              setCurrentPage(1);
-              setSelectedBrand(e.target.value);
-              setFromWeek(null);
-              setToWeek(null);
-              setAvailableWeeks([]);
-              setSelectedL0("");
-              setSelectedL1("");
-            }}
-            className="px-4 py-2 border rounded-lg"
-          >
-            <option value="Nexlev">Nexlev</option>
-            <option value="Audio Array">Audio Array</option>
-            <option value="Tonor">Tonor</option>
-            <option value="White Mulberry">White Mulberry</option>
-          </select>
+          {/* Multi-select brand pills */}
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Brands</span>
+            {BRAND_OPTIONS.map((b) => {
+              const active = selectedBrands.includes(b);
+              return (
+                <button
+                  key={b}
+                  onClick={() => {
+                    setCurrentPage(1);
+                    setSelectedBrands((prev) => {
+                      const next = prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b];
+                      return next;
+                    });
+                    // Reset week + category filters when brand mix changes
+                    setFromWeek(null);
+                    setToWeek(null);
+                    setAvailableWeeks([]);
+                    setSelectedL0("");
+                    setSelectedL1("");
+                  }}
+                  className={`px-2.5 py-1.5 text-xs rounded-md border transition ${
+                    active
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
+                  }`}
+                >
+                  {b}
+                </button>
+              );
+            })}
+            {selectedBrands.length > 0 && (
+              <button
+                onClick={() => { setCurrentPage(1); setSelectedBrands([]); }}
+                className="text-xs text-slate-500 hover:text-slate-900 ml-1"
+                title="Clear all brand selections"
+              >
+                clear
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             <select
