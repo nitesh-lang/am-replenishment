@@ -56,7 +56,6 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
 
     master_df     = get("Fossil Replenishment/Fossil Replenishment.xlsx")
     master_df.columns = master_df.columns.str.strip()
-    amazon_df     = get("inventory_amazon_fossil.xlsx")
     sales_df      = get("weekly_sales_snapshot.csv")
 
     # =====================
@@ -69,19 +68,6 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     if "Fossil SOH" not in master_df.columns:
         master_df["Fossil SOH"] = 0
     master_df["Fossil SOH"] = pd.to_numeric(master_df["Fossil SOH"], errors="coerce").fillna(0)
-
-    # =====================
-    # AMAZON INVENTORY LOOKUP (ledger)
-    # Source: inventory_amazon_fossil.xlsx
-    # Key: SKU → Qty, filtered by Channel=Amazon
-    # =====================
-
-    amazon_df.columns = amazon_df.columns.str.strip()
-    amazon_filtered = amazon_df[
-        amazon_df["Channel"].str.strip().str.lower() == "amazon"
-    ]
-    amazon_map = amazon_filtered.groupby("SKU")["Qty"].sum()
-    master_df["Amazon Inventory"] = master_df["SKU"].map(amazon_map).fillna(0)
 
     # =====================
     # OTHER STOCK (from Fossil Replenishment.xlsx)
@@ -97,7 +83,7 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     # TOTAL INVENTORY
     # =====================
 
-    for col in ["Cambium SOH", "Amazon Inventory", "Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO"]:
+    for col in ["Cambium SOH", "Andheri/Goregaon sellable Stock", "In Transit PO", "Open PO"]:
         master_df[col] = pd.to_numeric(master_df[col], errors="coerce").fillna(0)
 
     master_df["Total Inventory"] = (

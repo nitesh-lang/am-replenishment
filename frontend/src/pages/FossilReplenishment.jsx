@@ -647,7 +647,7 @@ function FossilSOPModal({ open, onClose }) {
             <ul className="list-disc pl-5 space-y-0.5 text-xs">
               <li>Sales counted: brand = <b>Fossil</b>, channel = <b>Amazon</b> only</li>
               <li>Inventory fields: all sourced from the master xlsx (Cambium SOH, Andheri/Goregaon, In Transit PO, Open PO, Fossil SOH)</li>
-              <li>Amazon Inventory (computed from FBA file) is read but <b>not</b> in Total Inventory — Total uses Cambium SOH + 3 master columns only</li>
+              <li>Total Inventory = Cambium SOH + Andheri/Goregaon sellable + In Transit PO + Open PO (all sourced from the master file)</li>
             </ul>
           </section>
 
