@@ -81,7 +81,8 @@ export default function BlinkitReplenishment() {
         return (
           (r.model || "").toLowerCase().includes(q) ||
           (r.sku || "").toLowerCase().includes(q) ||
-          (r.asin || "").toLowerCase().includes(q)
+          (r.asin || "").toLowerCase().includes(q) ||
+          String(r.item_id || "").toLowerCase().includes(q)
         );
       });
   }, [data, search, selectedBrand]);
@@ -149,6 +150,7 @@ export default function BlinkitReplenishment() {
     { key: "brand",                label: "Brand" },
     { key: "model",                label: "Model" },
     { key: "sku",                  label: "SKU" },
+    { key: "item_id",              label: "Item ID" },
     { key: "asin",                 label: "ASIN" },
     { key: "expansion_level",      label: "Expansion" },
     { key: "category_l1",          label: "Category" },
@@ -235,7 +237,7 @@ export default function BlinkitReplenishment() {
         <input
           value={search}
           onChange={(e) => { setCurrentPage(1); setSearch(e.target.value); }}
-          placeholder="Search model / SKU / ASIN..."
+          placeholder="Search model / SKU / ASIN / Item ID..."
           className="px-3 py-1.5 text-sm border border-slate-200 rounded-md w-64"
         />
 
