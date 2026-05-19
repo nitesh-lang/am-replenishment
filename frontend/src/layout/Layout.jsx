@@ -43,7 +43,7 @@ export default function Layout({ children }) {
     { name: "Dashboard",              path: "/dashboard",              moduleKey: "dashboard",              icon: LayoutDashboard },
     { name: "Replenishment",          path: "/replenishment",          moduleKey: "replenishment",          icon: LayoutDashboard },
     { name: "FC Allocation",          path: "/fc-allocation",          moduleKey: "fc-allocation",          icon: Boxes },
-    { name: "China Reorder",          path: "/china-reorder",          moduleKey: "china-reorder",          icon: Boxes },
+    { name: "Reorder",                path: "/china-reorder",          moduleKey: "china-reorder",          icon: Boxes },
     { name: "Sales Analytics",        path: "/sales-analytics",        moduleKey: "sales-analytics",        icon: BarChart3 },
     { name: "Region Sales",           path: "/region-sales",           moduleKey: "region-sales",           icon: BarChart3 },
     { name: "CB Replenishment",       path: "/cb-replenishment",       moduleKey: "cb-replenishment",       icon: Boxes },

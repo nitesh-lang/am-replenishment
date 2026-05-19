@@ -10,7 +10,7 @@ const MODULE_LABELS = {
   "fc-allocation":          "FC Allocation",
   "sales-analytics":        "Sales Analytics",
   "region-sales":           "Region Sales",
-  "china-reorder":          "China Reorder",
+  "china-reorder":          "Reorder",
   "cb-replenishment":       "CB Replenishment",
   "wm-replenishment":       "Clicktech Replenishment",
   "fossil-replenishment":   "Fossil Replenishment",
