@@ -333,40 +333,27 @@ def calculate_replenishment(
     df["total_units_sold"] = df["total_units_sold"].fillna(0)
 
     # ---------------------------------------------
-    # AMPM INVENTORY (case-insensitive + base-fallback lookup)
+    # AMPM INVENTORY (SKU-based lookup)
     # ---------------------------------------------
-    # Build per-Model AMPM qty from the inventory snapshot (Channel == AMPM).
-    # Then for each master row do a two-step lookup:
-    #   1. direct case-insensitive match
-    #   2. fall back to master's first-token "base" — catches variants where
-    #      the inventory tracks only the base SKU. e.g. master
-    #      "AI-02 2x2| Metallic Red" -> base "AI-02" -> inventory "AI-02".
-    # The fallback only fires when the direct match misses, so models like
-    # "AM-W33 Pro" (which directly matches inv "AM-W33 pro") never accidentally
-    # pull in the separate base "AM-W33" stock that lives as its own SKU.
-    ampm_inv = (
-        inventory[inventory["Channel"].astype(str).str.strip().str.lower() == "ampm"]
-        .copy()
-    )
-    ampm_inv["_key"] = ampm_inv["Model"].astype(str).str.strip().str.lower()
-    ampm_qty_by_key = (
-        ampm_inv.groupby("_key", as_index=False)["Qty"].sum()
-                .set_index("_key")["Qty"].to_dict()
+    # The inventory snapshot records AMPM stock against the specific SKU
+    # that owns the physical units. SKU is the unambiguous link — Model is
+    # not (multiple master SKUs can share the same Model, and variant
+    # SKUs would otherwise double-share the base's AMPM pool).
+    #
+    # Verified: every AMPM row across all 4 account inventory files has a
+    # populated SKU column (118 Nexlev, 159 Audio Array, 59 WM, 32 Tonor).
+    ampm_inv = inventory[
+        inventory["Channel"].astype(str).str.strip().str.lower() == "ampm"
+    ].copy()
+    ampm_inv["_sku"] = ampm_inv["SKU"].astype(str).str.strip().str.upper()
+    ampm_qty_by_sku = (
+        ampm_inv.groupby("_sku", as_index=False)["Qty"].sum()
+                .set_index("_sku")["Qty"].to_dict()
     )
 
-    def _lookup_ampm(master_m):
-        m = str(master_m).strip()
-        if not m:
-            return 0.0
-        ml = m.lower()
-        if ml in ampm_qty_by_key:
-            return float(ampm_qty_by_key[ml])
-        base = ml.split(" ")[0]
-        if base and base != ml and base in ampm_qty_by_key:
-            return float(ampm_qty_by_key[base])
-        return 0.0
-
-    df["ampm_inventory"] = df["Model"].apply(_lookup_ampm)
+    df["ampm_inventory"] = (
+        df["SKU"].astype(str).str.strip().str.upper().map(ampm_qty_by_sku).fillna(0)
+    )
 
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
     df["ampm_inventory"] = df["ampm_inventory"].fillna(0)

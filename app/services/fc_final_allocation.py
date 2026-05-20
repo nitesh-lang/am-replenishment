@@ -580,40 +580,19 @@ def calculate_final_allocation(
 
     ampm_df = ampm_df[ampm_df["channel"].str.lower() == "ampm"]
 
-    ampm_df["model"] = ampm_df["model"].astype(str).str.strip()
-    df_plan["model"] = df_plan["model"].astype(str).str.strip()
-
-    # Build a case-insensitive inventory lookup: model_key (lower) -> total AMPM qty.
-    ampm_df["_key"] = ampm_df["model"].str.lower()
-    inv_qty = (
-        ampm_df.groupby("_key", as_index=False)["qty"].sum()
-               .set_index("_key")["qty"].to_dict()
+    # SKU-based AMPM lookup. SKU is the unambiguous physical-stock key — the
+    # inventory snapshot tracks which specific SKU owns each AMPM line.
+    # Switching from Model-keyed to SKU-keyed prevents variant SKUs (e.g.
+    # FBA76733 / Model "AI-02") from inheriting the 6-unit pool that
+    # belongs only to FBA79070 / Model "AI-02 2x2| Metallic Red".
+    ampm_df["_sku"] = ampm_df["sku"].astype(str).str.strip().str.upper()
+    inv_qty_by_sku = (
+        ampm_df.groupby("_sku", as_index=False)["qty"].sum()
+               .set_index("_sku")["qty"].to_dict()
     )
 
-    # Two-step lookup per master row:
-    #   1. Direct case-insensitive match. Catches "AM-W33 Pro" ↔ "AM-W33 pro",
-    #      "AM-C3a" ↔ "AM-C3A" etc.
-    #   2. Base fallback (first space-separated token). Catches variants where
-    #      the inventory tracks only the base, e.g. master
-    #      "AI-02 2x2| Metallic Red" → base "AI-02" → inventory "AI-02" (6 units).
-    #      The fallback only fires when step 1 misses, so models like
-    #      "AM-W33 Pro" never accidentally pull in the separate "AM-W33" base
-    #      stock — those are different physical products that DO have their
-    #      own AMPM lines.
-    def _lookup_ampm(master_m):
-        m = str(master_m).strip()
-        if not m:
-            return 0.0
-        ml = m.lower()
-        if ml in inv_qty:
-            return float(inv_qty[ml])
-        base = ml.split(" ")[0]
-        if base and base != ml and base in inv_qty:
-            return float(inv_qty[base])
-        return 0.0
-
     df_plan["ampm_inventory"] = pd.to_numeric(
-        df_plan["model"].apply(_lookup_ampm),
+        df_plan["sku"].astype(str).str.strip().str.upper().map(inv_qty_by_sku).fillna(0),
         errors="coerce",
     ).fillna(0)
 
