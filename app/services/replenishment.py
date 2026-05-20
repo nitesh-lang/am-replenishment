@@ -232,24 +232,43 @@ def calculate_replenishment(
     validate_columns(inventory, ["Model", "Channel", "Qty"], "inventory snapshot")
     validate_columns(sales, ["model", "units_sold", "week"], "sales snapshot")
 
-    # Normalize sales model names — strip variant suffixes like "ETC-07-WH" → "ETC-07"
-    # Check if master models are a prefix of sales models and normalize accordingly
+    # Normalize sales and inventory model names so they line up with the
+    # master's canonical model name. Handles:
+    #   - Case mismatches:  "AM-W33 pro"  → "AM-W33 Pro"
+    #                       "AM-C11 PRO"  → "AM-C11 Pro"
+    #                       "AM-C3A"      → "AM-C3a"
+    #   - Variant suffixes after '-':  "ETC-07-WH"     → "ETC-07"
+    #   - Bundle descriptors in parens: "UB-01 (AI-04…)" → "UB-01"
     master_models = set(master["Model"].astype(str).str.strip().unique())
+    master_models_lower = {m.lower(): m for m in master_models}
+
     def normalize_model(m):
         m = str(m).strip()
-        # If exact match exists, keep as is
+        if not m:
+            return m
+        # Exact match
         if m in master_models:
             return m
-        # Try stripping after last '-' if result matches master
+        # Case-insensitive match — return the master's canonical casing
+        if m.lower() in master_models_lower:
+            return master_models_lower[m.lower()]
+        # Try stripping after last '-' (variant suffix)
         parts = m.rsplit("-", 1)
-        if len(parts) == 2 and parts[0] in master_models:
-            return parts[0]
-        # Try stripping after '(' like "UB-01 (AI-04...)" → "UB-01"
+        if len(parts) == 2:
+            if parts[0] in master_models:
+                return parts[0]
+            if parts[0].lower() in master_models_lower:
+                return master_models_lower[parts[0].lower()]
+        # Try stripping after '(' (bundle suffix)
         base = m.split("(")[0].strip()
         if base in master_models:
             return base
+        if base.lower() in master_models_lower:
+            return master_models_lower[base.lower()]
         return m
-    sales["model"] = sales["model"].apply(normalize_model)
+
+    sales["model"]    = sales["model"].apply(normalize_model)
+    inventory["Model"] = inventory["Model"].apply(normalize_model)
 
     # ---------------------------------------------
     # SALES WINDOW
