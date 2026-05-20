@@ -333,23 +333,40 @@ def calculate_replenishment(
     df["total_units_sold"] = df["total_units_sold"].fillna(0)
 
     # ---------------------------------------------
-    # INVENTORY SUMMARY
+    # AMPM INVENTORY (case-insensitive + base-fallback lookup)
     # ---------------------------------------------
-    inventory_summary = (
-        inventory
-        .groupby(["Model", "Channel"])["Qty"]
-        .sum()
-        .unstack(fill_value=0)
-        .reset_index()
+    # Build per-Model AMPM qty from the inventory snapshot (Channel == AMPM).
+    # Then for each master row do a two-step lookup:
+    #   1. direct case-insensitive match
+    #   2. fall back to master's first-token "base" — catches variants where
+    #      the inventory tracks only the base SKU. e.g. master
+    #      "AI-02 2x2| Metallic Red" -> base "AI-02" -> inventory "AI-02".
+    # The fallback only fires when the direct match misses, so models like
+    # "AM-W33 Pro" (which directly matches inv "AM-W33 pro") never accidentally
+    # pull in the separate base "AM-W33" stock that lives as its own SKU.
+    ampm_inv = (
+        inventory[inventory["Channel"].astype(str).str.strip().str.lower() == "ampm"]
+        .copy()
+    )
+    ampm_inv["_key"] = ampm_inv["Model"].astype(str).str.strip().str.lower()
+    ampm_qty_by_key = (
+        ampm_inv.groupby("_key", as_index=False)["Qty"].sum()
+                .set_index("_key")["Qty"].to_dict()
     )
 
-    inventory_summary["ampm_inventory"] = (
-        inventory_summary["AMPM"].fillna(0)
-        if "AMPM" in inventory_summary.columns
-        else 0
-    )
+    def _lookup_ampm(master_m):
+        m = str(master_m).strip()
+        if not m:
+            return 0.0
+        ml = m.lower()
+        if ml in ampm_qty_by_key:
+            return float(ampm_qty_by_key[ml])
+        base = ml.split(" ")[0]
+        if base and base != ml and base in ampm_qty_by_key:
+            return float(ampm_qty_by_key[base])
+        return 0.0
 
-    df = df.merge(inventory_summary[["Model", "ampm_inventory"]], on="Model", how="left")
+    df["ampm_inventory"] = df["Model"].apply(_lookup_ampm)
 
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
     df["ampm_inventory"] = df["ampm_inventory"].fillna(0)

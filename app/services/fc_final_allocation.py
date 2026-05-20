@@ -583,51 +583,39 @@ def calculate_final_allocation(
     ampm_df["model"] = ampm_df["model"].astype(str).str.strip()
     df_plan["model"] = df_plan["model"].astype(str).str.strip()
 
-    # Case-insensitive model matching — same fix as the Replenishment service.
-    # Inventory snapshots have models like "AM-W33 pro" / "AM-C11 PRO" / "AM-C3A"
-    # whereas the master uses "AM-W33 Pro" / "AM-C11 Pro" / "AM-C3a". Normalise
-    # the inventory's model to the master's canonical casing before the merge,
-    # else those SKUs land in the "no match → ampm_inventory = 0" bucket.
-    master_models       = set(df_plan["model"].dropna().astype(str).unique())
-    master_models_lower = {m.lower(): m for m in master_models}
+    # Build a case-insensitive inventory lookup: model_key (lower) -> total AMPM qty.
+    ampm_df["_key"] = ampm_df["model"].str.lower()
+    inv_qty = (
+        ampm_df.groupby("_key", as_index=False)["qty"].sum()
+               .set_index("_key")["qty"].to_dict()
+    )
 
-    def _normalize_inv_model(m):
-        m = str(m).strip()
+    # Two-step lookup per master row:
+    #   1. Direct case-insensitive match. Catches "AM-W33 Pro" ↔ "AM-W33 pro",
+    #      "AM-C3a" ↔ "AM-C3A" etc.
+    #   2. Base fallback (first space-separated token). Catches variants where
+    #      the inventory tracks only the base, e.g. master
+    #      "AI-02 2x2| Metallic Red" → base "AI-02" → inventory "AI-02" (6 units).
+    #      The fallback only fires when step 1 misses, so models like
+    #      "AM-W33 Pro" never accidentally pull in the separate "AM-W33" base
+    #      stock — those are different physical products that DO have their
+    #      own AMPM lines.
+    def _lookup_ampm(master_m):
+        m = str(master_m).strip()
         if not m:
-            return m
-        if m in master_models:
-            return m
-        if m.lower() in master_models_lower:
-            return master_models_lower[m.lower()]
-        # Variant suffix after last '-'  (e.g. "ETC-07-WH" -> "ETC-07")
-        parts = m.rsplit("-", 1)
-        if len(parts) == 2:
-            if parts[0] in master_models:
-                return parts[0]
-            if parts[0].lower() in master_models_lower:
-                return master_models_lower[parts[0].lower()]
-        # Bundle descriptor after '('  ("UB-01 (AI-04…)" -> "UB-01")
-        base = m.split("(")[0].strip()
-        if base in master_models:
-            return base
-        if base.lower() in master_models_lower:
-            return master_models_lower[base.lower()]
-        return m
+            return 0.0
+        ml = m.lower()
+        if ml in inv_qty:
+            return float(inv_qty[ml])
+        base = ml.split(" ")[0]
+        if base and base != ml and base in inv_qty:
+            return float(inv_qty[base])
+        return 0.0
 
-    ampm_df["model"] = ampm_df["model"].apply(_normalize_inv_model)
-
-    ampm_df = ampm_df.groupby("model", as_index=False)["qty"].sum()
-
-    ampm_df = ampm_df.rename(columns={"qty": "ampm_inventory"})
-
-    # merge with main df
-    df_plan = df_plan.merge(
-        ampm_df,
-        on="model",
-        how="left"
-)
-
-    df_plan["ampm_inventory"] = pd.to_numeric(df_plan["ampm_inventory"], errors="coerce").fillna(0)
+    df_plan["ampm_inventory"] = pd.to_numeric(
+        df_plan["model"].apply(_lookup_ampm),
+        errors="coerce",
+    ).fillna(0)
 
     if "category" in df_plan.columns:
         df_plan["category"] = df_plan["category"].fillna("-").astype(str).str.strip().replace("nan", "-")
