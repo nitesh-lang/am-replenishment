@@ -333,27 +333,62 @@ def calculate_replenishment(
     df["total_units_sold"] = df["total_units_sold"].fillna(0)
 
     # ---------------------------------------------
-    # AMPM INVENTORY (SKU-based lookup)
+    # AMPM INVENTORY (SKU-keyed with safe Model fallback)
     # ---------------------------------------------
-    # The inventory snapshot records AMPM stock against the specific SKU
-    # that owns the physical units. SKU is the unambiguous link — Model is
-    # not (multiple master SKUs can share the same Model, and variant
-    # SKUs would otherwise double-share the base's AMPM pool).
+    # Primary: SKU-keyed lookup against AMPM-channel rows of the inventory
+    # snapshot. SKU is the unambiguous physical-stock owner — it prevents
+    # variants/Pro-vs-base SKUs from inheriting each other's AMPM pool.
     #
-    # Verified: every AMPM row across all 4 account inventory files has a
-    # populated SKU column (118 Nexlev, 159 Audio Array, 59 WM, 32 Tonor).
+    # Fallback: when the SKU misses AND the master file has *exactly one*
+    # row with that Model, fall back to summing AMPM by Model. This
+    # catches cases where the warehouse labels the same physical product
+    # under a different SKU than the operational master (e.g. master
+    # carries the new ASIN's SKU "FBK80024" while the 440 units of
+    # Model "SS-02" are sitting under the old SKU "FBA79589").
+    #
+    # The "Model unique in master" guard prevents the AI-02-style case
+    # where two master SKUs legitimately share a Model and need separate
+    # stock — fallback is skipped there so each SKU stays on its own
+    # direct match (or 0 if it has no direct AMPM line).
     ampm_inv = inventory[
         inventory["Channel"].astype(str).str.strip().str.lower() == "ampm"
     ].copy()
-    ampm_inv["_sku"] = ampm_inv["SKU"].astype(str).str.strip().str.upper()
+    ampm_inv["_sku"]   = ampm_inv["SKU"].astype(str).str.strip().str.upper()
+    ampm_inv["_model"] = ampm_inv["Model"].astype(str).str.strip().str.lower()
     ampm_qty_by_sku = (
         ampm_inv.groupby("_sku", as_index=False)["Qty"].sum()
                 .set_index("_sku")["Qty"].to_dict()
     )
 
-    df["ampm_inventory"] = (
-        df["SKU"].astype(str).str.strip().str.upper().map(ampm_qty_by_sku).fillna(0)
+    # ORPHAN inventory rows = those whose SKU isn't in the operational master.
+    # These are the rows where the warehouse labels the same physical product
+    # under a different SKU than the master uses (e.g. master "FBK80024" vs
+    # inventory "FBA79589" for Model SS-02). Only orphan rows feed the Model
+    # fallback — preventing the AI-02 case where FBA79070's stock would
+    # otherwise spill onto FBA76733.
+    master_skus = set(master["SKU"].astype(str).str.strip().str.upper())
+    ampm_orphan = ampm_inv[~ampm_inv["_sku"].isin(master_skus)]
+    ampm_orphan_qty_by_model = (
+        ampm_orphan.groupby("_model", as_index=False)["Qty"].sum()
+                   .set_index("_model")["Qty"].to_dict()
     )
+
+    master_model_count = (
+        master["Model"].astype(str).str.strip().str.lower().value_counts().to_dict()
+    )
+
+    by_sku_col      = df["SKU"].astype(str).str.strip().str.upper().map(ampm_qty_by_sku).fillna(0)
+    model_lower     = df["Model"].astype(str).str.strip().str.lower()
+    by_model_orphan = model_lower.map(ampm_orphan_qty_by_model).fillna(0)
+    master_cnt      = model_lower.map(master_model_count).fillna(0)
+
+    # Fallback fires only when:
+    #   - SKU-keyed lookup returned 0, AND
+    #   - the master has exactly one row with this Model (no variant ambiguity), AND
+    #   - the Model fallback pool is built only from orphan inventory rows
+    #     (so we never re-allocate stock that's already owned by another SKU)
+    fallback = (by_sku_col == 0) & (master_cnt == 1)
+    df["ampm_inventory"] = by_sku_col.where(~fallback, by_model_orphan)
 
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
     df["ampm_inventory"] = df["ampm_inventory"].fillna(0)
