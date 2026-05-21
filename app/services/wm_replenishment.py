@@ -99,12 +99,13 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         if "channel" in inv_df.columns:
             print("WM UNIQUE CHANNELS:", inv_df["channel"].str.strip().unique().tolist())
 
-            ampm_raw = inv_df[
-                inv_df["channel"].str.strip().str.lower() == "ampm"
-            ].groupby("model", as_index=False).sum(numeric_only=True)
+            # AMPM aggregated by lowercase Model (case-insensitive key)
+            ampm_filter = inv_df[inv_df["channel"].str.strip().str.lower() == "ampm"].copy()
+            ampm_filter["_key"] = ampm_filter["model"].astype(str).str.strip().str.lower()
+            ampm_raw = ampm_filter.groupby("_key", as_index=False).sum(numeric_only=True)
 
             if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
-                ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["model", "ampm_inventory"]]
+                ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["_key", "ampm_inventory"]]
 
             inv_df = inv_df[inv_df["channel"].str.strip().str.lower() == "1p"]
 
@@ -147,7 +148,10 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         df = master_df.merge(cb_sales, on="model", how="left")
         df = df.merge(amazon_sales, on="model", how="left")
         df = df.merge(inv_df[["model", "final_cb_qty"]], on="model", how="left")
-        df = df.merge(ampm_inventory_df, on="model", how="left")
+        # Case-insensitive AMPM merge: build a lowercase key on df, drop after merge
+        df["_key"] = df["model"].astype(str).str.strip().str.lower()
+        df = df.merge(ampm_inventory_df, on="_key", how="left")
+        df = df.drop(columns=["_key"])
         df = df.merge(open_po, on="model", how="left")
         df = df.merge(in_transit, on="model", how="left")
 

@@ -46,10 +46,9 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             df["model"] = df["model"].astype(str).str.strip()
 
         # Normalize master model names for joining — strip bundle descriptions like "UB-01 (AI-04...)"
-        # Sales file has full names, master now has full names too — exact match
-        # But keep a normalized key for joining in case of minor differences
-        master_df["model_join"] = master_df["model"].astype(str).str.split("(").str[0].str.strip()
-        sales_df["model_join"]  = sales_df["model"].astype(str).str.split("(").str[0].str.strip()
+        # Case-insensitive: lowercased so master "AM-W47 Wired" matches inventory "AM-W47 WIRED".
+        master_df["model_join"] = master_df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
+        sales_df["model_join"]  = sales_df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
 
         po_df["model"] = po_df["model"].fillna(po_df["sku"]).astype(str).str.strip()
 
@@ -131,7 +130,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             print("AMPM ROWS FOUND:", len(ampm_raw))
 
             if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
-                ampm_raw["model_join"] = ampm_raw["model"].astype(str).str.split("(").str[0].str.strip()
+                ampm_raw["model_join"] = ampm_raw["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
                 ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["brand", "model_join", "ampm_inventory"]]
 
             # =========================
@@ -142,7 +141,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             ].copy()
 
             if "qty" in pipeline_raw.columns and len(pipeline_raw) > 0:
-                pipeline_raw["model_join"] = pipeline_raw["model"].astype(str).str.split("(").str[0].str.strip()
+                pipeline_raw["model_join"] = pipeline_raw["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
                 china_in_transit_df = (
                     pipeline_raw.groupby("model_join", as_index=False)["qty"]
                     .sum()
@@ -165,7 +164,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
                 inventory_df.groupby(["brand", "model"], as_index=False)
                 .sum(numeric_only=True)
             )
-        inventory_df["model_join"] = inventory_df["model"].astype(str).str.split("(").str[0].str.strip()
+        inventory_df["model_join"] = inventory_df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
 
         if "qty" in inventory_df.columns:
             inventory_df = inventory_df.rename(
@@ -176,7 +175,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # OPEN PO / IN TRANSIT
         # =========================
 
-        po_df["model_join"] = po_df["model"].astype(str).str.split("(").str[0].str.strip()
+        po_df["model_join"] = po_df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
 
         open_po = (
             po_df[po_df["delivery status"] == "Open PO"]
