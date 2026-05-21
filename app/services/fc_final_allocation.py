@@ -580,44 +580,17 @@ def calculate_final_allocation(
 
     ampm_df = ampm_df[ampm_df["channel"].str.lower() == "ampm"]
 
-    # SKU-keyed AMPM lookup with a safe Model fallback. See the matching
-    # block in app/services/replenishment.py for the rationale:
-    #   1. SKU-keyed primary — prevents variants from inheriting each other.
-    #   2. Model-keyed fallback only when the operational df_plan has
-    #      exactly one row per Model (no variant ambiguity). Catches the
-    #      SS-02 case where master uses FBK80024 but the 440 AMPM units
-    #      are sitting under FBA79589 in the warehouse snapshot.
-    ampm_df["_sku"]   = ampm_df["sku"].astype(str).str.strip().str.upper()
-    ampm_df["_model"] = ampm_df["model"].astype(str).str.strip().str.lower()
-    inv_qty_by_sku = (
-        ampm_df.groupby("_sku",   as_index=False)["qty"].sum()
-               .set_index("_sku")["qty"].to_dict()
+    # Exact Model match — case-insensitive only. No base-token / variant
+    # fallback. If the master Model and inventory Model don't match
+    # character-for-character (modulo case), result is 0.
+    ampm_df["_key"] = ampm_df["model"].astype(str).str.strip().str.lower()
+    inv_qty_by_model = (
+        ampm_df.groupby("_key", as_index=False)["qty"].sum()
+               .set_index("_key")["qty"].to_dict()
     )
-
-    # Orphan inventory rows = those whose SKU isn't in the operational plan.
-    # Only orphan rows feed the Model fallback (see the matching rationale
-    # in app/services/replenishment.py).
-    plan_skus = set(df_plan["sku"].astype(str).str.strip().str.upper())
-    inv_orphan = ampm_df[~ampm_df["_sku"].isin(plan_skus)]
-    inv_orphan_qty_by_model = (
-        inv_orphan.groupby("_model", as_index=False)["qty"].sum()
-                  .set_index("_model")["qty"].to_dict()
-    )
-
-    plan_model_sku_count = (
-        df_plan.assign(_m=df_plan["model"].astype(str).str.strip().str.lower())
-               .groupby("_m")["sku"].nunique().to_dict()
-    )
-
-    by_sku_col      = df_plan["sku"].astype(str).str.strip().str.upper().map(inv_qty_by_sku).fillna(0)
-    model_lower     = df_plan["model"].astype(str).str.strip().str.lower()
-    by_model_orphan = model_lower.map(inv_orphan_qty_by_model).fillna(0)
-    plan_cnt        = model_lower.map(plan_model_sku_count).fillna(0)
-
-    fallback = (by_sku_col == 0) & (plan_cnt == 1)
 
     df_plan["ampm_inventory"] = pd.to_numeric(
-        by_sku_col.where(~fallback, by_model_orphan),
+        df_plan["model"].astype(str).str.strip().str.lower().map(inv_qty_by_model).fillna(0),
         errors="coerce",
     ).fillna(0)
 
