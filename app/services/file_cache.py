@@ -77,6 +77,15 @@ def preload():
         # Blinkit AMPM snapshots
         "Blinkit/AMPM/inventory_snapshot_nexlev.xlsx",
         "Blinkit/AMPM/Inventory_snapshot_audio_array.xlsx",
+        # Reorder Intelligence — additional data (reviews + returns)
+        "Additional/reviews/Audio Array.csv",
+        "Additional/reviews/Nexlev.csv",
+        "Additional/reviews/Tonor.csv",
+        "Additional/reviews/White Mulberry.csv",
+        "Additional/returns/Audio Array FBA Returns.csv",
+        "Additional/returns/Nexlev.csv",
+        "Additional/returns/CRPL.csv",
+        "Additional/returns/viomi.csv",
     ]
 
     # Excel files with specific sheets
@@ -92,6 +101,10 @@ def preload():
         ("Blinkit/Sales/March 2026.xlsx", "Sales Report", 0),
         ("Blinkit/Sales/April 2026.xlsx", "Sales Report", 0),
         ("Blinkit/Sales/May 2026.xlsx",   "Sales Report", 0),
+        # Reorder Intelligence — margin sheets (one per brand)
+        ("Additional/margin/Audio Array.xlsx",    "Margin Data", 0),
+        ("Additional/margin/Nexlev.xlsx",         "Margin Data", 0),
+        ("Additional/margin/White Mulberry.xlsx", "Margin Data", 0),
     ]
 
     # Load sheet files first

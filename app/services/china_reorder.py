@@ -1,6 +1,135 @@
 import os
 import pandas as pd
-from app.services.file_cache import get
+from app.services.file_cache import get, get_excel_sheet
+
+
+# =================================================
+# ADDITIONAL DATA LOADERS (used by China Reorder /
+# Reorder Intelligence — joined by ASIN)
+# =================================================
+
+_REVIEW_FILES = [
+    "Additional/reviews/Audio Array.csv",
+    "Additional/reviews/Nexlev.csv",
+    "Additional/reviews/Tonor.csv",
+    "Additional/reviews/White Mulberry.csv",
+]
+
+_MARGIN_FILES = [
+    # (path, sheet name)
+    ("Additional/margin/Audio Array.xlsx",    "Margin Data"),
+    ("Additional/margin/Nexlev.xlsx",         "Margin Data"),
+    ("Additional/margin/White Mulberry.xlsx", "Margin Data"),
+]
+
+_FBA_RETURN_FILES = [
+    "Additional/returns/Audio Array FBA Returns.csv",
+    "Additional/returns/Nexlev.csv",
+    "Additional/returns/CRPL.csv",
+    "Additional/returns/viomi.csv",
+]
+
+_1P_RETURN_FILE = "Additional/returns/1p Returns.xlsx"
+
+
+def _load_reviews_by_asin() -> pd.DataFrame:
+    """ASIN → (avg_rating, rating_count). Pooled across brand files."""
+    parts = []
+    for f in _REVIEW_FILES:
+        try:
+            df = get(f)
+        except Exception as e:
+            print(f"⚠️ reviews not loaded ({f}): {e}")
+            continue
+        if "ASIN" not in df.columns:
+            continue
+        df = df.copy()
+        df["_asin"] = df["ASIN"].astype(str).str.strip().str.upper()
+        cols = {"_asin": "asin"}
+        if "Reviews: Rating"       in df.columns: cols["Reviews: Rating"]       = "avg_rating"
+        if "Reviews: Rating Count" in df.columns: cols["Reviews: Rating Count"] = "rating_count"
+        parts.append(df.rename(columns=cols)[list(cols.values())])
+    if not parts:
+        return pd.DataFrame(columns=["asin", "avg_rating", "rating_count"])
+    out = pd.concat(parts, ignore_index=True).drop_duplicates(subset=["asin"], keep="first")
+    return out
+
+
+def _load_margin_by_asin() -> pd.DataFrame:
+    """ASIN → (net_margin_inr, net_margin_pct). Pooled across brand files."""
+    parts = []
+    for f, sheet in _MARGIN_FILES:
+        try:
+            df = get_excel_sheet(f, sheet)
+        except Exception as e:
+            print(f"⚠️ margin not loaded ({f}::{sheet}): {e}")
+            continue
+        if "ASIN" not in df.columns:
+            continue
+        df = df.copy()
+        df["_asin"] = df["ASIN"].astype(str).str.strip().str.upper()
+        cols = {"_asin": "asin"}
+        if "Net Margin"   in df.columns: cols["Net Margin"]   = "net_margin_inr"
+        if "Net Margin %" in df.columns: cols["Net Margin %"] = "net_margin_pct"
+        parts.append(df.rename(columns=cols)[list(cols.values())])
+    if not parts:
+        return pd.DataFrame(columns=["asin", "net_margin_inr", "net_margin_pct"])
+    out = pd.concat(parts, ignore_index=True).drop_duplicates(subset=["asin"], keep="first")
+    return out
+
+
+def _load_returns_by_asin() -> pd.DataFrame:
+    """ASIN → returns_90d.
+
+    FBA returns: row-level with `return-date` — filter to last 90 days,
+    sum `quantity` per ASIN.
+    1p Returns: ASIN-level summary already (~90-day viewing range in
+    the file's banner), take the `Customer Returns` column directly.
+    """
+    cutoff = pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.Timedelta(days=90)
+    parts = []
+
+    # FBA per-event returns
+    for f in _FBA_RETURN_FILES:
+        try:
+            df = get(f)
+        except Exception as e:
+            print(f"⚠️ FBA returns not loaded ({f}): {e}")
+            continue
+        if not {"asin", "return-date", "quantity"}.issubset(df.columns):
+            continue
+        df = df.copy()
+        df["_dt"]  = pd.to_datetime(df["return-date"], errors="coerce", utc=True).dt.tz_localize(None)
+        df["_qty"] = pd.to_numeric(df["quantity"], errors="coerce").fillna(0)
+        df = df[df["_dt"] >= cutoff]
+        df["_asin"] = df["asin"].astype(str).str.strip().str.upper()
+        parts.append(df[["_asin", "_qty"]].rename(columns={"_asin": "asin", "_qty": "returns_90d"}))
+
+    # 1p returns (ASIN-level pre-aggregated)
+    try:
+        df1 = get_excel_sheet(_1P_RETURN_FILE, "Sheet1", header=1) if False else None
+    except Exception:
+        df1 = None
+    # The 1p file has a non-standard banner — try multiple read strategies
+    try:
+        df1 = pd.read_excel(
+            f"data/input/{_1P_RETURN_FILE}", sheet_name=0, engine="openpyxl", header=1
+        )
+        if "ASIN" in df1.columns and "Customer Returns" in df1.columns:
+            df1 = df1.copy()
+            df1["asin"]        = df1["ASIN"].astype(str).str.strip().str.upper()
+            df1["returns_90d"] = pd.to_numeric(df1["Customer Returns"], errors="coerce").fillna(0)
+            parts.append(df1[["asin", "returns_90d"]])
+    except Exception as e:
+        print(f"⚠️ 1p returns not loaded: {e}")
+
+    if not parts:
+        return pd.DataFrame(columns=["asin", "returns_90d"])
+
+    return (
+        pd.concat(parts, ignore_index=True)
+          .groupby("asin", as_index=False)["returns_90d"].sum()
+    )
 
 
 def china_reorder_logic(
@@ -290,6 +419,50 @@ def china_reorder_logic(
     df["suggested_reorder"] = (
         df["target_stock"] - df["current_inventory"] - df["open_order_qty"] - df["pipeline_qty"]
     ).clip(lower=0)
+
+    # ============================================================
+    # ASIN MAP (from inventory) + ADDITIONAL DATA LOOKUPS
+    # ============================================================
+    # Reviews, margin, and returns are all keyed on ASIN. Build a
+    # model -> asin map from the brand's inventory snapshot, then merge
+    # the three extra datasets in.
+    asin_col = None
+    for cand in ["asin", "ASIN"]:
+        if cand in inv_df.columns:
+            asin_col = cand; break
+    if asin_col is not None:
+        model_asin = (
+            inv_df[["model", asin_col]]
+            .dropna()
+            .drop_duplicates(subset="model")
+            .rename(columns={asin_col: "asin"})
+        )
+        model_asin["asin"] = model_asin["asin"].astype(str).str.strip().str.upper()
+        df = df.merge(model_asin, on="model", how="left")
+    else:
+        df["asin"] = ""
+
+    # Reviews
+    rev = _load_reviews_by_asin()
+    df = df.merge(rev, on="asin", how="left")
+    df["avg_rating"]   = pd.to_numeric(df.get("avg_rating",   0), errors="coerce").fillna(0).round(1)
+    df["rating_count"] = pd.to_numeric(df.get("rating_count", 0), errors="coerce").fillna(0).astype(int)
+
+    # Margin
+    mar = _load_margin_by_asin()
+    df = df.merge(mar, on="asin", how="left")
+    df["net_margin_inr"] = pd.to_numeric(df.get("net_margin_inr", 0), errors="coerce").fillna(0).round(0).astype(int)
+    df["net_margin_pct"] = pd.to_numeric(df.get("net_margin_pct", 0), errors="coerce").fillna(0).round(2)
+
+    # Returns — qty over last 90 days; % against 12-week sales
+    ret = _load_returns_by_asin()
+    df = df.merge(ret, on="asin", how="left")
+    df["returns_90d"] = pd.to_numeric(df.get("returns_90d", 0), errors="coerce").fillna(0).astype(int)
+    df["returns_pct"] = df.apply(
+        lambda r: round((r["returns_90d"] / r["last_12w_sales"]) * 100, 2)
+                  if r.get("last_12w_sales", 0) > 0 else 0.0,
+        axis=1,
+    )
 
     # ============================================================
     # OPTIONAL REMARKS COLUMN

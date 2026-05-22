@@ -377,16 +377,21 @@ export default function ChinaReorder() {
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
-                {["model", "last_12w_sales", "avg_weekly_sales", "current_inventory", "open_order_qty", "pipeline_qty", "suggested_reorder"]
+                {["model", "last_12w_sales", "avg_weekly_sales", "current_inventory", "open_order_qty", "pipeline_qty", "suggested_reorder", "avg_rating", "rating_count", "returns_pct", "net_margin_inr", "net_margin_pct"]
                   .map((col) => (
                     <th
                       key={col}
                       onClick={() => toggleSort(col)}
-                      className="px-4 py-3 cursor-pointer"
+                      className="px-4 py-3 cursor-pointer whitespace-nowrap"
                     >
                       {{
-                        "open_order_qty": "PO Yet to Pickup",
-                        "pipeline_qty": "PO Picked Up",
+                        "open_order_qty":   "PO Yet to Pickup",
+                        "pipeline_qty":     "PO Picked Up",
+                        "avg_rating":       "Rating",
+                        "rating_count":     "# Ratings",
+                        "returns_pct":      "Returns %",
+                        "net_margin_inr":   "Net Margin ₹",
+                        "net_margin_pct":   "Net Margin %",
                       }[col] || col} {getSortArrow(col)}
                     </th>
                   ))}
@@ -397,6 +402,10 @@ export default function ChinaReorder() {
             <tbody>
               {paginatedData.map((row, i) => {
                 const status = getStatus(row);
+                const ratingsCount = Number(row.rating_count) || 0;
+                const returnsPct   = Number(row.returns_pct)  || 0;
+                const netMarginInr = Number(row.net_margin_inr) || 0;
+                const netMarginPct = Number(row.net_margin_pct) || 0;
 
                 return (
                   <tr
@@ -405,19 +414,32 @@ export default function ChinaReorder() {
                   >
                     <td className="px-4 py-3 font-medium">{row.model}</td>
                     <td className="px-4 py-3">{row.last_12w_sales}</td>
-                    <td className="px-4 py-3">
-                      {row.avg_weekly_sales?.toFixed(2)}
-                    </td>
+                    <td className="px-4 py-3">{row.avg_weekly_sales?.toFixed(2)}</td>
                     <td className="px-4 py-3">{row.current_inventory}</td>
-                    <td className="px-4 py-3 font-medium text-indigo-600">
-                      {row.open_order_qty || 0}
+                    <td className="px-4 py-3 font-medium text-indigo-600">{row.open_order_qty || 0}</td>
+                    <td className="px-4 py-3 font-medium text-purple-600">{row.pipeline_qty || 0}</td>
+                    <td className="px-4 py-3 font-semibold text-indigo-700">{Math.round(row.suggested_reorder)}</td>
+
+                    {/* Reviews */}
+                    <td className="px-4 py-3 tabular-nums">{row.avg_rating ? Number(row.avg_rating).toFixed(1) : "—"}</td>
+                    <td className="px-4 py-3 tabular-nums text-slate-600">{ratingsCount ? ratingsCount.toLocaleString() : "—"}</td>
+
+                    {/* Returns %  — colour amber if >10 %, red if >20 % */}
+                    <td className={`px-4 py-3 tabular-nums font-medium ${
+                      returnsPct >= 20 ? "text-red-700" :
+                      returnsPct >= 10 ? "text-amber-700" : "text-slate-700"
+                    }`}>
+                      {returnsPct ? `${returnsPct.toFixed(1)}%` : "—"}
                     </td>
-                    <td className="px-4 py-3 font-medium text-purple-600">
-                      {row.pipeline_qty || 0}
+
+                    {/* Net Margin */}
+                    <td className={`px-4 py-3 tabular-nums font-medium ${netMarginInr < 0 ? "text-red-700" : "text-slate-800"}`}>
+                      {netMarginInr ? `₹${netMarginInr.toLocaleString()}` : "—"}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-indigo-700">
-                      {Math.round(row.suggested_reorder)}
+                    <td className={`px-4 py-3 tabular-nums ${netMarginPct < 0 ? "text-red-700" : "text-slate-700"}`}>
+                      {netMarginPct ? `${netMarginPct.toFixed(2)}%` : "—"}
                     </td>
+
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 text-xs rounded ${getStatusBadge(status)}`}>
                         {status}
