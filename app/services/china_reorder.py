@@ -441,6 +441,7 @@ def china_reorder_logic(
         df = df.merge(model_asin, on="model", how="left")
     else:
         df["asin"] = ""
+    df["asin"] = df["asin"].fillna("").astype(str)
 
     # Reviews
     rev = _load_reviews_by_asin()
@@ -469,6 +470,18 @@ def china_reorder_logic(
     # ============================================================
 
     df["remarks"] = ""
+
+    # ============================================================
+    # JSON-SAFE SANITIZE — any lingering NaN / inf blows up json.dumps
+    # ============================================================
+    import numpy as np
+    df = df.replace([np.inf, -np.inf], 0)
+    # Numeric NaNs -> 0; object NaNs -> ""
+    for c in df.columns:
+        if pd.api.types.is_numeric_dtype(df[c]):
+            df[c] = df[c].fillna(0)
+        else:
+            df[c] = df[c].fillna("").astype(str)
 
     # ============================================================
     # RETURN JSON
