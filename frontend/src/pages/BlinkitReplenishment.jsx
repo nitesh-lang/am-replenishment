@@ -200,7 +200,9 @@ export default function BlinkitReplenishment() {
     { key: "state_required",       label: "Required", numeric: true, highlight: true },
     { key: "state_soh",            label: "State SOH", numeric: true },
     { key: "blinkit_soh",          label: "Total Blinkit SOH", numeric: true },
-    { key: "state_deficiency",     label: "Deficiency", numeric: true, highlight: "primary" },
+    { key: "state_deficiency",     label: "Deficiency", numeric: true, highlight: true },
+    { key: "ro_headroom",          label: "RO Headroom", numeric: true },
+    { key: "ro_accepted_qty",      label: "RO Accepted Qty", numeric: true, highlight: "primary" },
     { key: "ampm_inv",             label: "AMPM Inv", numeric: true },
   ];
 

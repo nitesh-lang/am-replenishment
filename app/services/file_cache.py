@@ -101,6 +101,8 @@ def preload():
         ("Blinkit/Sales/March 2026.xlsx", "Sales Report", 0),
         ("Blinkit/Sales/April 2026.xlsx", "Sales Report", 0),
         ("Blinkit/Sales/May 2026.xlsx",   "Sales Report", 0),
+        # Blinkit Bulk RO — per-warehouse acceptance caps (Max Inventory etc.)
+        ("Blinkit/RO/SELLER_BULK_SHIPMENT_INPUT.xlsx", "Bulk RO", 0),
         # Reorder Intelligence — margin sheets (one per brand)
         ("Additional/margin/Audio Array.xlsx",    "Margin Data", 0),
         ("Additional/margin/Nexlev.xlsx",         "Margin Data", 0),

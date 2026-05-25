@@ -289,6 +289,43 @@ def _warehouse_to_state(name: str) -> str | None:
     return None
 
 
+def _load_ro_headroom_by_state() -> pd.DataFrame:
+    """Per (Item ID, State) Blinkit acceptance headroom from the Bulk RO sheet.
+
+    Source: data/input/Blinkit/RO/SELLER_BULK_SHIPMENT_INPUT.xlsx (sheet "Bulk RO").
+    Headroom per warehouse line:
+        max(0, Max Inventory − Sellable Quantity − Incoming Quantity)
+    Rows with Lock Status == "LOCKED" are excluded (Blinkit won't accept
+    a shipment to that warehouse for that item right now).
+
+    Aggregates across warehouses in each customer state via the same
+    city → state mapping used elsewhere (Delhi + Haryana stays merged).
+    """
+    try:
+        df = get_excel_sheet("Blinkit/RO/SELLER_BULK_SHIPMENT_INPUT.xlsx", "Bulk RO")
+    except Exception as e:
+        print(f"⚠️ Bulk RO not loaded: {e}")
+        return pd.DataFrame(columns=["item_id", "customer_state", "ro_headroom"])
+
+    df = df.copy()
+    df["Item ID"] = pd.to_numeric(df["Item ID"], errors="coerce").astype("Int64")
+    for col in ["Max Inventory", "Sellable Quantity", "Incoming Quantity"]:
+        df[col] = pd.to_numeric(df.get(col, 0), errors="coerce").fillna(0)
+    df["_lock"] = df.get("Lock Status", "").astype(str).str.strip().str.upper()
+    df = df[df["_lock"] != "LOCKED"]
+
+    df["_headroom"] = (df["Max Inventory"] - df["Sellable Quantity"] - df["Incoming Quantity"]).clip(lower=0)
+
+    df["state"] = df["Warehouse Name"].apply(_warehouse_to_state)
+    df["state"] = df["state"].apply(_normalise_state)
+
+    return (
+        df.dropna(subset=["Item ID", "state"])
+          .groupby(["Item ID", "state"], as_index=False)["_headroom"].sum()
+          .rename(columns={"Item ID": "item_id", "state": "customer_state", "_headroom": "ro_headroom"})
+    )
+
+
 def _load_blinkit_soh_by_state() -> pd.DataFrame:
     """Per (Item ID, State) SOH summed across the warehouses sitting in that state.
 
@@ -400,6 +437,7 @@ def load_blinkit_statewise(
     soh_total = _load_blinkit_soh()             # per Item ID — total across warehouses
     soh_state = _load_blinkit_soh_by_state()    # per (Item ID, State) — exact
     ampm      = _load_ampm()                    # per Model
+    ro_headroom = _load_ro_headroom_by_state()  # per (Item ID, State) — Blinkit RO acceptance cap
     orders, window = _load_monthly_orders(from_week=from_week, to_week=to_week)
 
     if orders.empty:
@@ -443,6 +481,14 @@ def load_blinkit_statewise(
     df["state_required"]   = (df["state_avg_weekly"] * cover_weeks).astype(int)
 
     df["state_deficiency"] = (df["state_required"] - df["state_soh"]).clip(lower=0).astype(int)
+
+    # RO acceptance — how much of the state deficiency Blinkit will actually
+    # accept, capped by their per-warehouse Max Inventory headroom in that
+    # state. Only populated for rows where state_deficiency > 0.
+    df = df.merge(ro_headroom, on=["item_id", "customer_state"], how="left")
+    df["ro_headroom"] = df["ro_headroom"].fillna(0).astype(int)
+    df["ro_accepted_qty"] = df[["state_deficiency", "ro_headroom"]].min(axis=1).astype(int)
+    df.loc[df["state_deficiency"] <= 0, "ro_accepted_qty"] = 0
 
     # Demand-share % for display (no calculation depends on it)
     df["state_share_pct"] = (

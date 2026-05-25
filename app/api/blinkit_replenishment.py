@@ -133,6 +133,7 @@ def get_blinkit_replenishment_statewise(
             "state_sales", "state_share_pct", "state_avg_weekly",
             "state_required",
             "state_soh", "blinkit_soh", "state_deficiency",
+            "ro_headroom", "ro_accepted_qty",
             "ampm_inv",
             "total_sales_window",
             "asin", "expansion_level", "category_l1",
