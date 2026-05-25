@@ -193,6 +193,8 @@ export default function BlinkitReplenishment() {
     { key: "brand",                label: "Brand" },
     { key: "model",                label: "Model" },
     { key: "sku",                  label: "SKU" },
+    { key: "item_id",              label: "Item ID" },
+    { key: "product_id",           label: "Product ID" },
     { key: "customer_state",       label: "State", highlight: true },
     { key: "state_sales",          label: `Sales (${windowSize}w)`, numeric: true },
     { key: "state_share_pct",      label: "Share %", numeric: true },
