@@ -417,7 +417,7 @@ def calculate_final_allocation(
 
     if account.lower() == "nexlev":
         repl_path = "data/input/replenishment_master_nexlev.xlsx"
-        sheet_to_load = "Nexlev"
+        sheet_to_load = "nexlev"
     elif account.lower() == "viomi":
         repl_path = "data/input/replenishment_master_viomi.xlsx"
         sheet_to_load = "Viomi"
