@@ -92,8 +92,8 @@ def preload():
     sheet_files = [
         ("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA", 0),
         ("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM", 0),
-        ("replenishment_master_nexlev.xlsx", "Nexlev", 0),
-        ("replenishment_master_viomi.xlsx", "Viomi", 0),
+        ("replenishment_master_nexlev.xlsx", "nexlev", 0),
+        ("replenishment_master_viomi.xlsx",  "Viomi",  0),
         # Blinkit module
         ("Blinkit/Input/Nexlev Product Master.xlsx", "Blinkit", 0),
         ("Blinkit/Inventory/InventoryData.xlsx", "Stock On Hand", 2),
