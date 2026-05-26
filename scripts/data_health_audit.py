@@ -262,27 +262,70 @@ def check_account(acct: dict, master: dict) -> dict:
     return r
 
 
+def _ampm_lookup_from_snapshot(snap_path: Path) -> dict[str, float]:
+    """Build a case-insensitive Model -> total AMPM Qty dict from a snapshot file."""
+    try:
+        df = pd.read_excel(snap_path, engine="openpyxl")
+    except Exception:
+        return {}
+    if "Channel" not in df.columns or "Model" not in df.columns or "Qty" not in df.columns:
+        return {}
+    a = df[df["Channel"].astype(str).str.strip() == "AMPM"].copy()
+    a["Model"] = a["Model"].astype(str).str.strip()
+    a["Qty"] = pd.to_numeric(a["Qty"], errors="coerce").fillna(0)
+    return {k.strip().lower(): float(v) for k, v in a.groupby("Model")["Qty"].sum().to_dict().items()}
+
+
+def _ampm_lookup_misses(service_df: pd.DataFrame, snap_path: Path) -> list[tuple]:
+    """Models where service output shows AMPM=0 but the snapshot has stock.
+    Returns list of (SKU, Model, snapshot_qty)."""
+    ampm = _ampm_lookup_from_snapshot(snap_path)
+    if not ampm or service_df is None or service_df.empty:
+        return []
+    miss = []
+    for _, r in service_df.iterrows():
+        model = str(r.get("Model") or r.get("model") or "").strip()
+        out = pd.to_numeric(r.get("ampm_inventory"), errors="coerce")
+        out = 0.0 if pd.isna(out) else float(out)
+        if out == 0 and model:
+            k = model.lower()
+            if k in ampm and ampm[k] > 0:
+                miss.append((r.get("SKU") or r.get("sku"), model, int(ampm[k])))
+    return miss
+
+
 def run_services_smoke():
     """End-to-end service smoke test — does each replenishment service
-    return non-empty output with no NaN/inf in numeric columns?"""
+    return non-empty output with no NaN/inf, and is AMPM correctly populated
+    for every model that has stock in the snapshot?"""
     from app.services.file_cache import preload
     preload()
 
     out = []
 
-    # AA & WM use a different service from Nexlev/Viomi
+    snapshot_by_acct = {
+        "NEXLEV":          INPUT / "inventory_snapshot_nexlev.xlsx",
+        "VIOMI":           INPUT / "inventory_snapshot_nexlev.xlsx",
+        "AUDIO ARRAY":     INPUT / "Inventory_snapshot_audio_array.xlsx",
+        "WHITE MULBERRY":  INPUT / "Inventory_snapshot_WM.xlsx",
+    }
+
     from app.services.replenishment import calculate_replenishment
-    for acct in ["NEXLEV", "VIOMI"]:
+    for acct in ["NEXLEV", "VIOMI", "AUDIO ARRAY", "WHITE MULBERRY"]:
         try:
             df = calculate_replenishment(sales_window=12, replenish_weeks=8, account=acct)
             num = df.select_dtypes(include=[np.number])
+            misses = _ampm_lookup_misses(df, snapshot_by_acct[acct])
+            status = "WARN" if misses else "PASS"
             out.append({
                 "Service": f"replenishment ({acct})",
-                "Status": "PASS",
+                "Status": status,
                 "Rows": len(df),
                 "NaN_cells": int(num.isna().sum().sum()),
                 "Inf_cells": int(np.isinf(num).sum().sum()),
                 "AMPM_pop": int((df.get("ampm_inventory", pd.Series([0])) > 0).sum()),
+                "AMPM_lookup_misses": len(misses),
+                "_misses": misses[:30],
             })
         except Exception as e:
             out.append({"Service": f"replenishment ({acct})", "Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
@@ -308,7 +351,7 @@ def run_services_smoke():
     except Exception as e:
         out.append({"Service": "blinkit", "Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
 
-    return pd.DataFrame(out)
+    return out
 
 
 def main():
@@ -339,7 +382,19 @@ def main():
     # Service smoke test
     print(f"  ━━ SERVICE SMOKE TEST ━━")
     svc = run_services_smoke()
-    print(svc.fillna("").to_string(index=False))
+    # Keep _misses out of the printed/written table but surface them below
+    misses_by_service = {row["Service"]: row.pop("_misses", []) for row in svc}
+    svc_df = pd.DataFrame(svc)
+    print(svc_df.fillna("").to_string(index=False))
+
+    # Flag any AMPM lookup misses with detail
+    for name, m in misses_by_service.items():
+        if m:
+            print(f"\n  ⚠️  {name} — {len(m)} models with AMPM=0 in service but stock in snapshot:")
+            for sku, model, qty in m[:10]:
+                print(f"      SKU={sku}  Model={model}  snapshot_qty={qty}")
+            if len(m) > 10:
+                print(f"      ... +{len(m) - 10} more")
     print()
 
     # ─── Excel report ─────────────────────────────────────────────────
@@ -368,7 +423,18 @@ def main():
                 rows.append({"Check": k, "Status": status, "Detail": detail})
             pd.DataFrame(rows).to_excel(w, sheet_name=name, index=False)
 
-        svc.to_excel(w, sheet_name="Services", index=False)
+        svc_df.to_excel(w, sheet_name="Services", index=False)
+        # Detail sheet listing every AMPM lookup miss (if any)
+        miss_rows = []
+        for name, m in misses_by_service.items():
+            for sku, model, qty in m:
+                miss_rows.append({"Service": name, "SKU": sku, "Model": model, "AMPM_qty_in_snapshot": qty})
+        if miss_rows:
+            pd.DataFrame(miss_rows).to_excel(w, sheet_name="AMPM lookup misses", index=False)
+        else:
+            pd.DataFrame([{"note": "no AMPM lookup misses — all clean"}]).to_excel(
+                w, sheet_name="AMPM lookup misses", index=False
+            )
 
     print(f"  Report written: {out_path}")
 
