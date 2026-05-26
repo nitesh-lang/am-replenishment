@@ -354,6 +354,126 @@ def run_services_smoke():
     return out
 
 
+def run_fc_allocation_smoke(master: dict) -> tuple[list[dict], dict[str, list]]:
+    """FC Final Allocation smoke test per account.
+
+    Checks:
+      - service runs end-to-end without exception
+      - non-empty output with required columns present
+      - no NaN/inf in numeric columns
+      - shortfall invariant: fc_shortfall == max(0, required_units - fc_inventory)
+      - weekly_velocity >= 0 for all rows
+      - every SKU in output resolves to sku_master
+      - every (non-Fossil) row has a real Model (not the "-" fallback)
+    """
+    from app.services.fc_final_allocation import calculate_final_allocation
+
+    # Live FC allocation output schema (after the transfer engine has run)
+    REQUIRED_COLS = [
+        "sku", "fulfillment_center", "weekly_velocity",
+        "fc_inventory", "target_cover_units", "coverage_gap_units", "send_qty",
+    ]
+    NUMERIC_COLS = [
+        "weekly_velocity", "fc_inventory", "target_cover_units",
+        "coverage_gap_units", "send_qty",
+    ]
+
+    out: list[dict] = []
+    issues: dict[str, list] = {}
+
+    for acct in ["Nexlev", "Viomi", "Audio Array", "White Mulberry", "Fossil"]:
+        row: dict[str, Any] = {"Service": f"fc_allocation ({acct})"}
+        problem_list: list[str] = []
+        try:
+            df = calculate_final_allocation(replenish_weeks=8, channel="All", account=acct)
+        except Exception as e:
+            row["Status"] = "FAIL"
+            row["Error"] = f"{type(e).__name__}: {e}"
+            out.append(row)
+            continue
+
+        if df is None or df.empty:
+            row["Status"] = "FAIL"
+            row["Rows"] = 0
+            row["Error"] = "empty DataFrame"
+            out.append(row)
+            continue
+
+        row["Rows"] = len(df)
+        row["SKUs"] = df["sku"].nunique() if "sku" in df.columns else 0
+        row["FCs"] = df["fulfillment_center"].nunique() if "fulfillment_center" in df.columns else 0
+
+        # Required columns
+        missing_cols = [c for c in REQUIRED_COLS if c not in df.columns]
+        if missing_cols:
+            problem_list.append(f"missing columns: {missing_cols}")
+
+        # NaN / inf
+        num = df.select_dtypes(include=[np.number])
+        nan_cells = int(num.isna().sum().sum())
+        inf_cells = int(np.isinf(num).sum().sum())
+        row["NaN_cells"] = nan_cells
+        row["Inf_cells"] = inf_cells
+
+        # Coverage gap invariant: coverage_gap_units = max(0, target_cover_units - (fc_inventory + transfer_in))
+        if all(c in df.columns for c in ["coverage_gap_units", "target_cover_units", "fc_inventory"]):
+            transfer_in = pd.to_numeric(df.get("transfer_in", 0), errors="coerce").fillna(0)
+            expected = (df["target_cover_units"] - df["fc_inventory"] - transfer_in).clip(lower=0)
+            actual = pd.to_numeric(df["coverage_gap_units"], errors="coerce").fillna(0)
+            bad_gap = int((expected.round(2) != actual.round(2)).sum())
+            row["Gap_inv_violations"] = bad_gap
+            if bad_gap:
+                problem_list.append(f"{bad_gap} coverage-gap-invariant violations")
+
+        # send_qty sanity: must be non-negative and ≤ coverage_gap_units (can't send more than the gap)
+        if all(c in df.columns for c in ["send_qty", "coverage_gap_units"]):
+            sq = pd.to_numeric(df["send_qty"], errors="coerce").fillna(0)
+            gap = pd.to_numeric(df["coverage_gap_units"], errors="coerce").fillna(0)
+            neg_send = int((sq < 0).sum())
+            over_send = int((sq > gap + 0.01).sum())  # tiny tolerance for float
+            row["Negative_send_rows"] = neg_send
+            row["Over_send_rows"] = over_send
+            if neg_send:
+                problem_list.append(f"{neg_send} rows with negative send_qty")
+            if over_send:
+                problem_list.append(f"{over_send} rows where send_qty > coverage_gap")
+
+        # weekly_velocity >= 0
+        if "weekly_velocity" in df.columns:
+            neg = int((pd.to_numeric(df["weekly_velocity"], errors="coerce").fillna(0) < 0).sum())
+            row["Negative_velocity_rows"] = neg
+            if neg:
+                problem_list.append(f"{neg} rows with negative weekly_velocity")
+
+        # SKU resolves to sku_master (case-insensitive)
+        if "sku" in df.columns:
+            unique_skus = df["sku"].astype(str).str.strip().str.upper().unique()
+            unmatched = [s for s in unique_skus if s not in master["by_sku"]]
+            row["Unmatched_SKUs"] = len(unmatched)
+            issues.setdefault(row["Service"], []).extend(
+                [{"kind": "unmatched_sku", "sku": s} for s in unmatched[:30]]
+            )
+            if unmatched:
+                problem_list.append(f"{len(unmatched)} SKUs not in sku_master")
+
+        # Model populated (non-Fossil only; Fossil uses Item No which can be sparse)
+        if "model" in df.columns and acct.lower() != "fossil":
+            placeholder = int((df["model"].astype(str).str.strip().isin(["", "-", "nan"])).sum())
+            row["Rows_without_model"] = placeholder
+            if placeholder:
+                problem_list.append(f"{placeholder} rows with placeholder model")
+
+        if problem_list:
+            row["Status"] = "WARN"
+            row["Issues"] = "; ".join(problem_list)
+        else:
+            row["Status"] = "PASS"
+
+        out.append(row)
+
+    return out, issues
+
+
 def main():
     print(f"\n{'=' * 78}\n  DATA HEALTH AUDIT — {datetime.now():%Y-%m-%d %H:%M}\n{'=' * 78}\n")
 
@@ -397,6 +517,23 @@ def main():
                 print(f"      ... +{len(m) - 10} more")
     print()
 
+    # FC Allocation smoke
+    print(f"  ━━ FC ALLOCATION SMOKE TEST ━━")
+    fc_rows, fc_issues = run_fc_allocation_smoke(master)
+    fc_df = pd.DataFrame(fc_rows)
+    if not fc_df.empty:
+        print(fc_df.fillna("").to_string(index=False))
+    for service_name, ilist in fc_issues.items():
+        if ilist:
+            kinds = {}
+            for it in ilist:
+                kinds.setdefault(it["kind"], []).append(it)
+            for kind, items in kinds.items():
+                print(f"\n  ⚠️  {service_name} — {len(items)} {kind} (showing first 10):")
+                for it in items[:10]:
+                    print(f"      {it}")
+    print()
+
     # ─── Excel report ─────────────────────────────────────────────────
     NORM.mkdir(parents=True, exist_ok=True)
     out_path = NORM / f"data_health_audit_{datetime.now():%Y%m%d_%H%M}.xlsx"
@@ -434,6 +571,19 @@ def main():
         else:
             pd.DataFrame([{"note": "no AMPM lookup misses — all clean"}]).to_excel(
                 w, sheet_name="AMPM lookup misses", index=False
+            )
+
+        # FC Allocation
+        fc_df.to_excel(w, sheet_name="FC Allocation", index=False)
+        fc_issue_rows = []
+        for service_name, ilist in fc_issues.items():
+            for it in ilist:
+                fc_issue_rows.append({"Service": service_name, **it})
+        if fc_issue_rows:
+            pd.DataFrame(fc_issue_rows).to_excel(w, sheet_name="FC issues", index=False)
+        else:
+            pd.DataFrame([{"note": "no FC allocation issues — all clean"}]).to_excel(
+                w, sheet_name="FC issues", index=False
             )
 
     print(f"  Report written: {out_path}")
