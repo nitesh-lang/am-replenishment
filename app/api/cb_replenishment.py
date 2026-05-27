@@ -117,7 +117,7 @@ def get_cb_replenishment(
 
         # Get last 12 available weeks for frontend dropdowns
         try:
-            raw_sales = pd.read_csv("data/input/weekly_sales_snapshot - CB Replenishment.csv")
+            raw_sales = pd.read_csv("data/input/weekly_sales_snapshot.csv")
             raw_sales["week_num"] = raw_sales["week"].astype(str).str.extract(r"(\d+)")[0].pipe(pd.to_numeric, errors="coerce")
             available_weeks = sorted(
                 raw_sales["week_num"].dropna().unique().tolist(),

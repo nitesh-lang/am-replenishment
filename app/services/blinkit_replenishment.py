@@ -11,7 +11,7 @@ ACTIVE_EXPANSION_LEVELS = {"Level 1", "Level 2", "Level 4", "Trial"}
 AMPM_CHANNEL = "AMPM"
 
 # Source weekly sales file + channel value used by the China Reorder export
-BLINKIT_SALES_FILE    = "weekly_sales_snapshot - ChinaReorder.csv"
+BLINKIT_SALES_FILE    = "weekly_sales_snapshot.csv"
 BLINKIT_SALES_CHANNEL = "Blinkit Sales"
 
 # Default sales window size in weeks (used when from/to not specified)

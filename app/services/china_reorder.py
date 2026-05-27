@@ -157,7 +157,7 @@ def china_reorder_logic(
         "..",
         "data",
         "input",
-        "weekly_sales_snapshot - ChinaReorder.csv"
+        "weekly_sales_snapshot.csv"
     )
 
     # ============================================================
@@ -186,14 +186,14 @@ def china_reorder_logic(
         inv_file
     )
 
-    print("READING SALES (cached): weekly_sales_snapshot - ChinaReorder.csv")
+    print("READING SALES (cached): weekly_sales_snapshot.csv")
     print("READING INVENTORY (cached):", inv_file)
 
     # ============================================================
     # LOAD FILES
     # ============================================================
 
-    sales_df = get("weekly_sales_snapshot - ChinaReorder.csv")
+    sales_df = get("weekly_sales_snapshot.csv")
     inv_df = get(inv_file)
 
     # ============================================================

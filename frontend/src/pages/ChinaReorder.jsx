@@ -540,7 +540,7 @@ function ChinaReorderSOPModal({ open, onClose }) {
             <h3 className="text-sm font-semibold text-slate-900 mb-2">Where the numbers come from</h3>
             <table className="w-full text-xs border-collapse">
               <tbody>
-                <tr><td className="border border-slate-300 px-2 py-1 font-medium w-44">Sales</td><td className="border border-slate-300 px-2 py-1"><code>weekly_sales_snapshot - ChinaReorder.csv</code> · filtered to the selected brand</td></tr>
+                <tr><td className="border border-slate-300 px-2 py-1 font-medium w-44">Sales</td><td className="border border-slate-300 px-2 py-1"><code>weekly_sales_snapshot.csv</code> · filtered to the selected brand</td></tr>
                 <tr><td className="border border-slate-300 px-2 py-1 font-medium">Nexlev inventory</td><td className="border border-slate-300 px-2 py-1"><code>inventory_snapshot_nexlev.xlsx</code></td></tr>
                 <tr><td className="border border-slate-300 px-2 py-1 font-medium">Audio Array inventory</td><td className="border border-slate-300 px-2 py-1"><code>Inventory_snapshot_audio_array.xlsx</code></td></tr>
                 <tr><td className="border border-slate-300 px-2 py-1 font-medium">Tonor inventory</td><td className="border border-slate-300 px-2 py-1"><code>Inventory_snapshot_tonor.xlsx</code></td></tr>

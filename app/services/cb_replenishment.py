@@ -18,7 +18,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # =========================
 
         master_df = get("CB Replenishment_Master.xlsx")
-        sales_df = get("weekly_sales_snapshot - CB Replenishment.csv")
+        sales_df = get("weekly_sales_snapshot.csv")
         inv_audio_df = get("Inventory_snapshot_audio_array.xlsx")
         inv_tonor_df = get("Inventory_snapshot_tonor.xlsx")
         po_df = get("In_Transit_PO data.xlsx")

@@ -35,7 +35,7 @@ def get_china_reorder(
     # available_weeks: union across all selected brands (sales file is shared)
     try:
         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        sales_path = os.path.join(BASE_DIR, "..", "data", "input", "weekly_sales_snapshot - ChinaReorder.csv")
+        sales_path = os.path.join(BASE_DIR, "..", "data", "input", "weekly_sales_snapshot.csv")
         raw = pd.read_csv(sales_path)
         raw.columns = raw.columns.str.strip().str.lower()
         raw["brand"] = raw["brand"].astype(str).str.strip().str.lower()

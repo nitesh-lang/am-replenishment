@@ -72,9 +72,9 @@ AM_Replenishment/
 │   ├── inventory_amazon_{nexlev,viomi,audio_array,WM}.csv
 │   ├── inventory_ledger_{nexlev,viomi,Audio Array,WM}.csv
 │   ├── fba_shipments_{nexlev,viomi,Audio Array,WM}.csv
-│   ├── weekly_sales_snapshot.csv               # main sales — Amazon + 1p Sales channels
-│   ├── weekly_sales_snapshot - ChinaReorder.csv  # has more channels incl. Blinkit Sales
-│   ├── weekly_sales_snapshot - CB Replenishment.csv
+│   ├── weekly_sales_snapshot.csv               # SINGLE sales source for all consumers
+│                                                 # (CB, China Reorder, Blinkit, Replenishment).
+│                                                 # Has all channels incl. Blinkit/Blinkit Sales.
 │   ├── In_Transit_PO data.xlsx · In_Transit_PO data - WM.xlsx
 │   ├── Fossil Replenishment/                    # Fossil-specific subfolder
 │   └── Blinkit/                                  # Blinkit-specific subfolder
@@ -99,7 +99,7 @@ They share the same data files but slice/aggregate differently.
 |---|---|---|---|---|
 | **Replenishment** | `/replenishment` | Nexlev / Viomi / Audio Array / White Mulberry | weekly_sales_snapshot + Inventory_snapshot_* + inventory_amazon_* | Per-model send qty, AMPM/Amazon SOH, risky/overstock flags |
 | **FC Allocation** | `/fc-allocation` | same 4 + Fossil | fba_shipments_* + inventory_ledger_* + per-account master | Per-(SKU × FC) send qty, transfer-in, fill_pct, IXD governance |
-| **Reorder Intelligence** | `/china-reorder` | multi-brand (multi-select Nexlev / Audio Array / Tonor / WM) | weekly_sales_snapshot - ChinaReorder.csv + Inventory_snapshot_* | Per-model 12-week sales, suggested reorder qty |
+| **Reorder Intelligence** | `/china-reorder` | multi-brand (multi-select Nexlev / Audio Array / Tonor / WM) | weekly_sales_snapshot.csv + Inventory_snapshot_* | Per-model 12-week sales, suggested reorder qty |
 | **CB Replenishment** | `/cb-replenishment` | Audio Array + Tonor (CB = "China Buy") | CB Replenishment_Master.xlsx + In_Transit_PO data.xlsx + AA/Tonor snapshots | Per-model PO requirement with working-week save flow |
 | **Clicktech (WM)** | `/wm-replenishment` | White Mulberry only | AA & WM Replenishment.xlsx (WM sheet) + Inventory_snapshot_WM.xlsx + In_Transit_PO data - WM.xlsx | Per-model PO requirement |
 | **Fossil Replenishment** | `/fossil-replenishment` | Fossil only | Fossil Replenishment/* subfolder | Detail page, separate cluster math |
@@ -358,7 +358,7 @@ reason.
 | 2026-05-18 | Removed China Reorder Working module (unused) | (deletion) |
 | 2026-05-19 | Blinkit module: Per-SKU + Per-State views, toggle in UI | `blinkit_replenishment.*` |
 | 2026-05-19 | Blinkit State: fixed `/12` velocity divisor; Delhi+Haryana merged | `blinkit_replenishment.py` |
-| 2026-05-19 | Blinkit sales source: `weekly_sales_snapshot - ChinaReorder.csv` (channel = "Blinkit Sales") for Per-SKU; monthly Excels for Per-State | `blinkit_replenishment.py` |
+| 2026-05-19 | Blinkit sales source: `weekly_sales_snapshot.csv` (channel = "Blinkit Sales") for Per-SKU; monthly Excels for Per-State | `blinkit_replenishment.py` |
 | 2026-05-20 | China Reorder renamed to "Reorder Intelligence"; multi-brand selection | `china_reorder.py` |
 | 2026-05-21 | AMPM lookup: **exact Model match, case-insensitive only**. No SKU layer, no fallback | `replenishment.py`, `fc_final_allocation.py`, `cb_replenishment.py`, `wm_replenishment.py` |
 | 2026-05-21 | sku_master alignment is **owned at the data layer** — code does not auto-canonicalise (user chose not to add a Layer 2 normaliser) | n/a |
@@ -380,7 +380,7 @@ Things the team is aware of but hasn't fixed:
   `FBK79598`, `FBK79569`, `FBK79685`, `FBA79991`). These are operational /
   pipeline SKUs — decision pending whether to add to sku_master.
 - **`weekly_sales_snapshot.csv` has zero Blinkit-channel rows** — code is
-  wired to use `weekly_sales_snapshot - ChinaReorder.csv` (channel
+  wired to use `weekly_sales_snapshot.csv` (channel
   `"Blinkit Sales"`) instead.
 - **Old DB password lives forever in git history** (commits `67a19b4` /
   `6e84574`). It's invalidated by the rotation, so it's just history
