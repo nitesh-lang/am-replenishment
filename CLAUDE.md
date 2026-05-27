@@ -362,6 +362,9 @@ reason.
 | 2026-05-20 | China Reorder renamed to "Reorder Intelligence"; multi-brand selection | `china_reorder.py` |
 | 2026-05-21 | AMPM lookup: **exact Model match, case-insensitive only**. No SKU layer, no fallback | `replenishment.py`, `fc_final_allocation.py`, `cb_replenishment.py`, `wm_replenishment.py` |
 | 2026-05-21 | sku_master alignment is **owned at the data layer** — code does not auto-canonicalise (user chose not to add a Layer 2 normaliser) | n/a |
+| 2026-05-26 | Single sales file: all consumers read `weekly_sales_snapshot.csv`; `- CB Replenishment.csv` / `- ChinaReorder.csv` retired | `bf529eb` |
+| 2026-05-26 | `scripts/data_health_audit.py` is the canonical weekly audit — covers file integrity, master alignment, AMPM lookup misses, FC allocation invariants | `8337586` / `99342f8` / `6826de7` |
+| 2026-05-27 | **Zero-inconsistency standard locked in** across replenishment / ClickTech / CB / Reorder / Blinkit / Fossil — every weekly refresh runs the audit, any new finding outside the documented known-exceptions list is a regression | see §12 |
 
 Commits land on `main`; there is no `develop` branch or PR review process.
 Co-author on commits is `Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
@@ -370,21 +373,37 @@ Co-author on commits is `Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
 
 ## 12. Known issues / data-hygiene watchlist
 
-Things the team is aware of but hasn't fixed:
+**Replenishment-module hygiene standard (2026-05-27 onward):** sku_master
+and every replenishment master sheet (AA / WM / CB / Nexlev / Viomi) are
+**fully aligned**. The active 12-week sales window in
+`weekly_sales_snapshot.csv` is clean. Going forward, any audit FAIL/WARN
+outside the documented known-exceptions list below is a regression to
+triage immediately — not background noise.
 
-- **Audio Array model naming drift** — variants like `AM-W47 Wired` vs
-  warehouse `AM-W47 WIRED` were case-only and resolve via case-insens. But
-  `AH-50 Ear Cushion` (master) vs `AH-50` (inv) is real semantic drift —
-  needs data alignment.
-- **Viomi has ~6 SKUs the sku_master doesn't carry** (`FBP79350`, `FBA79779`,
-  `FBK79598`, `FBK79569`, `FBK79685`, `FBA79991`). These are operational /
-  pipeline SKUs — decision pending whether to add to sku_master.
-- **`weekly_sales_snapshot.csv` has zero Blinkit-channel rows** — code is
-  wired to use `weekly_sales_snapshot.csv` (channel
-  `"Blinkit Sales"`) instead.
+Run `python scripts/data_health_audit.py` after every weekly data
+refresh. Expected output: PASS across all 5 accounts for SKU + Model
+checks, zero AMPM lookup misses in any live service, zero math-invariant
+violations in FC allocation.
+
+**Documented known exceptions (don't action unless user flags):**
+
+- **Fossil's ~32 SKUs not in `sku_master`** — Fossil has a separate catalog;
+  unmatched is expected. Repl sheet also has no `Model` column (uses
+  `Item No`); audit handles this with SKIP.
+- **Nexlev FC: ~17 spare-parts SKUs** with FC inventory but not on the
+  Nexlev replenishment master (CAP-05, ST-03, mops, HEPA filters, set-of-spares).
+  Show as `model="-"` in FC UI. Policy call pending: filter at FC layer
+  or add to repl sheet.
+- **Audio Array FC: `FBM79783`** (AM-C47 USB Microphone Kit - Boomarm)
+  has 9 units of FC inventory but missing from AA repl sheet. Likely a
+  bundle/kit variant that needs adding.
+- **WM FC**: `FBA79667 / FBA79175 / FBA76765 / FBA79668` in sku_master
+  but missing from WM repl sheet (3 have stock).
+- **Spelling drift in weeks 4–9** (`AH-60 RD` vs `AH-60-RD`) is outside
+  the active 12-week window, so it doesn't affect any calculation.
+  Cleanup at leisure.
 - **Old DB password lives forever in git history** (commits `67a19b4` /
-  `6e84574`). It's invalidated by the rotation, so it's just history
-  noise — not a live risk.
+  `6e84574`). Invalidated by rotation; history noise, not live risk.
 - **`requirements.txt` is unpinned** — fresh installs could pull newer
   versions and break. Worth pinning when there's time.
 - **No Alembic** — schema changes are ad-hoc `CREATE TABLE IF NOT EXISTS`
