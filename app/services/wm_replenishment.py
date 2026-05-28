@@ -117,16 +117,19 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         # =========================
         # OPEN PO / IN TRANSIT
         # =========================
+        # Case-insensitive Delivery Status — source file inconsistently uses
+        # "Open po" / "In-Transit" casing (see cb_replenishment.py for context).
+        po_df["_status"] = po_df["delivery status"].astype(str).str.strip().str.lower()
 
         open_po = (
-            po_df[po_df["delivery status"] == "Open PO"]
+            po_df[po_df["_status"] == "open po"]
             .groupby("model", as_index=False)["accepted quantity"]
             .sum()
             .rename(columns={"accepted quantity": "open_po"})
         )
 
         in_transit = (
-            po_df[po_df["delivery status"] == "In-Transit"]
+            po_df[po_df["_status"] == "in-transit"]
             .groupby("model", as_index=False)["accepted quantity"]
             .sum()
             .rename(columns={"accepted quantity": "in_transit"})

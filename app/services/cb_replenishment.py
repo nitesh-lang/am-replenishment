@@ -177,15 +177,19 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         po_df["model_join"] = po_df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
 
+        # Case-insensitive Delivery Status — the source file uses "Open po"
+        # (lowercase) and "In-Transit" inconsistently. Normalise before filter.
+        po_df["_status"] = po_df["delivery status"].astype(str).str.strip().str.lower()
+
         open_po = (
-            po_df[po_df["delivery status"] == "Open PO"]
+            po_df[po_df["_status"] == "open po"]
             .groupby("model_join", as_index=False)["accepted quantity"]
             .sum()
             .rename(columns={"accepted quantity": "open_po"})
         )
 
         in_transit = (
-            po_df[po_df["delivery status"] == "In-Transit"]
+            po_df[po_df["_status"] == "in-transit"]
             .groupby("model_join", as_index=False)["accepted quantity"]
             .sum()
             .rename(columns={"accepted quantity": "in_transit"})
