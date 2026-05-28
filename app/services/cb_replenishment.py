@@ -163,14 +163,20 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
             # =========================
             # CHINA IN-TRANSIT (Pipeline channel from inventory snapshots)
+            # Pipeline records can have missing ASIN/SKU (stock arriving from
+            # China before final IDs are assigned), so we cascade through
+            # ASIN -> SKU -> model_join to make sure no quantity is dropped.
             # =========================
             pipeline_raw = inventory_df[
                 inventory_df["channel"].str.strip().str.lower() == "pipeline"
             ].copy()
 
+            pipe_by_model = pd.DataFrame(columns=["model_join", "china_in_transit_model"])
+
             if "qty" in pipeline_raw.columns and len(pipeline_raw) > 0:
                 pipeline_raw["_asin"] = pipeline_raw.get("asin", "").astype(str).str.strip().str.upper()
                 pipeline_raw["_sku"]  = pipeline_raw.get("sku", "").astype(str).str.strip().str.upper()
+                pipeline_raw["model_join"] = pipeline_raw["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
                 pipe_by_asin = (
                     pipeline_raw[pipeline_raw["_asin"] != ""]
                     .groupby("_asin", as_index=False)["qty"].sum()
@@ -180,6 +186,10 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
                     pipeline_raw[pipeline_raw["_sku"] != ""]
                     .groupby("_sku", as_index=False)["qty"].sum()
                     .rename(columns={"qty": "china_in_transit_sku", "_sku": "sku"})
+                )
+                pipe_by_model = (
+                    pipeline_raw.groupby("model_join", as_index=False)["qty"].sum()
+                    .rename(columns={"qty": "china_in_transit_model"})
                 )
                 print("PIPELINE (China In-Transit) ROWS FOUND:", len(pipeline_raw))
 
@@ -277,10 +287,19 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         df = df.merge(ampm_by_sku,  left_on="_sku",  right_on="sku",  how="left", suffixes=("", "_ampm_s"))
         df["ampm_inventory"] = df["ampm_inventory_asin"].fillna(df["ampm_inventory_sku"]).fillna(0)
 
-        # --- China in-transit (Pipeline) — ASIN primary, SKU fallback ---
-        df = df.merge(pipe_by_asin, left_on="_asin", right_on="asin", how="left", suffixes=("", "_pipe_a"))
-        df = df.merge(pipe_by_sku,  left_on="_sku",  right_on="sku",  how="left", suffixes=("", "_pipe_s"))
-        df["china_in_transit"] = df["china_in_transit_asin"].fillna(df["china_in_transit_sku"]).fillna(0)
+        # --- China in-transit (Pipeline) — ASIN -> SKU -> Model cascade ---
+        # Model fallback included because Pipeline records frequently arrive
+        # from China without final ASIN/SKU yet; without this, those units
+        # disappear from the deficiency calc.
+        df = df.merge(pipe_by_asin,  left_on="_asin", right_on="asin", how="left", suffixes=("", "_pipe_a"))
+        df = df.merge(pipe_by_sku,   left_on="_sku",  right_on="sku",  how="left", suffixes=("", "_pipe_s"))
+        df = df.merge(pipe_by_model, on="model_join", how="left")
+        df["china_in_transit"] = (
+            df["china_in_transit_asin"]
+            .fillna(df["china_in_transit_sku"])
+            .fillna(df["china_in_transit_model"])
+            .fillna(0)
+        )
 
         # --- PO (Open + In-Transit) — ASIN primary, SKU fallback ---
         df = df.merge(open_po_by_asin,    on="_asin", how="left")
@@ -296,7 +315,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             "cb_3m_sales_sku", "cb_3m_sales_model",
             "cambium_3m_sales_sku", "cambium_3m_sales_model",
             "ampm_inventory_asin", "ampm_inventory_sku",
-            "china_in_transit_asin", "china_in_transit_sku",
+            "china_in_transit_asin", "china_in_transit_sku", "china_in_transit_model",
             "open_po_asin", "open_po_sku",
             "in_transit_asin", "in_transit_sku",
             "asin_ampm_a", "sku_ampm_s", "asin_pipe_a", "sku_pipe_s",
