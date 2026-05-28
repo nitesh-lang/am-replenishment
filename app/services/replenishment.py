@@ -296,19 +296,34 @@ def calculate_replenishment(
         sales_n = sales_n[sales_n["channel"].isin(["Amazon", "1p Sales"])]
 
     # ---------------------------------------------
-    # AGGREGATE SALES
+    # AGGREGATE SALES — ASIN primary, SKU fallback, Model fallback
     # ---------------------------------------------
-    velocity = (
-        sales_n
+    # ASIN-keyed attribution avoids the duplicate-Model double-count when
+    # a master has multiple SKUs sharing one Model (AA: 12 such pairs;
+    # Nexlev/Viomi: 1 pair on SW-01). Each cascade level is EXCLUSIVE —
+    # contains only sales rows that couldn't be attributed by a higher
+    # priority key. Guarantees every sales row counts exactly once.
+    sales_n = sales_n.copy()
+    sales_n["_asin"] = sales_n.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    sales_n["_sku"]  = sales_n.get("sku", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+
+    velocity_by_asin = (
+        sales_n[sales_n["_asin"] != ""]
+        .groupby("_asin", as_index=False)
+        .agg(total_units_sold_asin=("units_sold", "sum"))
+    )
+    velocity_by_sku = (
+        sales_n[(sales_n["_asin"] == "") & (sales_n["_sku"] != "")]
+        .groupby("_sku", as_index=False)
+        .agg(total_units_sold_sku=("units_sold", "sum"))
+    )
+    velocity_by_model = (
+        sales_n[(sales_n["_asin"] == "") & (sales_n["_sku"] == "")]
         .groupby("model", as_index=False)
-        .agg(total_units_sold=("units_sold", "sum"))
+        .agg(total_units_sold_model=("units_sold", "sum"))
     )
 
-    actual_weeks = sales_n["week"].nunique()
-
-    velocity["sales_velocity"] = (
-        velocity["total_units_sold"] / max(actual_weeks, 1)
-    ).round(0)
+    actual_weeks = max(sales_n["week"].nunique(), 1)
 
     # ---------------------------------------------
     # MERGE WITH MASTER
@@ -319,7 +334,24 @@ def calculate_replenishment(
         print("WARNING: 'Status' column NOT found in master. Available:", master.columns.tolist())
         master["listing_status"] = "-"
 
-    df = master.merge(velocity, left_on="Model", right_on="model", how="left")
+    df = master.copy()
+    df["_asin"] = df["ASIN"].astype(str).str.strip().str.upper()
+    df["_sku"]  = df["SKU"].astype(str).str.strip().str.upper() if "SKU" in df.columns else ""
+
+    df = df.merge(velocity_by_asin,  left_on="_asin", right_on="_asin", how="left")
+    df = df.merge(velocity_by_sku,   left_on="_sku",  right_on="_sku",  how="left")
+    df = df.merge(velocity_by_model, left_on="Model", right_on="model", how="left")
+    df["total_units_sold"] = (
+        df["total_units_sold_asin"]
+        .fillna(df["total_units_sold_sku"])
+        .fillna(df["total_units_sold_model"])
+        .fillna(0)
+    )
+    df["sales_velocity"] = (df["total_units_sold"] / actual_weeks).round(0)
+    df = df.drop(columns=[c for c in [
+        "total_units_sold_asin", "total_units_sold_sku", "total_units_sold_model",
+        "_asin", "_sku",
+    ] if c in df.columns])
 
     df = df.merge(amazon_inventory, left_on="ASIN", right_on="asin", how="left")
 
