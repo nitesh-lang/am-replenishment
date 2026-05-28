@@ -181,16 +181,21 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # (lowercase) and "In-Transit" inconsistently. Normalise before filter.
         po_df["_status"] = po_df["delivery status"].astype(str).str.strip().str.lower()
 
+        # Aggregate PO by SKU (unique per master row) instead of model_join
+        # to avoid double-counting when master has multiple SKUs sharing the
+        # same Model name (e.g. AM-S1 has 2 rows: same Model, different SKUs).
+        po_df["_sku"] = po_df["sku"].astype(str).str.strip().str.upper()
+
         open_po = (
             po_df[po_df["_status"] == "open po"]
-            .groupby("model_join", as_index=False)["accepted quantity"]
+            .groupby("_sku", as_index=False)["accepted quantity"]
             .sum()
             .rename(columns={"accepted quantity": "open_po"})
         )
 
         in_transit = (
             po_df[po_df["_status"] == "in-transit"]
-            .groupby("model_join", as_index=False)["accepted quantity"]
+            .groupby("_sku", as_index=False)["accepted quantity"]
             .sum()
             .rename(columns={"accepted quantity": "in_transit"})
         )
@@ -215,8 +220,12 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             df = df.merge(inventory_df[["brand","model_join","final_cb_qty"]], on=["brand","model_join"], how="left")
         df = df.merge(ampm_inventory_df[["brand","model_join","ampm_inventory"]], on=["brand","model_join"], how="left")
         df = df.merge(china_in_transit_df, on="model_join", how="left")
-        df = df.merge(open_po, on="model_join", how="left")
-        df = df.merge(in_transit, on="model_join", how="left")
+        # Join PO data by SKU (not model_join) so duplicate-Model master rows
+        # don't double-count Open PO / In-Transit.
+        df["_sku"] = df["sku"].astype(str).str.strip().str.upper()
+        df = df.merge(open_po,    on="_sku", how="left")
+        df = df.merge(in_transit, on="_sku", how="left")
+        df = df.drop(columns=["_sku"])
 
         df = df.fillna(0)
         df["remarks"] = ""
