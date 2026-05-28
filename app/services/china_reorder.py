@@ -237,7 +237,42 @@ def china_reorder_logic(
         .str.upper()
     )
 
-    # Normalize sales model names — strip variant suffixes like "ETC-07-WH" → "ETC-07"
+    # ============================================================
+    # CANONICALIZE MODEL VIA sku_master (ASIN -> SKU -> string-normalize)
+    # ============================================================
+    # Build (ASIN -> Model) and (SKU -> Model) maps from sku_master filtered
+    # to this brand. This handles two real problems at once:
+    #   1. Spelling drift in sales data (e.g. "AH-60 RD" vs "AH-60-RD") —
+    #      both ASINs map to the same canonical Model.
+    #   2. Bundle / variant aliases — different SKUs sharing one Model are
+    #      attributed to the same Model row in the output.
+    # Sales / inventory rows without ASIN+SKU fall back to the existing
+    # string-based normalization (case + variant suffix + bundle strip).
+    asin_to_model: dict[str, str] = {}
+    sku_to_model:  dict[str, str] = {}
+    try:
+        sm = get("sku_master.xlsx")
+        sm = sm.dropna(subset=["FBA SKU", "Model"]).copy()
+        sm.columns = sm.columns.str.strip()
+        sm["_brand"] = sm["Brand"].astype(str).str.strip().str.lower()
+        sm["_model_canon"] = sm["Model"].astype(str).str.strip().str.upper()
+        sm["_asin"] = sm["ASIN"].astype(str).str.strip().str.upper()
+        sm["_sku"]  = sm["FBA SKU"].astype(str).str.strip().str.upper()
+        sm_b = sm[sm["_brand"] == brand_clean]
+        # Drop dup keys — keep first occurrence
+        asin_to_model = dict(zip(
+            sm_b[sm_b["_asin"].str.fullmatch(r"[A-Z0-9]+", na=False)].drop_duplicates("_asin")["_asin"],
+            sm_b[sm_b["_asin"].str.fullmatch(r"[A-Z0-9]+", na=False)].drop_duplicates("_asin")["_model_canon"],
+        ))
+        sku_to_model = dict(zip(
+            sm_b[sm_b["_sku"] != ""].drop_duplicates("_sku")["_sku"],
+            sm_b[sm_b["_sku"] != ""].drop_duplicates("_sku")["_model_canon"],
+        ))
+    except Exception as e:
+        print(f"⚠️  sku_master load failed ({brand_clean}): {e}")
+
+    # String-normalize fallback — case + variant + bundle stripping against
+    # the brand's inventory models.
     inv_models = set(inv_df["model"].unique())
     def normalize_model(m):
         m = str(m).strip().upper()
@@ -252,7 +287,29 @@ def china_reorder_logic(
         if base in inv_models:
             return base
         return m
-    sales_df["model"] = sales_df["model"].apply(normalize_model)
+
+    def canonical_model(asin: str, sku: str, model: str) -> str:
+        if asin and asin in asin_to_model:
+            return asin_to_model[asin]
+        if sku and sku in sku_to_model:
+            return sku_to_model[sku]
+        return normalize_model(model)
+
+    # Apply cascade to sales
+    sales_df["_asin"] = sales_df.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    sales_df["_sku"]  = sales_df.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    sales_df["model"] = [
+        canonical_model(a, s, m)
+        for a, s, m in zip(sales_df["_asin"], sales_df["_sku"], sales_df["model"])
+    ]
+
+    # Apply same cascade to inventory (so the model groupby below aligns)
+    inv_df["_asin"] = inv_df.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    inv_df["_sku"]  = inv_df.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    inv_df["model"] = [
+        canonical_model(a, s, m)
+        for a, s, m in zip(inv_df["_asin"], inv_df["_sku"], inv_df["model"])
+    ]
 
     inv_df["channel"] = (
         inv_df["channel"]

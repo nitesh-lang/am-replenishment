@@ -69,71 +69,89 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
             window_size = 12
 
         # =========================
-        # 1P SALES
+        # SALES — ASIN primary, SKU fallback, Model fallback (exclusive)
         # =========================
+        # Same cascade standard as CB and replenishment.py — ASIN-keyed
+        # attribution avoids the duplicate-Model double-count and remains
+        # resilient if WM master ever picks up duplicate Models.
+        sales_df["_asin"] = sales_df.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+        sales_df["_sku"]  = sales_df.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
 
-        cb_sales = (
-            sales_df[sales_df["channel"] == "1p Sales"]
-            .groupby("model", as_index=False)["units_sold"]
-            .sum()
-            .rename(columns={"units_sold": "cb_3m_sales"})
-        )
+        def _sales_agg(channel: str, level: str, out_name: str) -> pd.DataFrame:
+            sub = sales_df[sales_df["channel"] == channel]
+            if level == "asin":
+                sub = sub[sub["_asin"] != ""]
+                return sub.groupby("_asin", as_index=False)["units_sold"].sum().rename(columns={"units_sold": out_name})
+            if level == "sku":
+                sub = sub[(sub["_asin"] == "") & (sub["_sku"] != "")]
+                return sub.groupby("_sku", as_index=False)["units_sold"].sum().rename(columns={"units_sold": out_name})
+            sub = sub[(sub["_asin"] == "") & (sub["_sku"] == "")]
+            return sub.groupby("model", as_index=False)["units_sold"].sum().rename(columns={"units_sold": out_name})
+
+        cb_sales_by_asin     = _sales_agg("1p Sales", "asin",  "cb_3m_sales_asin")
+        cb_sales_by_sku      = _sales_agg("1p Sales", "sku",   "cb_3m_sales_sku")
+        cb_sales_by_model    = _sales_agg("1p Sales", "model", "cb_3m_sales_model")
+        amazon_sales_by_asin = _sales_agg("Amazon",   "asin",  "amazon_3m_sales_asin")
+        amazon_sales_by_sku  = _sales_agg("Amazon",   "sku",   "amazon_3m_sales_sku")
+        amazon_sales_by_model= _sales_agg("Amazon",   "model", "amazon_3m_sales_model")
 
         # =========================
-        # AMAZON SALES
+        # AMPM INVENTORY — ASIN primary, SKU fallback
         # =========================
-
-        amazon_sales = (
-            sales_df[sales_df["channel"] == "Amazon"]
-            .groupby("model", as_index=False)["units_sold"]
-            .sum()
-            .rename(columns={"units_sold": "amazon_3m_sales"})
-        )
-
-        # =========================
-        # AMPM INVENTORY
-        # =========================
-
-        ampm_inventory_df = pd.DataFrame(columns=["model", "ampm_inventory"])
+        ampm_by_asin = pd.DataFrame(columns=["_asin", "ampm_inventory_asin"])
+        ampm_by_sku  = pd.DataFrame(columns=["_sku",  "ampm_inventory_sku"])
 
         if "channel" in inv_df.columns:
             print("WM UNIQUE CHANNELS:", inv_df["channel"].str.strip().unique().tolist())
 
-            # AMPM aggregated by lowercase Model (case-insensitive key)
-            ampm_filter = inv_df[inv_df["channel"].str.strip().str.lower() == "ampm"].copy()
-            ampm_filter["_key"] = ampm_filter["model"].astype(str).str.strip().str.lower()
-            ampm_raw = ampm_filter.groupby("_key", as_index=False).sum(numeric_only=True)
-
+            ampm_raw = inv_df[inv_df["channel"].str.strip().str.lower() == "ampm"].copy()
             if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
-                ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["_key", "ampm_inventory"]]
+                ampm_raw["_asin"] = ampm_raw.get("asin", "").astype(str).str.strip().str.upper()
+                ampm_raw["_sku"]  = ampm_raw.get("sku",  "").astype(str).str.strip().str.upper()
+                ampm_by_asin = (
+                    ampm_raw[ampm_raw["_asin"] != ""].groupby("_asin", as_index=False)["qty"].sum()
+                    .rename(columns={"qty": "ampm_inventory_asin"})
+                )
+                ampm_by_sku = (
+                    ampm_raw[ampm_raw["_sku"] != ""].groupby("_sku", as_index=False)["qty"].sum()
+                    .rename(columns={"qty": "ampm_inventory_sku"})
+                )
 
             inv_df = inv_df[inv_df["channel"].str.strip().str.lower() == "1p"]
 
-        inv_df = inv_df.groupby("model", as_index=False).sum(numeric_only=True)
-
-        if "qty" in inv_df.columns:
-            inv_df = inv_df.rename(columns={"qty": "final_cb_qty"})
-
-        # =========================
-        # OPEN PO / IN TRANSIT
-        # =========================
-        # Case-insensitive Delivery Status — source file inconsistently uses
-        # "Open po" / "In-Transit" casing (see cb_replenishment.py for context).
-        po_df["_status"] = po_df["delivery status"].astype(str).str.strip().str.lower()
-
-        open_po = (
-            po_df[po_df["_status"] == "open po"]
-            .groupby("model", as_index=False)["accepted quantity"]
-            .sum()
-            .rename(columns={"accepted quantity": "open_po"})
+        # 1P inventory aggregated by ASIN (preferred) or model fallback
+        inv_df["_asin"] = inv_df.get("asin", "").astype(str).str.strip().str.upper()
+        inv_1p_by_asin = (
+            inv_df[inv_df["_asin"] != ""].groupby("_asin", as_index=False)["qty"].sum()
+            .rename(columns={"qty": "final_cb_qty_asin"}) if "qty" in inv_df.columns else
+            pd.DataFrame(columns=["_asin", "final_cb_qty_asin"])
+        )
+        inv_1p_by_model = (
+            inv_df.groupby("model", as_index=False)["qty"].sum()
+            .rename(columns={"qty": "final_cb_qty_model"}) if "qty" in inv_df.columns else
+            pd.DataFrame(columns=["model", "final_cb_qty_model"])
         )
 
-        in_transit = (
-            po_df[po_df["_status"] == "in-transit"]
-            .groupby("model", as_index=False)["accepted quantity"]
-            .sum()
-            .rename(columns={"accepted quantity": "in_transit"})
-        )
+        # =========================
+        # OPEN PO / IN TRANSIT — ASIN primary, SKU fallback
+        # =========================
+        po_df["_status"] = po_df["delivery status"].astype(str).str.strip().str.lower() if "delivery status" in po_df.columns else ""
+        po_df["_asin"]   = po_df.get("asin", "").astype(str).str.strip().str.upper()
+        po_df["_sku"]    = po_df.get("sku",  "").astype(str).str.strip().str.upper()
+
+        def _po_agg(status: str, key: str, name: str) -> pd.DataFrame:
+            sub = po_df[po_df["_status"] == status]
+            if key not in sub.columns or sub.empty:
+                return pd.DataFrame(columns=[key, name])
+            return (
+                sub[sub[key] != ""].groupby(key, as_index=False)["accepted quantity"].sum()
+                .rename(columns={"accepted quantity": name})
+            )
+
+        open_po_by_asin    = _po_agg("open po",    "_asin", "open_po_asin")
+        open_po_by_sku     = _po_agg("open po",    "_sku",  "open_po_sku")
+        in_transit_by_asin = _po_agg("in-transit", "_asin", "in_transit_asin")
+        in_transit_by_sku  = _po_agg("in-transit", "_sku",  "in_transit_sku")
 
         # =========================
         # RENAME MASTER COLUMNS
@@ -145,18 +163,49 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         })
 
         # =========================
-        # MERGE
+        # MERGE — ASIN → SKU → Model cascade on master
         # =========================
+        df = master_df.copy()
+        df["_asin"] = df["asin"].astype(str).str.strip().str.upper() if "asin" in df.columns else ""
+        df["_sku"]  = df["sku"].astype(str).str.strip().str.upper()  if "sku"  in df.columns else ""
 
-        df = master_df.merge(cb_sales, on="model", how="left")
-        df = df.merge(amazon_sales, on="model", how="left")
-        df = df.merge(inv_df[["model", "final_cb_qty"]], on="model", how="left")
-        # Case-insensitive AMPM merge: build a lowercase key on df, drop after merge
-        df["_key"] = df["model"].astype(str).str.strip().str.lower()
-        df = df.merge(ampm_inventory_df, on="_key", how="left")
-        df = df.drop(columns=["_key"])
-        df = df.merge(open_po, on="model", how="left")
-        df = df.merge(in_transit, on="model", how="left")
+        # Sales
+        df = df.merge(cb_sales_by_asin,     left_on="_asin", right_on="_asin", how="left")
+        df = df.merge(cb_sales_by_sku,      left_on="_sku",  right_on="_sku",  how="left")
+        df = df.merge(cb_sales_by_model,    on="model", how="left")
+        df = df.merge(amazon_sales_by_asin, left_on="_asin", right_on="_asin", how="left")
+        df = df.merge(amazon_sales_by_sku,  left_on="_sku",  right_on="_sku",  how="left")
+        df = df.merge(amazon_sales_by_model,on="model", how="left")
+        df["cb_3m_sales"]     = df["cb_3m_sales_asin"].fillna(df["cb_3m_sales_sku"]).fillna(df["cb_3m_sales_model"]).fillna(0)
+        df["amazon_3m_sales"] = df["amazon_3m_sales_asin"].fillna(df["amazon_3m_sales_sku"]).fillna(df["amazon_3m_sales_model"]).fillna(0)
+
+        # 1P inventory
+        df = df.merge(inv_1p_by_asin,  left_on="_asin", right_on="_asin", how="left")
+        df = df.merge(inv_1p_by_model, on="model", how="left")
+        df["final_cb_qty"] = df["final_cb_qty_asin"].fillna(df["final_cb_qty_model"]).fillna(0)
+
+        # AMPM
+        df = df.merge(ampm_by_asin, left_on="_asin", right_on="_asin", how="left")
+        df = df.merge(ampm_by_sku,  left_on="_sku",  right_on="_sku",  how="left")
+        df["ampm_inventory"] = df["ampm_inventory_asin"].fillna(df["ampm_inventory_sku"]).fillna(0)
+
+        # PO
+        df = df.merge(open_po_by_asin,    left_on="_asin", right_on="_asin", how="left")
+        df = df.merge(open_po_by_sku,     left_on="_sku",  right_on="_sku",  how="left")
+        df = df.merge(in_transit_by_asin, left_on="_asin", right_on="_asin", how="left")
+        df = df.merge(in_transit_by_sku,  left_on="_sku",  right_on="_sku",  how="left")
+        df["open_po"]    = df["open_po_asin"].fillna(df["open_po_sku"]).fillna(0)
+        df["in_transit"] = df["in_transit_asin"].fillna(df["in_transit_sku"]).fillna(0)
+
+        df = df.drop(columns=[c for c in [
+            "_asin", "_sku",
+            "cb_3m_sales_asin", "cb_3m_sales_sku", "cb_3m_sales_model",
+            "amazon_3m_sales_asin", "amazon_3m_sales_sku", "amazon_3m_sales_model",
+            "final_cb_qty_asin", "final_cb_qty_model",
+            "ampm_inventory_asin", "ampm_inventory_sku",
+            "open_po_asin", "open_po_sku",
+            "in_transit_asin", "in_transit_sku",
+        ] if c in df.columns])
 
         df = df.fillna(0)
 
