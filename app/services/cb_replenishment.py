@@ -181,24 +181,28 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # (lowercase) and "In-Transit" inconsistently. Normalise before filter.
         po_df["_status"] = po_df["delivery status"].astype(str).str.strip().str.lower()
 
-        # Aggregate PO by SKU (unique per master row) instead of model_join
-        # to avoid double-counting when master has multiple SKUs sharing the
-        # same Model name (e.g. AM-S1 has 2 rows: same Model, different SKUs).
-        po_df["_sku"] = po_df["sku"].astype(str).str.strip().str.upper()
+        # Aggregate PO by ASIN (primary) and SKU (fallback) — joining by Model
+        # double-counts when master has multiple SKUs sharing the same Model
+        # name (e.g. AM-S1 has 2 rows: same Model, different SKUs/ASINs).
+        # ASIN is preferred because it's the Amazon-level product identity
+        # and is unique across the CB master.
+        po_df["_asin"] = po_df["asin"].astype(str).str.strip().str.upper()
+        po_df["_sku"]  = po_df["sku"].astype(str).str.strip().str.upper()
 
-        open_po = (
-            po_df[po_df["_status"] == "open po"]
-            .groupby("_sku", as_index=False)["accepted quantity"]
-            .sum()
-            .rename(columns={"accepted quantity": "open_po"})
-        )
+        def _agg(po_subset: pd.DataFrame, key: str, name: str) -> pd.DataFrame:
+            return (
+                po_subset.groupby(key, as_index=False)["accepted quantity"]
+                .sum()
+                .rename(columns={"accepted quantity": name})
+            )
 
-        in_transit = (
-            po_df[po_df["_status"] == "in-transit"]
-            .groupby("_sku", as_index=False)["accepted quantity"]
-            .sum()
-            .rename(columns={"accepted quantity": "in_transit"})
-        )
+        open_po_subset    = po_df[po_df["_status"] == "open po"]
+        in_transit_subset = po_df[po_df["_status"] == "in-transit"]
+
+        open_po_by_asin    = _agg(open_po_subset,    "_asin", "open_po_asin")
+        open_po_by_sku     = _agg(open_po_subset,    "_sku",  "open_po_sku")
+        in_transit_by_asin = _agg(in_transit_subset, "_asin", "in_transit_asin")
+        in_transit_by_sku  = _agg(in_transit_subset, "_sku",  "in_transit_sku")
 
         # =========================
         # MERGE
@@ -220,12 +224,23 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             df = df.merge(inventory_df[["brand","model_join","final_cb_qty"]], on=["brand","model_join"], how="left")
         df = df.merge(ampm_inventory_df[["brand","model_join","ampm_inventory"]], on=["brand","model_join"], how="left")
         df = df.merge(china_in_transit_df, on="model_join", how="left")
-        # Join PO data by SKU (not model_join) so duplicate-Model master rows
-        # don't double-count Open PO / In-Transit.
-        df["_sku"] = df["sku"].astype(str).str.strip().str.upper()
-        df = df.merge(open_po,    on="_sku", how="left")
-        df = df.merge(in_transit, on="_sku", how="left")
-        df = df.drop(columns=["_sku"])
+        # PO data: ASIN-primary, SKU-fallback. ASIN is unique across the CB
+        # master and avoids the double-count from duplicate-Model rows; SKU
+        # fallback covers the edge case of a master row whose ASIN doesn't
+        # match anything in the PO file but whose SKU does.
+        df["_asin"] = df["asin"].astype(str).str.strip().str.upper()
+        df["_sku"]  = df["sku"].astype(str).str.strip().str.upper()
+        df = df.merge(open_po_by_asin,    on="_asin", how="left")
+        df = df.merge(open_po_by_sku,     on="_sku",  how="left")
+        df = df.merge(in_transit_by_asin, on="_asin", how="left")
+        df = df.merge(in_transit_by_sku,  on="_sku",  how="left")
+        df["open_po"]    = df["open_po_asin"].fillna(df["open_po_sku"]).fillna(0)
+        df["in_transit"] = df["in_transit_asin"].fillna(df["in_transit_sku"]).fillna(0)
+        df = df.drop(columns=[
+            "_asin", "_sku",
+            "open_po_asin", "open_po_sku",
+            "in_transit_asin", "in_transit_sku",
+        ])
 
         df = df.fillna(0)
         df["remarks"] = ""
