@@ -93,41 +93,38 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             window_size = max(len(selected_weeks), 1)
 
         # =========================
-        # CB SALES (1p Sales channel) — per-SKU aggregation to avoid
-        # duplicate-Model double-count. Sales file has SKU but no ASIN, so
-        # we attribute by SKU; fall back to model_join for sales rows whose
-        # SKU is empty (~1% of file rows).
+        # CB SALES (1p Sales channel) — ASIN primary, SKU fallback, model
+        # fallback. weekly_sales_snapshot.csv now ships with an `asin` column
+        # (added 2026-05-28). ASIN-keyed attribution avoids the duplicate-
+        # Model double-count on the 22 CB master rows where 2 SKUs share a
+        # Model name.
         # =========================
-        sales_df["_sku"] = sales_df["sku"].astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+        sales_df["_asin"] = sales_df.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+        sales_df["_sku"]  = sales_df["sku"].astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
 
-        cb_sales_by_sku = (
-            sales_df[(sales_df["channel"] == "1p Sales") & (sales_df["_sku"] != "")]
-            .groupby("_sku", as_index=False)["units_sold"]
-            .sum()
-            .rename(columns={"units_sold": "cb_3m_sales_sku"})
-        )
-        cb_sales_by_model = (
-            sales_df[(sales_df["channel"] == "1p Sales") & (sales_df["_sku"] == "")]
-            .groupby(["brand", "model_join"], as_index=False)["units_sold"]
-            .sum()
-            .rename(columns={"units_sold": "cb_3m_sales_model"})
-        )
+        # Each cascade level contains only the sales rows that couldn't be
+        # attributed by a higher-priority key — guarantees each sales row is
+        # counted exactly once across the cascade.
+        def _sales_agg(channel: str, level: str, out_name: str) -> pd.DataFrame:
+            sub = sales_df[sales_df["channel"] == channel]
+            if level == "asin":
+                sub = sub[sub["_asin"] != ""]
+                grouped = sub.groupby("_asin", as_index=False)["units_sold"].sum()
+            elif level == "sku":
+                sub = sub[(sub["_asin"] == "") & (sub["_sku"] != "")]
+                grouped = sub.groupby("_sku", as_index=False)["units_sold"].sum()
+            else:  # model_join — only rows that have neither ASIN nor SKU
+                sub = sub[(sub["_asin"] == "") & (sub["_sku"] == "")]
+                grouped = sub.groupby(["brand", "model_join"], as_index=False)["units_sold"].sum()
+            return grouped.rename(columns={"units_sold": out_name})
 
-        # =========================
-        # CAMBIUM SALES (Amazon channel) — same per-SKU pattern
-        # =========================
-        cambium_sales_by_sku = (
-            sales_df[(sales_df["channel"] == "Amazon") & (sales_df["_sku"] != "")]
-            .groupby("_sku", as_index=False)["units_sold"]
-            .sum()
-            .rename(columns={"units_sold": "cambium_3m_sales_sku"})
-        )
-        cambium_sales_by_model = (
-            sales_df[(sales_df["channel"] == "Amazon") & (sales_df["_sku"] == "")]
-            .groupby(["brand", "model_join"], as_index=False)["units_sold"]
-            .sum()
-            .rename(columns={"units_sold": "cambium_3m_sales_model"})
-        )
+        cb_sales_by_asin    = _sales_agg("1p Sales", "asin",       "cb_3m_sales_asin")
+        cb_sales_by_sku     = _sales_agg("1p Sales", "sku",        "cb_3m_sales_sku")
+        cb_sales_by_model   = _sales_agg("1p Sales", "model_join", "cb_3m_sales_model")
+
+        cambium_sales_by_asin  = _sales_agg("Amazon", "asin",       "cambium_3m_sales_asin")
+        cambium_sales_by_sku   = _sales_agg("Amazon", "sku",        "cambium_3m_sales_sku")
+        cambium_sales_by_model = _sales_agg("Amazon", "model_join", "cambium_3m_sales_model")
 
         # =========================
         # INVENTORY — AMPM + China Pipeline aggregated by ASIN (primary)
@@ -268,13 +265,19 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         df["_asin"] = df["asin"].astype(str).str.strip().str.upper()
         df["_sku"]  = df["sku"].astype(str).str.strip().str.upper()
 
-        # --- Sales (1p + Amazon) — SKU-primary, model_join fallback ---
-        df = df.merge(cb_sales_by_sku,       left_on="_sku", right_on="_sku", how="left")
-        df = df.merge(cb_sales_by_model,     on=["brand","model_join"], how="left")
-        df = df.merge(cambium_sales_by_sku,  left_on="_sku", right_on="_sku", how="left")
-        df = df.merge(cambium_sales_by_model, on=["brand","model_join"], how="left")
-        df["cb_3m_sales"]      = df["cb_3m_sales_sku"].fillna(df["cb_3m_sales_model"]).fillna(0)
-        df["cambium_3m_sales"] = df["cambium_3m_sales_sku"].fillna(df["cambium_3m_sales_model"]).fillna(0)
+        # --- Sales (1p + Amazon) — ASIN primary, SKU fallback, model fallback ---
+        df = df.merge(cb_sales_by_asin,       left_on="_asin", right_on="_asin", how="left")
+        df = df.merge(cb_sales_by_sku,        left_on="_sku",  right_on="_sku",  how="left")
+        df = df.merge(cb_sales_by_model,      on=["brand", "model_join"], how="left")
+        df = df.merge(cambium_sales_by_asin,  left_on="_asin", right_on="_asin", how="left")
+        df = df.merge(cambium_sales_by_sku,   left_on="_sku",  right_on="_sku",  how="left")
+        df = df.merge(cambium_sales_by_model, on=["brand", "model_join"], how="left")
+        df["cb_3m_sales"] = (
+            df["cb_3m_sales_asin"].fillna(df["cb_3m_sales_sku"]).fillna(df["cb_3m_sales_model"]).fillna(0)
+        )
+        df["cambium_3m_sales"] = (
+            df["cambium_3m_sales_asin"].fillna(df["cambium_3m_sales_sku"]).fillna(df["cambium_3m_sales_model"]).fillna(0)
+        )
 
         # --- 1P inventory — already ASIN-keyed (or brand+model fallback) ---
         if "asin" in inventory_df.columns:
@@ -312,8 +315,8 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # Drop helper / lookup columns
         df = df.drop(columns=[c for c in [
             "_asin", "_sku",
-            "cb_3m_sales_sku", "cb_3m_sales_model",
-            "cambium_3m_sales_sku", "cambium_3m_sales_model",
+            "cb_3m_sales_asin", "cb_3m_sales_sku", "cb_3m_sales_model",
+            "cambium_3m_sales_asin", "cambium_3m_sales_sku", "cambium_3m_sales_model",
             "ampm_inventory_asin", "ampm_inventory_sku",
             "china_in_transit_asin", "china_in_transit_sku", "china_in_transit_model",
             "open_po_asin", "open_po_sku",
