@@ -46,6 +46,7 @@ def preload():
     # Plain files (CSV + Excel)
     files = [
         "CB Replenishment_Master.xlsx",
+        "sku_master.xlsx",
         "Inventory_snapshot_audio_array.xlsx",
         "Inventory_snapshot_tonor.xlsx",
         "In_Transit_PO data.xlsx",

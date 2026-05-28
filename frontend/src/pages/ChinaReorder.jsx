@@ -377,7 +377,7 @@ export default function ChinaReorder() {
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-xs uppercase sticky top-0">
               <tr>
-                {["model", "last_12w_sales", "avg_weekly_sales", "current_inventory", "open_order_qty", "pipeline_qty", "suggested_reorder", "avg_rating", "rating_count", "returns_pct", "net_margin_inr", "net_margin_pct"]
+                {["model", "sku", "asin", "last_12w_sales", "avg_weekly_sales", "current_inventory", "open_order_qty", "pipeline_qty", "suggested_reorder", "avg_rating", "rating_count", "returns_pct", "net_margin_inr", "net_margin_pct"]
                   .map((col) => (
                     <th
                       key={col}
@@ -385,6 +385,8 @@ export default function ChinaReorder() {
                       className="px-4 py-3 cursor-pointer whitespace-nowrap"
                     >
                       {{
+                        "sku":              "SKU",
+                        "asin":             "ASIN",
                         "open_order_qty":   "PO Yet to Pickup",
                         "pipeline_qty":     "PO Picked Up",
                         "avg_rating":       "Rating",
@@ -413,6 +415,8 @@ export default function ChinaReorder() {
                     className={`${getRowColor(status)} hover:bg-slate-50`}
                   >
                     <td className="px-4 py-3 font-medium">{row.model}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.sku || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.asin || "—"}</td>
                     <td className="px-4 py-3">{row.last_12w_sales}</td>
                     <td className="px-4 py-3">{row.avg_weekly_sales?.toFixed(2)}</td>
                     <td className="px-4 py-3">{row.current_inventory}</td>

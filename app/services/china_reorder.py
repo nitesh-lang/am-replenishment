@@ -421,11 +421,34 @@ def china_reorder_logic(
     ).clip(lower=0)
 
     # ============================================================
-    # ASIN MAP (from inventory) + ADDITIONAL DATA LOOKUPS
+    # SKU + ASIN from sku_master (canonical source of truth)
     # ============================================================
-    # Reviews, margin, and returns are all keyed on ASIN. Build a
-    # model -> asin map from the brand's inventory snapshot, then merge
-    # the three extra datasets in.
+    # Build a (brand, model_key) -> (FBA SKU, ASIN) lookup from sku_master,
+    # then merge onto the aggregated reorder rows. sku_master is the single
+    # source aligned across CB / AA / WM / Nexlev / Viomi replenishment masters
+    # (see CLAUDE.md §12). Falls back to inventory-snapshot ASIN if a row
+    # doesn't resolve.
+    try:
+        sku_master = get("sku_master.xlsx")
+        sku_master.columns = sku_master.columns.str.strip()
+        sku_master = sku_master.dropna(subset=["FBA SKU", "Model"]).copy()
+        sku_master["_brand"] = sku_master["Brand"].astype(str).str.strip().str.lower()
+        sku_master["_model"] = sku_master["Model"].astype(str).str.strip().str.upper()
+        sku_master["sku"] = sku_master["FBA SKU"].astype(str).str.strip().str.upper()
+        sku_master["asin_master"] = sku_master["ASIN"].astype(str).str.strip().str.upper()
+        master_lookup = (
+            sku_master[sku_master["_brand"] == brand_clean]
+            [["_model", "sku", "asin_master"]]
+            .drop_duplicates(subset="_model", keep="first")
+            .rename(columns={"_model": "model"})
+        )
+        df = df.merge(master_lookup, on="model", how="left")
+    except Exception as e:
+        print(f"⚠️  sku_master lookup failed for {brand_clean}: {e}")
+        df["sku"] = ""
+        df["asin_master"] = ""
+
+    # Fallback ASIN from inventory snapshot if sku_master didn't resolve
     asin_col = None
     for cand in ["asin", "ASIN"]:
         if cand in inv_df.columns:
@@ -435,13 +458,18 @@ def china_reorder_logic(
             inv_df[["model", asin_col]]
             .dropna()
             .drop_duplicates(subset="model")
-            .rename(columns={asin_col: "asin"})
+            .rename(columns={asin_col: "asin_inv"})
         )
-        model_asin["asin"] = model_asin["asin"].astype(str).str.strip().str.upper()
+        model_asin["asin_inv"] = model_asin["asin_inv"].astype(str).str.strip().str.upper()
         df = df.merge(model_asin, on="model", how="left")
     else:
-        df["asin"] = ""
-    df["asin"] = df["asin"].fillna("").astype(str)
+        df["asin_inv"] = ""
+
+    # Prefer master ASIN; fallback to inventory ASIN
+    df["asin"] = df["asin_master"].fillna("").astype(str)
+    df.loc[df["asin"].isin(["", "NAN"]), "asin"] = df.loc[df["asin"].isin(["", "NAN"]), "asin_inv"].fillna("").astype(str)
+    df["sku"] = df["sku"].fillna("").astype(str)
+    df.drop(columns=[c for c in ["asin_master", "asin_inv"] if c in df.columns], inplace=True)
 
     # Reviews
     rev = _load_reviews_by_asin()
