@@ -93,45 +93,73 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             window_size = max(len(selected_weeks), 1)
 
         # =========================
-        # CB SALES
+        # CB SALES (1p Sales channel) — per-SKU aggregation to avoid
+        # duplicate-Model double-count. Sales file has SKU but no ASIN, so
+        # we attribute by SKU; fall back to model_join for sales rows whose
+        # SKU is empty (~1% of file rows).
         # =========================
+        sales_df["_sku"] = sales_df["sku"].astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
 
-        cb_sales = (
-            sales_df[sales_df["channel"] == "1p Sales"]
+        cb_sales_by_sku = (
+            sales_df[(sales_df["channel"] == "1p Sales") & (sales_df["_sku"] != "")]
+            .groupby("_sku", as_index=False)["units_sold"]
+            .sum()
+            .rename(columns={"units_sold": "cb_3m_sales_sku"})
+        )
+        cb_sales_by_model = (
+            sales_df[(sales_df["channel"] == "1p Sales") & (sales_df["_sku"] == "")]
             .groupby(["brand", "model_join"], as_index=False)["units_sold"]
             .sum()
-            .rename(columns={"units_sold": "cb_3m_sales"})
+            .rename(columns={"units_sold": "cb_3m_sales_model"})
         )
 
         # =========================
-        # CAMBIUM SALES
+        # CAMBIUM SALES (Amazon channel) — same per-SKU pattern
         # =========================
-
-        cambium_sales = (
-            sales_df[sales_df["channel"] == "Amazon"]
+        cambium_sales_by_sku = (
+            sales_df[(sales_df["channel"] == "Amazon") & (sales_df["_sku"] != "")]
+            .groupby("_sku", as_index=False)["units_sold"]
+            .sum()
+            .rename(columns={"units_sold": "cambium_3m_sales_sku"})
+        )
+        cambium_sales_by_model = (
+            sales_df[(sales_df["channel"] == "Amazon") & (sales_df["_sku"] == "")]
             .groupby(["brand", "model_join"], as_index=False)["units_sold"]
             .sum()
-            .rename(columns={"units_sold": "cambium_3m_sales"})
+            .rename(columns={"units_sold": "cambium_3m_sales_model"})
         )
 
         # =========================
-        # INVENTORY
+        # INVENTORY — AMPM + China Pipeline aggregated by ASIN (primary)
+        # and SKU (fallback). Avoids duplicate-Model double-count: the same
+        # AMPM pool was being attributed to every master row sharing a Model.
         # =========================
-        ampm_inventory_df = pd.DataFrame(columns=["brand", "model_join", "ampm_inventory"])
-        china_in_transit_df = pd.DataFrame(columns=["model_join", "china_in_transit"])
+        ampm_by_asin   = pd.DataFrame(columns=["asin", "ampm_inventory_asin"])
+        ampm_by_sku    = pd.DataFrame(columns=["sku",  "ampm_inventory_sku"])
+        pipe_by_asin   = pd.DataFrame(columns=["asin", "china_in_transit_asin"])
+        pipe_by_sku    = pd.DataFrame(columns=["sku",  "china_in_transit_sku"])
 
         if "channel" in inventory_df.columns:
             print("UNIQUE CHANNELS IN INVENTORY:", inventory_df["channel"].str.strip().unique().tolist())
 
             ampm_raw = inventory_df[
                 inventory_df["channel"].str.strip().str.lower() == "ampm"
-            ].groupby(["brand", "model"], as_index=False).sum(numeric_only=True)
-
+            ].copy()
             print("AMPM ROWS FOUND:", len(ampm_raw))
 
             if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
-                ampm_raw["model_join"] = ampm_raw["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
-                ampm_inventory_df = ampm_raw.rename(columns={"qty": "ampm_inventory"})[["brand", "model_join", "ampm_inventory"]]
+                ampm_raw["_asin"] = ampm_raw.get("asin", "").astype(str).str.strip().str.upper()
+                ampm_raw["_sku"]  = ampm_raw.get("sku", "").astype(str).str.strip().str.upper()
+                ampm_by_asin = (
+                    ampm_raw[ampm_raw["_asin"] != ""]
+                    .groupby("_asin", as_index=False)["qty"].sum()
+                    .rename(columns={"qty": "ampm_inventory_asin", "_asin": "asin"})
+                )
+                ampm_by_sku = (
+                    ampm_raw[ampm_raw["_sku"] != ""]
+                    .groupby("_sku", as_index=False)["qty"].sum()
+                    .rename(columns={"qty": "ampm_inventory_sku", "_sku": "sku"})
+                )
 
             # =========================
             # CHINA IN-TRANSIT (Pipeline channel from inventory snapshots)
@@ -141,13 +169,19 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             ].copy()
 
             if "qty" in pipeline_raw.columns and len(pipeline_raw) > 0:
-                pipeline_raw["model_join"] = pipeline_raw["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
-                china_in_transit_df = (
-                    pipeline_raw.groupby("model_join", as_index=False)["qty"]
-                    .sum()
-                    .rename(columns={"qty": "china_in_transit"})
+                pipeline_raw["_asin"] = pipeline_raw.get("asin", "").astype(str).str.strip().str.upper()
+                pipeline_raw["_sku"]  = pipeline_raw.get("sku", "").astype(str).str.strip().str.upper()
+                pipe_by_asin = (
+                    pipeline_raw[pipeline_raw["_asin"] != ""]
+                    .groupby("_asin", as_index=False)["qty"].sum()
+                    .rename(columns={"qty": "china_in_transit_asin", "_asin": "asin"})
                 )
-                print("PIPELINE (China In-Transit) ROWS FOUND:", len(china_in_transit_df))
+                pipe_by_sku = (
+                    pipeline_raw[pipeline_raw["_sku"] != ""]
+                    .groupby("_sku", as_index=False)["qty"].sum()
+                    .rename(columns={"qty": "china_in_transit_sku", "_sku": "sku"})
+                )
+                print("PIPELINE (China In-Transit) ROWS FOUND:", len(pipeline_raw))
 
             inventory_df = inventory_df[
                 inventory_df["channel"].str.lower() == "1p"
@@ -216,31 +250,57 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         if "china in transit" in master_df.columns:
             master_df = master_df.drop(columns=["china in transit"])
 
-        df = master_df.merge(cb_sales, on=["brand","model_join"], how="left")
-        df = df.merge(cambium_sales, on=["brand","model_join"], how="left")
+        df = master_df.copy()
+
+        # Build ASIN/SKU keys on the master once — reused by every merge below.
+        # The standard across CB is ASIN primary, SKU fallback (then model_join
+        # for sales-rows-without-SKU only).
+        df["_asin"] = df["asin"].astype(str).str.strip().str.upper()
+        df["_sku"]  = df["sku"].astype(str).str.strip().str.upper()
+
+        # --- Sales (1p + Amazon) — SKU-primary, model_join fallback ---
+        df = df.merge(cb_sales_by_sku,       left_on="_sku", right_on="_sku", how="left")
+        df = df.merge(cb_sales_by_model,     on=["brand","model_join"], how="left")
+        df = df.merge(cambium_sales_by_sku,  left_on="_sku", right_on="_sku", how="left")
+        df = df.merge(cambium_sales_by_model, on=["brand","model_join"], how="left")
+        df["cb_3m_sales"]      = df["cb_3m_sales_sku"].fillna(df["cb_3m_sales_model"]).fillna(0)
+        df["cambium_3m_sales"] = df["cambium_3m_sales_sku"].fillna(df["cambium_3m_sales_model"]).fillna(0)
+
+        # --- 1P inventory — already ASIN-keyed (or brand+model fallback) ---
         if "asin" in inventory_df.columns:
             df = df.merge(inventory_df[["asin","final_cb_qty"]], on="asin", how="left")
         else:
             df = df.merge(inventory_df[["brand","model_join","final_cb_qty"]], on=["brand","model_join"], how="left")
-        df = df.merge(ampm_inventory_df[["brand","model_join","ampm_inventory"]], on=["brand","model_join"], how="left")
-        df = df.merge(china_in_transit_df, on="model_join", how="left")
-        # PO data: ASIN-primary, SKU-fallback. ASIN is unique across the CB
-        # master and avoids the double-count from duplicate-Model rows; SKU
-        # fallback covers the edge case of a master row whose ASIN doesn't
-        # match anything in the PO file but whose SKU does.
-        df["_asin"] = df["asin"].astype(str).str.strip().str.upper()
-        df["_sku"]  = df["sku"].astype(str).str.strip().str.upper()
+
+        # --- AMPM inventory — ASIN primary, SKU fallback ---
+        df = df.merge(ampm_by_asin, left_on="_asin", right_on="asin", how="left", suffixes=("", "_ampm_a"))
+        df = df.merge(ampm_by_sku,  left_on="_sku",  right_on="sku",  how="left", suffixes=("", "_ampm_s"))
+        df["ampm_inventory"] = df["ampm_inventory_asin"].fillna(df["ampm_inventory_sku"]).fillna(0)
+
+        # --- China in-transit (Pipeline) — ASIN primary, SKU fallback ---
+        df = df.merge(pipe_by_asin, left_on="_asin", right_on="asin", how="left", suffixes=("", "_pipe_a"))
+        df = df.merge(pipe_by_sku,  left_on="_sku",  right_on="sku",  how="left", suffixes=("", "_pipe_s"))
+        df["china_in_transit"] = df["china_in_transit_asin"].fillna(df["china_in_transit_sku"]).fillna(0)
+
+        # --- PO (Open + In-Transit) — ASIN primary, SKU fallback ---
         df = df.merge(open_po_by_asin,    on="_asin", how="left")
         df = df.merge(open_po_by_sku,     on="_sku",  how="left")
         df = df.merge(in_transit_by_asin, on="_asin", how="left")
         df = df.merge(in_transit_by_sku,  on="_sku",  how="left")
         df["open_po"]    = df["open_po_asin"].fillna(df["open_po_sku"]).fillna(0)
         df["in_transit"] = df["in_transit_asin"].fillna(df["in_transit_sku"]).fillna(0)
-        df = df.drop(columns=[
+
+        # Drop helper / lookup columns
+        df = df.drop(columns=[c for c in [
             "_asin", "_sku",
+            "cb_3m_sales_sku", "cb_3m_sales_model",
+            "cambium_3m_sales_sku", "cambium_3m_sales_model",
+            "ampm_inventory_asin", "ampm_inventory_sku",
+            "china_in_transit_asin", "china_in_transit_sku",
             "open_po_asin", "open_po_sku",
             "in_transit_asin", "in_transit_sku",
-        ])
+            "asin_ampm_a", "sku_ampm_s", "asin_pipe_a", "sku_pipe_s",
+        ] if c in df.columns])
 
         df = df.fillna(0)
         df["remarks"] = ""
