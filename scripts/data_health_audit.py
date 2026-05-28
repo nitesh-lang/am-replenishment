@@ -354,6 +354,78 @@ def run_services_smoke():
     return out
 
 
+def run_po_coverage_check() -> list[dict]:
+    """In-Transit/Open-PO file coverage check.
+
+    Catches the class of bug where service code filters delivery status with
+    a case-sensitive `==` ("Open PO") but the file has different casing
+    ("Open po") — silently dropping rows from the deficiency calculation.
+
+    For each PO file, validates:
+      - every non-empty 'Delivery Status' value normalises to a known bucket
+        (open po | in-transit), so the service captures it
+      - row-count balance: rows_captured == non_null_status_rows
+      - reports any unexpected status values so they can be triaged
+    """
+    KNOWN_STATUSES = {"open po", "in-transit"}
+    files = [
+        ("CB",  INPUT / "In_Transit_PO data.xlsx"),
+        ("WM",  INPUT / "In_Transit_PO data - WM.xlsx"),
+    ]
+
+    out = []
+    for label, path in files:
+        row: dict[str, Any] = {"File": label, "Path": path.name}
+        if not path.exists():
+            row.update({"Status": "FAIL", "Error": f"missing: {path.name}"})
+            out.append(row)
+            continue
+        try:
+            df = pd.read_excel(path, engine="openpyxl")
+        except Exception as e:
+            row.update({"Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
+            out.append(row)
+            continue
+
+        status_col = next((c for c in df.columns if c.strip().lower() == "delivery status"), None)
+        if status_col is None:
+            row.update({"Status": "FAIL", "Error": "no 'Delivery Status' column"})
+            out.append(row)
+            continue
+
+        statuses = df[status_col].dropna().astype(str).str.strip()
+        non_null = len(statuses)
+        if non_null == 0:
+            # Empty file is OK — just no rows to filter
+            row.update({"Status": "PASS", "Total_rows": len(df), "Non_null_status": 0,
+                       "Captured": 0, "Unknown_statuses": "{}"})
+            out.append(row)
+            continue
+
+        normalised = statuses.str.lower()
+        captured = normalised.isin(KNOWN_STATUSES).sum()
+        unknown = sorted(set(statuses[~normalised.isin(KNOWN_STATUSES)].unique()))
+        row.update({
+            "Total_rows": len(df),
+            "Non_null_status": non_null,
+            "Captured": int(captured),
+            "Unknown_statuses": ", ".join(unknown) if unknown else "—",
+        })
+
+        problems = []
+        if captured != non_null:
+            problems.append(f"{non_null - captured} rows have unknown status")
+        if unknown:
+            problems.append(f"unknown values: {unknown}")
+
+        row["Status"] = "PASS" if not problems else "WARN"
+        if problems:
+            row["Issue"] = "; ".join(problems)
+        out.append(row)
+
+    return out
+
+
 def run_fc_allocation_smoke(master: dict) -> tuple[list[dict], dict[str, list]]:
     """FC Final Allocation smoke test per account.
 
@@ -517,6 +589,14 @@ def main():
                 print(f"      ... +{len(m) - 10} more")
     print()
 
+    # PO file coverage check (case-sensitivity / status-bucket regression test)
+    print(f"  ━━ PO FILE COVERAGE CHECK ━━")
+    po_rows = run_po_coverage_check()
+    po_df = pd.DataFrame(po_rows)
+    if not po_df.empty:
+        print(po_df.fillna("").to_string(index=False))
+    print()
+
     # FC Allocation smoke
     print(f"  ━━ FC ALLOCATION SMOKE TEST ━━")
     fc_rows, fc_issues = run_fc_allocation_smoke(master)
@@ -572,6 +652,9 @@ def main():
             pd.DataFrame([{"note": "no AMPM lookup misses — all clean"}]).to_excel(
                 w, sheet_name="AMPM lookup misses", index=False
             )
+
+        # PO coverage
+        po_df.to_excel(w, sheet_name="PO file coverage", index=False)
 
         # FC Allocation
         fc_df.to_excel(w, sheet_name="FC Allocation", index=False)
