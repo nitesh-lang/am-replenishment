@@ -174,18 +174,24 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
                 pipeline_raw["_asin"] = pipeline_raw.get("asin", "").astype(str).str.strip().str.upper()
                 pipeline_raw["_sku"]  = pipeline_raw.get("sku", "").astype(str).str.strip().str.upper()
                 pipeline_raw["model_join"] = pipeline_raw["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
+                # Cascade levels must be EXCLUSIVE — each Pipeline row counts
+                # at exactly one level. Without this, the Model fallback would
+                # re-attribute Pipeline qty already counted via ASIN to every
+                # duplicate-Model master row sharing that Model (the 22 CB
+                # duplicate-Model pairs would each double-count).
                 pipe_by_asin = (
                     pipeline_raw[pipeline_raw["_asin"] != ""]
                     .groupby("_asin", as_index=False)["qty"].sum()
                     .rename(columns={"qty": "china_in_transit_asin", "_asin": "asin"})
                 )
                 pipe_by_sku = (
-                    pipeline_raw[pipeline_raw["_sku"] != ""]
+                    pipeline_raw[(pipeline_raw["_asin"] == "") & (pipeline_raw["_sku"] != "")]
                     .groupby("_sku", as_index=False)["qty"].sum()
                     .rename(columns={"qty": "china_in_transit_sku", "_sku": "sku"})
                 )
                 pipe_by_model = (
-                    pipeline_raw.groupby("model_join", as_index=False)["qty"].sum()
+                    pipeline_raw[(pipeline_raw["_asin"] == "") & (pipeline_raw["_sku"] == "")]
+                    .groupby("model_join", as_index=False)["qty"].sum()
                     .rename(columns={"qty": "china_in_transit_model"})
                 )
                 print("PIPELINE (China In-Transit) ROWS FOUND:", len(pipeline_raw))
