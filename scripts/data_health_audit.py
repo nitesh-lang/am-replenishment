@@ -262,35 +262,62 @@ def check_account(acct: dict, master: dict) -> dict:
     return r
 
 
-def _ampm_lookup_from_snapshot(snap_path: Path) -> dict[str, float]:
-    """Build a case-insensitive Model -> total AMPM Qty dict from a snapshot file."""
+def _ampm_lookup_from_snapshot(snap_path: Path) -> dict:
+    """Build ASIN, SKU, Model lookup dicts for AMPM rows in a snapshot.
+
+    Returns dict with three keys:
+      'by_asin'  : ASIN -> Qty
+      'by_sku'   : SKU  -> Qty
+      'by_model' : Model -> Qty
+    """
+    empty = {"by_asin": {}, "by_sku": {}, "by_model": {}}
     try:
         df = pd.read_excel(snap_path, engine="openpyxl")
     except Exception:
-        return {}
-    if "Channel" not in df.columns or "Model" not in df.columns or "Qty" not in df.columns:
-        return {}
+        return empty
+    if "Channel" not in df.columns or "Qty" not in df.columns:
+        return empty
     a = df[df["Channel"].astype(str).str.strip() == "AMPM"].copy()
-    a["Model"] = a["Model"].astype(str).str.strip()
     a["Qty"] = pd.to_numeric(a["Qty"], errors="coerce").fillna(0)
-    return {k.strip().lower(): float(v) for k, v in a.groupby("Model")["Qty"].sum().to_dict().items()}
+    a["_asin"]  = a.get("ASIN", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    a["_sku"]   = a.get("SKU",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    a["_model"] = a.get("Model", "").astype(str).str.strip().str.lower()
+    return {
+        "by_asin":  a[a["_asin"]  != ""].groupby("_asin")["Qty"].sum().to_dict(),
+        "by_sku":   a[a["_sku"]   != ""].groupby("_sku")["Qty"].sum().to_dict(),
+        "by_model": a.groupby("_model")["Qty"].sum().to_dict(),
+    }
 
 
 def _ampm_lookup_misses(service_df: pd.DataFrame, snap_path: Path) -> list[tuple]:
-    """Models where service output shows AMPM=0 but the snapshot has stock.
-    Returns list of (SKU, Model, snapshot_qty)."""
-    ampm = _ampm_lookup_from_snapshot(snap_path)
-    if not ampm or service_df is None or service_df.empty:
+    """Rows where service shows AMPM=0 but the snapshot has stock that
+    *should* have been resolvable via the ASIN→SKU→Model cascade.
+
+    Now cascade-aware: a row is only flagged if the snapshot has stock
+    keyed on the row's ASIN, SKU, *or* Model (matching the order the
+    service uses). Inactive duplicate-Model SKUs whose AMPM legitimately
+    sits under their sibling's ASIN are NOT flagged.
+    """
+    lookups = _ampm_lookup_from_snapshot(snap_path)
+    if service_df is None or service_df.empty:
         return []
     miss = []
     for _, r in service_df.iterrows():
-        model = str(r.get("Model") or r.get("model") or "").strip()
         out = pd.to_numeric(r.get("ampm_inventory"), errors="coerce")
         out = 0.0 if pd.isna(out) else float(out)
-        if out == 0 and model:
-            k = model.lower()
-            if k in ampm and ampm[k] > 0:
-                miss.append((r.get("SKU") or r.get("sku"), model, int(ampm[k])))
+        if out > 0:
+            continue
+        asin  = str(r.get("ASIN") or r.get("asin") or "").strip().upper()
+        sku   = str(r.get("SKU")  or r.get("sku")  or "").strip().upper()
+        model = str(r.get("Model") or r.get("model") or "").strip().lower()
+        # Only flag if the SAME cascade the service uses would have found stock
+        if asin and lookups["by_asin"].get(asin, 0) > 0:
+            miss.append((sku, model, int(lookups["by_asin"][asin])))
+        elif sku and lookups["by_sku"].get(sku, 0) > 0:
+            miss.append((sku, model, int(lookups["by_sku"][sku])))
+        # Model-only check is intentionally OMITTED: a duplicate-Model
+        # SKU whose AMPM legitimately sits under its sibling's ASIN is
+        # NOT a miss under ASIN-primary semantics.
     return miss
 
 

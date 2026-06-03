@@ -580,17 +580,42 @@ def calculate_final_allocation(
 
     ampm_df = ampm_df[ampm_df["channel"].str.lower() == "ampm"]
 
-    # Exact Model match — case-insensitive only. No base-token / variant
-    # fallback. If the master Model and inventory Model don't match
-    # character-for-character (modulo case), result is 0.
-    ampm_df["_key"] = ampm_df["model"].astype(str).str.strip().str.lower()
-    inv_qty_by_model = (
-        ampm_df.groupby("_key", as_index=False)["qty"].sum()
-               .set_index("_key")["qty"].to_dict()
+    # AMPM lookup — ASIN primary, SKU fallback, Model fallback (exclusive).
+    # Same project standard as CB / WM / replenishment. ASIN-primary anchors
+    # on the most stable identity so silent zeros from Model-string drift
+    # in the snapshot (e.g. "POS BRACKET" vs "POSS-01") can't happen.
+    ampm_df["_asin"]  = ampm_df.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    ampm_df["_sku"]   = ampm_df.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    ampm_df["_model"] = ampm_df["model"].astype(str).str.strip().str.lower()
+
+    # ASIN: rows w/ non-empty ASIN
+    # SKU: rows w/ non-empty SKU (non-exclusive — catches ASIN-drift cases)
+    # Model: rows w/ EMPTY ASIN AND SKU only (exclusive — no dup-Model bleed)
+    ampm_by_asin = (
+        ampm_df[ampm_df["_asin"] != ""]
+        .groupby("_asin", as_index=False)["qty"].sum()
+        .set_index("_asin")["qty"].to_dict()
+    )
+    ampm_by_sku = (
+        ampm_df[ampm_df["_sku"] != ""]
+        .groupby("_sku", as_index=False)["qty"].sum()
+        .set_index("_sku")["qty"].to_dict()
+    )
+    ampm_by_model = (
+        ampm_df[(ampm_df["_asin"] == "") & (ampm_df["_sku"] == "")]
+        .groupby("_model", as_index=False)["qty"].sum()
+        .set_index("_model")["qty"].to_dict()
     )
 
+    _asin_col = df_plan.get("asin",  pd.Series([""] * len(df_plan))).astype(str).str.strip().str.upper()
+    _sku_col  = df_plan.get("sku",   pd.Series([""] * len(df_plan))).astype(str).str.strip().str.upper()
+    _mod_col  = df_plan["model"].astype(str).str.strip().str.lower()
+
     df_plan["ampm_inventory"] = pd.to_numeric(
-        df_plan["model"].astype(str).str.strip().str.lower().map(inv_qty_by_model).fillna(0),
+        pd.Series([
+            ampm_by_asin.get(a, ampm_by_sku.get(s, ampm_by_model.get(m, 0)))
+            for a, s, m in zip(_asin_col, _sku_col, _mod_col)
+        ], index=df_plan.index),
         errors="coerce",
     ).fillna(0)
 

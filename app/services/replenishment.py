@@ -365,28 +365,52 @@ def calculate_replenishment(
     df["total_units_sold"] = df["total_units_sold"].fillna(0)
 
     # ---------------------------------------------
-    # AMPM INVENTORY (exact Model match — case-insensitive)
+    # AMPM INVENTORY — ASIN primary, SKU fallback, Model fallback (exclusive)
     # ---------------------------------------------
-    # Model is the only lookup key. Match must be exact (case differences
-    # tolerated). No variant / base-token fallback — if master Model and
-    # inventory Model don't match character-for-character (modulo case),
-    # the result is 0. The data team is responsible for keeping the names
-    # in sync.
+    # Cascade matches the project standard set in CB / WM / china_reorder.
+    # ASIN-primary anchors on the most stable identity and avoids silent
+    # zeros when the inventory snapshot's Model string drifts from the
+    # master's Model (e.g. "POS BRACKET" in snapshot vs "POSS-01" in master).
+    # Each level is exclusive — every AMPM file row counts exactly once.
     ampm_inv = inventory[
         inventory["Channel"].astype(str).str.strip().str.lower() == "ampm"
     ].copy()
-    ampm_inv["_key"] = ampm_inv["Model"].astype(str).str.strip().str.lower()
-    ampm_qty_by_model = (
-        ampm_inv.groupby("_key", as_index=False)["Qty"].sum()
-                .set_index("_key")["Qty"].to_dict()
+    ampm_inv["_asin"]  = ampm_inv.get("ASIN", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    ampm_inv["_sku"]   = ampm_inv.get("SKU",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    ampm_inv["_model"] = ampm_inv["Model"].astype(str).str.strip().str.lower()
+
+    # ASIN: rows w/ non-empty ASIN, grouped by ASIN.
+    # SKU: rows w/ non-empty SKU, grouped by SKU (non-exclusive — catches the
+    #       ASIN-drift case where master.ASIN != file.ASIN but SKU matches).
+    # Model: rows w/ EMPTY ASIN AND SKU only (exclusive — prevents duplicate-
+    #       Model master rows from double-counting the shared pool).
+    ampm_by_asin = (
+        ampm_inv[ampm_inv["_asin"] != ""]
+        .groupby("_asin", as_index=False)["Qty"].sum()
+        .set_index("_asin")["Qty"].to_dict()
+    )
+    ampm_by_sku = (
+        ampm_inv[ampm_inv["_sku"] != ""]
+        .groupby("_sku", as_index=False)["Qty"].sum()
+        .set_index("_sku")["Qty"].to_dict()
+    )
+    ampm_by_model = (
+        ampm_inv[(ampm_inv["_asin"] == "") & (ampm_inv["_sku"] == "")]
+        .groupby("_model", as_index=False)["Qty"].sum()
+        .set_index("_model")["Qty"].to_dict()
     )
 
-    df["ampm_inventory"] = (
-        df["Model"].astype(str).str.strip().str.lower().map(ampm_qty_by_model).fillna(0)
-    )
+    _master_asin = df["ASIN"].astype(str).str.strip().str.upper()
+    _master_sku  = df["SKU"].astype(str).str.strip().str.upper() if "SKU" in df.columns else pd.Series([""] * len(df))
+    _master_mod  = df["Model"].astype(str).str.strip().str.lower()
+
+    df["ampm_inventory"] = [
+        ampm_by_asin.get(a, ampm_by_sku.get(s, ampm_by_model.get(m, 0)))
+        for a, s, m in zip(_master_asin, _master_sku, _master_mod)
+    ]
 
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
-    df["ampm_inventory"] = df["ampm_inventory"].fillna(0)
+    df["ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
 
     # ---------------------------------------------
     # REQUIREMENT CALCULATION

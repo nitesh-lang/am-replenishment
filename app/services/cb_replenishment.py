@@ -179,13 +179,17 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
                 # re-attribute Pipeline qty already counted via ASIN to every
                 # duplicate-Model master row sharing that Model (the 22 CB
                 # duplicate-Model pairs would each double-count).
+                # SKU non-exclusive (catches ASIN-drift cases where master.ASIN
+                # differs from file.ASIN but SKU still matches). Model fallback
+                # stays exclusive — only rows with no ASIN AND no SKU — so
+                # duplicate-Model master rows don't double-count the shared pool.
                 pipe_by_asin = (
                     pipeline_raw[pipeline_raw["_asin"] != ""]
                     .groupby("_asin", as_index=False)["qty"].sum()
                     .rename(columns={"qty": "china_in_transit_asin", "_asin": "asin"})
                 )
                 pipe_by_sku = (
-                    pipeline_raw[(pipeline_raw["_asin"] == "") & (pipeline_raw["_sku"] != "")]
+                    pipeline_raw[pipeline_raw["_sku"] != ""]
                     .groupby("_sku", as_index=False)["qty"].sum()
                     .rename(columns={"qty": "china_in_transit_sku", "_sku": "sku"})
                 )
