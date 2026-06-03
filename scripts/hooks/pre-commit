@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Pre-commit hook: auto-run the data-health audit when any data/input file
+# is staged. Blocks the commit on FAIL.
+#
+# Install once via:   bash scripts/install_hooks.sh
+#
+# Bypass (emergencies only):   git commit --no-verify
+
+set -eu
+
+# Find repo root from anywhere the hook is invoked
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Detect if any staged file is under data/input/
+if git diff --cached --name-only --diff-filter=ACM | grep -qE '^data/input/'; then
+    :
+else
+    # No data files staged — skip the audit, allow commit
+    exit 0
+fi
+
+echo
+echo "━━ pre-commit hook: data file changes detected ━━"
+echo "  Running scripts/data_health_audit.py …"
+echo
+
+# Pick a Python interpreter; fall back to 'python' if 'python3' isn't on PATH
+if command -v python3 >/dev/null 2>&1; then
+    PY=python3
+else
+    PY=python
+fi
+
+# Run the audit. Pipe through tee so user sees output AND exit code is preserved.
+PYTHONIOENCODING=utf-8 "$PY" scripts/data_health_audit.py
+RC=$?
+
+if [ $RC -ne 0 ]; then
+    echo
+    echo "  ✗ Audit reported FAIL — commit blocked."
+    echo "  → Fix issues above (see report under D:/Nitesh/Normalization/)"
+    echo "  → Or bypass with:  git commit --no-verify  (emergencies only)"
+    exit 1
+fi
+
+echo
+echo "  ✓ Audit OK — proceeding with commit."
+exit 0

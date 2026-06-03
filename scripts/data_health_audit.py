@@ -1,19 +1,45 @@
-"""Per-account data-health audit for the replenishment pipeline.
+"""Data-health audit for the replenishment pipeline.
 
 Run after every weekly data refresh:
-    python scripts/data_health_audit.py
+    python scripts/data_health_audit.py            # report-only
+    python scripts/data_health_audit.py --strict   # exit non-zero on WARN too
 
-For each brand (Audio Array, WM, CB, Nexlev, Viomi, Fossil), checks:
-  - Required input files exist and are non-empty
-  - Replenishment master SKU/Model align with sku_master
-  - Inventory snapshot has AMPM channel rows
-  - Amazon FBA inventory file loaded, has positive qty
-  - Inventory ledger recent dates present
-  - Replenishment service runs end-to-end without NaN/inf
-  - AMPM model coverage % across the master
+Auto-runs as a pre-commit hook when files under data/input/ are staged.
+Install once: bash scripts/install_hooks.sh
 
-Writes a timestamped Excel report to D:/Nitesh/Normalization/ and prints
-a pass/fail checklist to stdout. Designed to be re-run weekly.
+Checks (organised by category):
+
+  STRUCTURE
+    • Schema: required columns present in every known input file
+    • File existence + non-empty per account
+
+  IDENTITY / MASTER ALIGNMENT (across CB / AA / WM / Nexlev / Viomi)
+    • Every SKU resolves to sku_master (NotInMaster = 0)
+    • Every Model matches case-insensitively  (ModelMismatch = 0)
+    • Every ASIN matches where both sides populated  (ASINMismatch = 0)
+    • Duplicate FBA SKU rows in sku_master
+    • Malformed ASIN strings (non-10-char alphanumeric)
+
+  DATA QUALITY
+    • Negative qty in inventory snapshots
+    • Negative units_sold in weekly sales
+    • Inventory ledger ≤ 14 days old per account
+    • AMPM model coverage % vs master
+
+  CROSS-FILE CONSISTENCY (proactive — catches silent zeros before they bite)
+    • Snapshot Model-string drift vs sku_master (via ASIN/SKU)
+    • Sales + PO Model-string drift vs sku_master (via ASIN/SKU)
+    • PO file Delivery Status coverage (open po / in-transit) — no rows dropped
+
+  SERVICE SMOKE (end-to-end)
+    • Each replenishment service produces non-empty output with no NaN/inf
+    • AMPM lookup misses (cascade-aware: ASIN→SKU)
+    • FC allocation invariants (gap math, send_qty bounds, velocity ≥ 0)
+
+Writes a timestamped Excel report under D:/Nitesh/Normalization/ and prints
+a PASS/WARN/FAIL checklist to stdout. Exit codes:
+  0 → clean (or PASS with WARN, unless --strict)
+  1 → at least one FAIL (or WARN in --strict mode)
 """
 from __future__ import annotations
 
@@ -381,6 +407,213 @@ def run_services_smoke():
     return out
 
 
+# ─────────────────────────────────────────────────────────────────────
+# NEW: Schema check — required columns per input file
+# ─────────────────────────────────────────────────────────────────────
+SCHEMA_SPECS = {
+    "weekly_sales_snapshot.csv":              ["week", "brand", "model", "channel", "asin", "sku", "units_sold"],
+    "sku_master.xlsx":                        ["FBA SKU", "ASIN", "Brand", "Model"],
+    "CB Replenishment_Master.xlsx":           ["SKU", "ASIN", "Brand", "Model"],
+    "Audio Array & WM Replenishment/AA & WM Replenishment.xlsx": ["SKU", "ASIN", "Model"],
+    "replenishment_master_nexlev.xlsx":       ["SKU", "ASIN", "Model"],
+    "replenishment_master_viomi.xlsx":        ["SKU", "ASIN", "Model"],
+    "Inventory_snapshot_audio_array.xlsx":    ["SKU", "ASIN", "Brand", "Model", "Channel", "Qty"],
+    "Inventory_snapshot_WM.xlsx":             ["SKU", "ASIN", "Brand", "Model", "Channel", "Qty"],
+    "Inventory_snapshot_tonor.xlsx":          ["SKU", "ASIN", "Brand", "Model", "Channel", "Qty"],
+    "inventory_snapshot_nexlev.xlsx":         ["SKU", "ASIN", "Brand", "Model", "Channel", "Qty"],
+    "In_Transit_PO data.xlsx":                ["SKU", "ASIN", "Model", "Delivery Status", "Accepted quantity"],
+    "In_Transit_PO data - WM.xlsx":           ["SKU", "ASIN", "Model", "Delivery Status", "Accepted quantity"],
+    "inventory_amazon_nexlev.csv":            ["sku", "asin", "afn-total-quantity"],
+    "inventory_amazon_viomi.csv":             ["sku", "asin", "afn-total-quantity"],
+    "inventory_amazon_audio_array.csv":       ["sku", "asin", "afn-total-quantity"],
+    "inventory_amazon_WM.csv":                ["sku", "asin", "afn-total-quantity"],
+}
+
+
+def run_schema_check() -> list[dict]:
+    """Verify every known input file still has its required columns."""
+    out = []
+    for rel, required in SCHEMA_SPECS.items():
+        path = INPUT / rel
+        row: dict[str, Any] = {"File": rel}
+        if not path.exists():
+            row.update({"Status": "FAIL", "Missing": "FILE NOT FOUND"})
+            out.append(row); continue
+        try:
+            if rel.endswith(".xlsx"):
+                # Specific known-sheet files; everything else uses first sheet
+                if rel == "Audio Array & WM Replenishment/AA & WM Replenishment.xlsx":
+                    df = pd.read_excel(path, sheet_name="AA", engine="openpyxl", nrows=0)
+                elif rel == "replenishment_master_nexlev.xlsx":
+                    df = pd.read_excel(path, sheet_name="nexlev", engine="openpyxl", nrows=0)
+                elif rel == "replenishment_master_viomi.xlsx":
+                    df = pd.read_excel(path, sheet_name="Viomi", engine="openpyxl", nrows=0)
+                else:
+                    df = pd.read_excel(path, sheet_name=0, engine="openpyxl", nrows=0)
+            else:
+                df = pd.read_csv(path, nrows=0)
+            cols = {c.strip() for c in df.columns}
+            missing = [c for c in required if c not in cols]
+            row["Status"] = "PASS" if not missing else "FAIL"
+            row["Missing"] = ", ".join(missing) if missing else "—"
+            out.append(row)
+        except Exception as e:
+            row.update({"Status": "FAIL", "Missing": f"{type(e).__name__}: {e}"})
+            out.append(row)
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────
+# NEW: Duplicate key + negative qty + ASIN format checks
+# ─────────────────────────────────────────────────────────────────────
+ASIN_RE = __import__("re").compile(r"^[A-Z0-9]{10}$")
+
+
+def run_data_quality_checks(master: dict) -> tuple[list[dict], list[dict]]:
+    """Flag duplicate keys, negative qty/sales, malformed ASINs."""
+    summary = []
+    details = []
+
+    # ── sku_master duplicate FBA SKUs + duplicate (Brand, Model) pairs ──
+    sm = pd.read_excel(MASTER_PATH, engine="openpyxl")
+    sm["_sku"] = sm["FBA SKU"].astype(str).str.strip().str.upper()
+    sm["_brand_model"] = (
+        sm["Brand"].astype(str).str.strip().str.lower() + "|" +
+        sm["Model"].astype(str).str.strip().str.lower()
+    )
+    dup_sku = sm[sm["_sku"].duplicated(keep=False)]
+    # Note: duplicate (Brand, Model) is INFORMATIONAL — products often have
+    # multiple variant ASINs under one Model (color / size variants). Reported
+    # as PASS with count for visibility; only same-FBA-SKU is a real bug.
+    dup_bm  = sm[sm["_brand_model"].duplicated(keep=False)]
+    summary.append({
+        "Check": "sku_master duplicate FBA SKU",
+        "Count": len(dup_sku),
+        "Status": "PASS" if dup_sku.empty else "WARN",
+    })
+    summary.append({
+        "Check": "sku_master (Brand, Model) variants (info)",
+        "Count": len(dup_bm),
+        "Status": "PASS",
+    })
+    for _, r in dup_sku.head(50).iterrows():
+        details.append({"Issue": "dup_sku_in_master", "SKU": r["FBA SKU"], "ASIN": r.get("ASIN"), "Model": r.get("Model")})
+
+    # ── Malformed ASINs in sku_master + replenishment masters ──
+    bad_asin_files = [
+        ("sku_master",        MASTER_PATH, None, "FBA SKU", "ASIN"),
+        ("CB",                INPUT / "CB Replenishment_Master.xlsx", None, "SKU", "ASIN"),
+        ("AA",                INPUT / "Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA", "SKU", "ASIN"),
+        ("WM",                INPUT / "Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM", "SKU", "ASIN"),
+        ("Nexlev",            INPUT / "replenishment_master_nexlev.xlsx", "nexlev", "SKU", "ASIN"),
+        ("Viomi",             INPUT / "replenishment_master_viomi.xlsx", "Viomi", "SKU", "ASIN"),
+    ]
+    bad_asin_count = 0
+    for label, path, sheet, sku_col, asin_col in bad_asin_files:
+        if not path.exists():
+            continue
+        df = pd.read_excel(path, sheet_name=sheet, engine="openpyxl") if sheet else pd.read_excel(path, engine="openpyxl")
+        if asin_col not in df.columns:
+            continue
+        df["_asin"] = df[asin_col].astype(str).str.strip().str.upper()
+        bad = df[df["_asin"].notna() & ~df["_asin"].isin(["", "NAN", "-"])].copy()
+        bad = bad[~bad["_asin"].apply(lambda x: bool(ASIN_RE.match(x)))]
+        bad_asin_count += len(bad)
+        for _, r in bad.head(20).iterrows():
+            details.append({"Issue": "malformed_asin", "Scope": label, "SKU": r.get(sku_col), "ASIN_value": r["_asin"]})
+    summary.append({
+        "Check": "Malformed ASIN strings",
+        "Count": bad_asin_count,
+        "Status": "PASS" if bad_asin_count == 0 else "WARN",
+    })
+
+    # ── Negative qty in inventory snapshots ──
+    neg_qty = 0
+    for snap in ["Inventory_snapshot_audio_array.xlsx", "Inventory_snapshot_WM.xlsx",
+                 "Inventory_snapshot_tonor.xlsx", "inventory_snapshot_nexlev.xlsx"]:
+        path = INPUT / snap
+        if not path.exists(): continue
+        df = pd.read_excel(path, engine="openpyxl")
+        if "Qty" not in df.columns: continue
+        neg = df[pd.to_numeric(df["Qty"], errors="coerce") < 0]
+        neg_qty += len(neg)
+        for _, r in neg.head(10).iterrows():
+            details.append({"Issue": "negative_qty", "Snapshot": snap, "SKU": r.get("SKU"), "Channel": r.get("Channel"), "Qty": r["Qty"]})
+    summary.append({
+        "Check": "Negative Qty in inventory snapshots",
+        "Count": neg_qty,
+        "Status": "PASS" if neg_qty == 0 else "WARN",
+    })
+
+    # ── Negative units_sold in weekly sales ──
+    sales_path = INPUT / "weekly_sales_snapshot.csv"
+    neg_sales = 0
+    if sales_path.exists():
+        df = pd.read_csv(sales_path)
+        if "units_sold" in df.columns:
+            neg = df[pd.to_numeric(df["units_sold"], errors="coerce") < 0]
+            neg_sales = len(neg)
+            for _, r in neg.head(10).iterrows():
+                details.append({"Issue": "negative_sales", "SKU": r.get("sku"), "Week": r.get("week"), "Channel": r.get("channel"), "units_sold": r["units_sold"]})
+    # Negative units_sold typically represent returns/refunds — informational,
+    # not a hard fail. Surfaced as WARN so the count stays visible.
+    summary.append({
+        "Check": "Negative units_sold in weekly_sales_snapshot",
+        "Count": neg_sales,
+        "Status": "PASS" if neg_sales == 0 else "WARN",
+    })
+
+    return summary, details
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Existing snapshot model-drift check (extended to sales + PO via the
+# generalised _cross_file_drift helper)
+# ─────────────────────────────────────────────────────────────────────
+def _cross_file_drift(label: str, path: Path, asin_col: str, sku_col: str,
+                      model_col: str, sheet: str | None, master_asin: dict,
+                      master_sku: dict) -> tuple[int, list[dict]]:
+    """Generic Model-string drift detector — returns (drift_count, detail_rows)."""
+    if not path.exists():
+        return 0, []
+    try:
+        if path.suffix == ".xlsx":
+            df = pd.read_excel(path, sheet_name=sheet if sheet is not None else 0, engine="openpyxl")
+        else:
+            df = pd.read_csv(path)
+    except Exception:
+        return 0, []
+    if model_col not in df.columns:
+        return 0, []
+    df["_asin"]  = df.get(asin_col, "").astype(str).str.strip().str.upper().replace({"NAN": "", "-": ""})
+    df["_sku"]   = df.get(sku_col, "").astype(str).str.strip().str.upper().replace({"NAN": "", "-": ""})
+    df["_model"] = df[model_col].astype(str).str.strip()
+    df["_model_low"] = df["_model"].str.lower()
+
+    drift_rows = []
+    seen = set()
+    for _, r in df.iterrows():
+        snap_model = r["_model_low"].strip()
+        if snap_model in ("", "nan", "none"):
+            continue
+        canon, via = None, None
+        if r["_asin"] and r["_asin"] in master_asin:
+            canon, via = master_asin[r["_asin"]], "ASIN"
+        elif r["_sku"] and r["_sku"] in master_sku:
+            canon, via = master_sku[r["_sku"]], "SKU"
+        if canon and canon.lower() != snap_model:
+            key = (r["_asin"], r["_sku"], snap_model, canon.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            drift_rows.append({
+                "Source": label, "Via": via,
+                "ASIN": r["_asin"] or "-", "SKU": r["_sku"] or "-",
+                "Source_Model": r["_model"], "Master_Model": canon,
+            })
+    return len(drift_rows), drift_rows
+
+
 def run_snapshot_model_drift_check(master: dict) -> tuple[list[dict], list[dict]]:
     """Proactively detect Model-string drift in inventory snapshots vs sku_master.
 
@@ -476,6 +709,46 @@ def run_snapshot_model_drift_check(master: dict) -> tuple[list[dict], list[dict]
         })
         summary.append(row)
 
+    return summary, details
+
+
+def run_extended_drift_check(master: dict) -> tuple[list[dict], list[dict]]:
+    """Extend Model-string drift detection to sales + PO files.
+
+    Uses the same ASIN/SKU resolution as the snapshot check. Catches the
+    same class of upstream hygiene issues but in sales / PO data sources.
+    """
+    # Master lookups
+    asin_to_model: dict[str, str] = {}
+    sku_to_model:  dict[str, str] = {}
+    sm = pd.read_excel(MASTER_PATH, engine="openpyxl")
+    sm["_asin"]  = sm.get("ASIN", "").astype(str).str.strip().str.upper().replace({"NAN": "", "-": ""})
+    sm["_sku"]   = sm["FBA SKU"].astype(str).str.strip().str.upper()
+    sm["_model"] = sm["Model"].astype(str).str.strip()
+    for _, r in sm.drop_duplicates("_asin").iterrows():
+        if r["_asin"]:
+            asin_to_model[r["_asin"]] = r["_model"]
+    for _, r in sm.drop_duplicates("_sku").iterrows():
+        if r["_sku"]:
+            sku_to_model[r["_sku"]] = r["_model"]
+
+    SOURCES = [
+        ("Sales",  INPUT / "weekly_sales_snapshot.csv",  "asin", "sku", "model", None),
+        ("CB PO",  INPUT / "In_Transit_PO data.xlsx",    "ASIN", "SKU", "Model", None),
+        ("WM PO",  INPUT / "In_Transit_PO data - WM.xlsx", "ASIN", "SKU", "Model", None),
+    ]
+
+    summary = []
+    details = []
+    for label, path, asin_c, sku_c, mod_c, sheet in SOURCES:
+        n, rows = _cross_file_drift(label, path, asin_c, sku_c, mod_c, sheet, asin_to_model, sku_to_model)
+        summary.append({
+            "Source": label,
+            "Path": path.name,
+            "Unique_drifts": n,
+            "Status": "PASS" if n == 0 else "WARN",
+        })
+        details.extend(rows)
     return summary, details
 
 
@@ -672,10 +945,34 @@ def run_fc_allocation_smoke(master: dict) -> tuple[list[dict], dict[str, list]]:
 
 
 def main():
-    print(f"\n{'=' * 78}\n  DATA HEALTH AUDIT — {datetime.now():%Y-%m-%d %H:%M}\n{'=' * 78}\n")
+    strict = "--strict" in sys.argv
+    print(f"\n{'=' * 78}\n  DATA HEALTH AUDIT — {datetime.now():%Y-%m-%d %H:%M}{' [STRICT]' if strict else ''}\n{'=' * 78}\n")
 
     master = _load_master()
     print(f"  sku_master loaded: {master['rows']} rows, {len(master['model_set'])} unique Models\n")
+
+    # Schema check — fail fast if any input file is missing required columns
+    print(f"  ━━ SCHEMA CHECK (required columns per input file) ━━")
+    schema_rows = run_schema_check()
+    schema_df = pd.DataFrame(schema_rows)
+    print(schema_df.fillna("").to_string(index=False))
+    print()
+
+    # Data quality — duplicates, negative qty, malformed ASINs
+    print(f"  ━━ DATA QUALITY CHECKS (duplicates / negative qty / ASIN format) ━━")
+    dq_summary, dq_details = run_data_quality_checks(master)
+    dq_summary_df = pd.DataFrame(dq_summary)
+    print(dq_summary_df.fillna("").to_string(index=False))
+    if dq_details:
+        # Print the first few of each kind
+        kinds = {}
+        for d in dq_details:
+            kinds.setdefault(d["Issue"], []).append(d)
+        for kind, items in kinds.items():
+            print(f"\n  ⚠️  {kind}: {len(items)} (showing first 5)")
+            for it in items[:5]:
+                print(f"      {it}")
+    print()
 
     results = [check_account(a, master) for a in ACCOUNTS]
 
@@ -733,6 +1030,19 @@ def main():
         for d in drift_details[:15]:
             print(f"      [{d['Snapshot']}] via {d['Via']}  SKU={d['SKU']}  ASIN={d['ASIN']}")
             print(f"          snapshot Model: '{d['Snapshot_Model']}'  ≠  master Model: '{d['Master_Model']}'")
+    print()
+
+    # Extended drift check — sales + PO files
+    print(f"  ━━ EXTENDED MODEL DRIFT CHECK (sales + PO vs sku_master) ━━")
+    ext_summary, ext_details = run_extended_drift_check(master)
+    ext_summary_df = pd.DataFrame(ext_summary)
+    if not ext_summary_df.empty:
+        print(ext_summary_df.fillna("").to_string(index=False))
+    if ext_details:
+        print(f"\n  ⚠️  {len(ext_details)} extended drifts found (showing first 10):")
+        for d in ext_details[:10]:
+            print(f"      [{d['Source']}] via {d['Via']}  SKU={d['SKU']}  ASIN={d['ASIN']}")
+            print(f"          source Model: '{d['Source_Model']}'  ≠  master Model: '{d['Master_Model']}'")
     print()
 
     # FC Allocation smoke
@@ -794,13 +1104,32 @@ def main():
         # PO coverage
         po_df.to_excel(w, sheet_name="PO file coverage", index=False)
 
-        # Model drift
+        # Schema
+        schema_df.to_excel(w, sheet_name="Schema check", index=False)
+
+        # Data quality
+        dq_summary_df.to_excel(w, sheet_name="Data quality", index=False)
+        if dq_details:
+            pd.DataFrame(dq_details).to_excel(w, sheet_name="DQ details", index=False)
+        else:
+            pd.DataFrame([{"note": "no data quality issues"}]).to_excel(w, sheet_name="DQ details", index=False)
+
+        # Snapshot drift
         drift_summary_df.to_excel(w, sheet_name="Snapshot Model drift", index=False)
         if drift_details:
             pd.DataFrame(drift_details).to_excel(w, sheet_name="Drift details", index=False)
         else:
             pd.DataFrame([{"note": "no Model-string drift detected"}]).to_excel(
                 w, sheet_name="Drift details", index=False
+            )
+
+        # Extended drift (sales + PO)
+        ext_summary_df.to_excel(w, sheet_name="Extended drift", index=False)
+        if ext_details:
+            pd.DataFrame(ext_details).to_excel(w, sheet_name="Extended drift details", index=False)
+        else:
+            pd.DataFrame([{"note": "no extended drift detected"}]).to_excel(
+                w, sheet_name="Extended drift details", index=False
             )
 
         # FC Allocation
@@ -818,12 +1147,33 @@ def main():
 
     print(f"  Report written: {out_path}")
 
-    # Exit code: non-zero if any FAIL
-    has_fail = any(
-        (v[0] if isinstance(v, tuple) else v) == "FAIL"
-        for r in results for k, v in r.items() if not k.startswith("_")
-    )
-    sys.exit(1 if has_fail else 0)
+    # ─── Exit code logic ─────────────────────────────────────────────
+    # Default:        exit 1 on any FAIL
+    # --strict mode:  exit 1 on any FAIL or WARN
+    statuses: list[str] = []
+    for r in results:
+        for k, v in r.items():
+            if not k.startswith("_"):
+                statuses.append(v[0] if isinstance(v, tuple) else v)
+    statuses += [r.get("Status", "PASS") for r in schema_rows]
+    statuses += [r.get("Status", "PASS") for r in dq_summary]
+    statuses += [r.get("Status", "PASS") for r in svc]
+    statuses += [r.get("Status", "PASS") for r in po_rows]
+    statuses += [r.get("Status", "PASS") for r in drift_summary]
+    statuses += [r.get("Status", "PASS") for r in ext_summary]
+    statuses += [r.get("Status", "PASS") for r in fc_rows]
+
+    has_fail = any(s == "FAIL" for s in statuses)
+    has_warn = any(s == "WARN" for s in statuses)
+
+    if has_fail:
+        print("\n  ❌ AUDIT FAILED — exit 1")
+        sys.exit(1)
+    if strict and has_warn:
+        print("\n  ⚠️  AUDIT WARN (strict mode) — exit 1")
+        sys.exit(1)
+    print(f"\n  ✅ AUDIT {'OK' if not has_warn else 'OK (with warnings)'} — exit 0")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
