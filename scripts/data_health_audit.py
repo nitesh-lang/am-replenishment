@@ -381,6 +381,104 @@ def run_services_smoke():
     return out
 
 
+def run_snapshot_model_drift_check(master: dict) -> tuple[list[dict], list[dict]]:
+    """Proactively detect Model-string drift in inventory snapshots vs sku_master.
+
+    For each row in every inventory snapshot, look up its (ASIN, SKU) in
+    sku_master. If a match exists but the snapshot's Model string differs
+    from the canonical Model (case-insensitive), flag the drift. This is
+    the upstream cause of silent-zero bugs like FBK79786 / POSS-01 →
+    snapshot Model "POS BRACKET" while master Model "POSS-01".
+
+    Returns (summary_rows, detail_rows).
+    """
+    # Master lookups
+    asin_to_model: dict[str, str] = {}
+    sku_to_model:  dict[str, str] = {}
+    for sku_key, ref in master["by_sku"].items():
+        canon = ref["Model"]
+        if sku_key and isinstance(canon, str):
+            sku_to_model[sku_key] = canon
+    # Build ASIN map from master_df, not from by_sku index
+    sm = pd.read_excel(MASTER_PATH, engine="openpyxl")
+    sm["_asin"] = sm.get("ASIN", "").astype(str).str.strip().str.upper().replace({"NAN": "", "-": ""})
+    sm["_model"] = sm["Model"].astype(str).str.strip()
+    for _, r in sm.drop_duplicates("_asin").iterrows():
+        a = r["_asin"]
+        if a:
+            asin_to_model[a] = r["_model"]
+
+    SNAPSHOTS = [
+        ("Audio Array", INPUT / "Inventory_snapshot_audio_array.xlsx"),
+        ("WM",          INPUT / "Inventory_snapshot_WM.xlsx"),
+        ("Tonor",       INPUT / "Inventory_snapshot_tonor.xlsx"),
+        ("Nexlev",      INPUT / "inventory_snapshot_nexlev.xlsx"),
+    ]
+
+    summary = []
+    details = []
+    for label, path in SNAPSHOTS:
+        row: dict[str, Any] = {"Snapshot": label, "Path": path.name}
+        if not path.exists():
+            row.update({"Status": "FAIL", "Error": "missing"})
+            summary.append(row)
+            continue
+        try:
+            df = pd.read_excel(path, engine="openpyxl")
+        except Exception as e:
+            row.update({"Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
+            summary.append(row)
+            continue
+
+        df["_asin"]  = df.get("ASIN", "").astype(str).str.strip().str.upper().replace({"NAN": "", "-": ""})
+        df["_sku"]   = df.get("SKU",  "").astype(str).str.strip().str.upper().replace({"NAN": ""})
+        df["_model"] = df.get("Model", "").astype(str).str.strip()
+        df["_model_low"] = df["_model"].str.lower()
+
+        drifts = 0
+        # Track unique drift cases (ASIN/SKU + the two model strings) so the
+        # detail list isn't multiplied by every channel row.
+        seen = set()
+        for _, r in df.iterrows():
+            canon = None
+            via = None
+            if r["_asin"] and r["_asin"] in asin_to_model:
+                canon = asin_to_model[r["_asin"]]
+                via = "ASIN"
+            elif r["_sku"] and r["_sku"] in sku_to_model:
+                canon = sku_to_model[r["_sku"]]
+                via = "SKU"
+            # Skip rows where snapshot Model is missing — that's a separate
+            # data-completeness issue, not drift. Drift = both sides have
+            # populated Model strings that disagree.
+            snap_model_clean = r["_model_low"].strip()
+            if snap_model_clean in ("", "nan", "none"):
+                continue
+            if canon and canon.lower() != snap_model_clean:
+                key = (r["_asin"], r["_sku"], snap_model_clean, canon.lower())
+                if key in seen:
+                    continue
+                seen.add(key)
+                drifts += 1
+                details.append({
+                    "Snapshot": label,
+                    "Via": via,
+                    "ASIN": r["_asin"] or "-",
+                    "SKU": r["_sku"] or "-",
+                    "Snapshot_Model": r["_model"],
+                    "Master_Model": canon,
+                })
+
+        row.update({
+            "Snapshot_rows": len(df),
+            "Unique_drifts": drifts,
+            "Status": "PASS" if drifts == 0 else "WARN",
+        })
+        summary.append(row)
+
+    return summary, details
+
+
 def run_po_coverage_check() -> list[dict]:
     """In-Transit/Open-PO file coverage check.
 
@@ -624,6 +722,19 @@ def main():
         print(po_df.fillna("").to_string(index=False))
     print()
 
+    # Inventory snapshot ↔ sku_master Model-drift check
+    print(f"  ━━ SNAPSHOT MODEL DRIFT CHECK (vs sku_master) ━━")
+    drift_summary, drift_details = run_snapshot_model_drift_check(master)
+    drift_summary_df = pd.DataFrame(drift_summary)
+    if not drift_summary_df.empty:
+        print(drift_summary_df.fillna("").to_string(index=False))
+    if drift_details:
+        print(f"\n  ⚠️  {len(drift_details)} model-string drifts found (showing first 15):")
+        for d in drift_details[:15]:
+            print(f"      [{d['Snapshot']}] via {d['Via']}  SKU={d['SKU']}  ASIN={d['ASIN']}")
+            print(f"          snapshot Model: '{d['Snapshot_Model']}'  ≠  master Model: '{d['Master_Model']}'")
+    print()
+
     # FC Allocation smoke
     print(f"  ━━ FC ALLOCATION SMOKE TEST ━━")
     fc_rows, fc_issues = run_fc_allocation_smoke(master)
@@ -682,6 +793,15 @@ def main():
 
         # PO coverage
         po_df.to_excel(w, sheet_name="PO file coverage", index=False)
+
+        # Model drift
+        drift_summary_df.to_excel(w, sheet_name="Snapshot Model drift", index=False)
+        if drift_details:
+            pd.DataFrame(drift_details).to_excel(w, sheet_name="Drift details", index=False)
+        else:
+            pd.DataFrame([{"note": "no Model-string drift detected"}]).to_excel(
+                w, sheet_name="Drift details", index=False
+            )
 
         # FC Allocation
         fc_df.to_excel(w, sheet_name="FC Allocation", index=False)
