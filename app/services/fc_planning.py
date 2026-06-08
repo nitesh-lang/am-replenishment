@@ -1,35 +1,70 @@
 from app.services.validation_engine import run_full_validation
 from app.services.file_cache import get, get_excel_sheet
 import os
+import re
 import pandas as pd
+from pathlib import Path
 
 
 # =================================================
-# FILE MAP — account → shipments + ledger files
+# FILE MAP — account → ledger + FBA Sales filename aliases
 # =================================================
+# Shipments now come from per-week files under data/input/FBA Sales/Week N/.
+# Each brand may have multiple acceptable filename stems (case-insensitive).
+# Ledger stays on its existing per-brand consolidated file.
 
 ACCOUNT_FILES = {
     "nexlev": {
-        "shipments": "fba_shipments_nexlev.csv",
-        "ledger":    "inventory_ledger_nexlev.csv",
+        "fba_aliases": ["nex", "nexlev"],
+        "ledger":      "inventory_ledger_nexlev.csv",
     },
     "viomi": {
-        "shipments": "fba_shipments_viomi.csv",
-        "ledger":    "inventory_ledger_viomi.csv",
+        "fba_aliases": ["vibc"],
+        "ledger":      "inventory_ledger_viomi.csv",
     },
     "white mulberry": {
-        "shipments": "fba_shipments_WM.csv",
-        "ledger":    "inventory_ledger_WM.csv",
+        "fba_aliases": ["crpl"],
+        "ledger":      "inventory_ledger_WM.csv",
     },
     "audio array": {
-        "shipments": "fba_shipments_Audio Array.csv",
-        "ledger":    "inventory_ledger_Audio Array.csv",
+        "fba_aliases": ["audio array"],
+        "ledger":      "inventory_ledger_Audio Array.csv",
     },
     "fossil": {
-        "shipments": "Fossil Replenishment/fba_shipments_fossil.csv",
-        "ledger":    "Fossil Replenishment/inventory_ledger_fossil.csv",
+        "fba_aliases": ["cr", "cambium retail"],
+        "ledger":      "Fossil Replenishment/inventory_ledger_fossil.csv",
     },
 }
+
+
+# Repo-relative path to the per-week FBA Sales folder
+_FBA_SALES_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "input" / "FBA Sales"
+
+
+def _load_weekly_fba_shipments(brand_aliases: list[str]) -> pd.DataFrame:
+    """Concatenate per-week FBA Sales CSVs for a brand into one DataFrame.
+
+    Walks every `Week N/` folder under data/input/FBA Sales/ and picks up
+    any CSV whose stem (case-insensitive) matches one of the brand aliases.
+    Returns an empty DataFrame if none found.
+    """
+    if not _FBA_SALES_ROOT.exists():
+        return pd.DataFrame()
+    aliases = {a.strip().lower() for a in brand_aliases}
+    frames: list[pd.DataFrame] = []
+    week_pat = re.compile(r"^Week\s+(\d+)$", re.IGNORECASE)
+    for wf in sorted(_FBA_SALES_ROOT.iterdir(), key=lambda p: int(week_pat.match(p.name).group(1)) if (p.is_dir() and week_pat.match(p.name)) else 0):
+        if not wf.is_dir() or not week_pat.match(wf.name):
+            continue
+        for csv in wf.glob("*.csv"):
+            if csv.stem.strip().lower() in aliases:
+                try:
+                    frames.append(pd.read_csv(csv))
+                except Exception as e:
+                    print(f"⚠️ Failed to read {csv}: {e}")
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
 
 
 # =================================================
@@ -41,7 +76,7 @@ def load_fc_data(account: str):
         raise ValueError(f"Unknown account for FC data: {account}")
 
     files = ACCOUNT_FILES[key]
-    shipments = get(files["shipments"]).copy()
+    shipments = _load_weekly_fba_shipments(files["fba_aliases"])
     ledger    = get(files["ledger"]).copy()
 
     shipments.columns = shipments.columns.str.strip()
