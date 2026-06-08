@@ -187,11 +187,13 @@ def get_fc_final(
     replenish_weeks: int = Query(default=8, ge=1),
     channel: str = Query(default="All"),
     account: str = Query(default="NEXLEV"),
+    sales_window: int = Query(default=12, ge=1, le=52),
 ):
     df = calculate_final_allocation(
         replenish_weeks=replenish_weeks,
         channel=channel,
-        account=account
+        account=account,
+        sales_window=sales_window,
     )
 
     # ── Fossil: load remarks + master_carton from DB only, send_qty always fresh ──

@@ -41,21 +41,42 @@ ACCOUNT_FILES = {
 _FBA_SALES_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "input" / "FBA Sales"
 
 
-def _load_weekly_fba_shipments(brand_aliases: list[str]) -> pd.DataFrame:
-    """Concatenate per-week FBA Sales CSVs for a brand into one DataFrame.
+def _load_weekly_fba_shipments(brand_aliases: list[str], sales_window: int = 12) -> pd.DataFrame:
+    """Concatenate per-week FBA Sales CSVs for a brand, restricted to the
+    last `sales_window` weeks.
 
-    Walks every `Week N/` folder under data/input/FBA Sales/ and picks up
-    any CSV whose stem (case-insensitive) matches one of the brand aliases.
-    Returns an empty DataFrame if none found.
+    Walks every `Week N/` folder under data/input/FBA Sales/, sorts by week
+    number descending, takes the most recent N folders, then loads any CSV
+    whose stem matches one of the brand aliases (case-insensitive).
+
+    If fewer than N weeks of data exist, returns whatever is available
+    (no error). Default window matches the dashboard convention (12 weeks).
     """
     if not _FBA_SALES_ROOT.exists():
         return pd.DataFrame()
     aliases = {a.strip().lower() for a in brand_aliases}
-    frames: list[pd.DataFrame] = []
     week_pat = re.compile(r"^Week\s+(\d+)$", re.IGNORECASE)
-    for wf in sorted(_FBA_SALES_ROOT.iterdir(), key=lambda p: int(week_pat.match(p.name).group(1)) if (p.is_dir() and week_pat.match(p.name)) else 0):
-        if not wf.is_dir() or not week_pat.match(wf.name):
+
+    # Collect (week_num, folder_path) for valid week folders
+    week_folders = []
+    for wf in _FBA_SALES_ROOT.iterdir():
+        if not wf.is_dir():
             continue
+        m = week_pat.match(wf.name)
+        if not m:
+            continue
+        week_folders.append((int(m.group(1)), wf))
+
+    if not week_folders:
+        return pd.DataFrame()
+
+    # Take the most recent `sales_window` weeks (desc by week number)
+    week_folders.sort(key=lambda x: x[0], reverse=True)
+    window = max(int(sales_window), 1)
+    selected = week_folders[:window]
+
+    frames: list[pd.DataFrame] = []
+    for _, wf in selected:
         for csv in wf.glob("*.csv"):
             if csv.stem.strip().lower() in aliases:
                 try:
@@ -70,13 +91,13 @@ def _load_weekly_fba_shipments(brand_aliases: list[str]) -> pd.DataFrame:
 # =================================================
 # DATA LOADERS — reads directly from repo files
 # =================================================
-def load_fc_data(account: str):
+def load_fc_data(account: str, sales_window: int = 12):
     key = account.strip().lower()
     if key not in ACCOUNT_FILES:
         raise ValueError(f"Unknown account for FC data: {account}")
 
     files = ACCOUNT_FILES[key]
-    shipments = _load_weekly_fba_shipments(files["fba_aliases"])
+    shipments = _load_weekly_fba_shipments(files["fba_aliases"], sales_window=sales_window)
     ledger    = get(files["ledger"]).copy()
 
     shipments.columns = shipments.columns.str.strip()
@@ -92,7 +113,8 @@ def load_fc_data(account: str):
 def calculate_fc_plan(
     replenish_weeks: int,
     channel: str,
-    account: str
+    account: str,
+    sales_window: int = 12,
 ) -> pd.DataFrame:
     """
     FC-Level Planning Engine
@@ -110,7 +132,7 @@ def calculate_fc_plan(
     -------------------------------------------------
     """
 
-    shipments, ledger = load_fc_data(account)
+    shipments, ledger = load_fc_data(account, sales_window=sales_window)
 
     # =================================================
     # VALIDATE SHIPMENTS STRUCTURE

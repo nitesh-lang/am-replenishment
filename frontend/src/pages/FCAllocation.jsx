@@ -12,6 +12,7 @@ export default function FCAllocation() {
   ============================================================ */
 
   const [replenishWeeks, setReplenishWeeks] = useState(8);
+  const [salesWindow, setSalesWindow] = useState(12);
   const [channel, setChannel] = useState("All");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -124,7 +125,7 @@ export default function FCAllocation() {
   useEffect(() => {
     setLoading(true);
     setFossilEdits({});
-    getFCFinal(replenishWeeks, channel, account)
+    getFCFinal(replenishWeeks, channel, account, salesWindow)
       .then((res) => {
         const rows = Array.isArray(res) ? res : [];
         setData(rows);
@@ -393,7 +394,12 @@ function exportCSV() {
       <FCAllocationSOPModal open={sopOpen} onClose={() => setSopOpen(false)} />
 
       {/* FILTER PANEL */}
-      <div className="card grid grid-cols-1 md:grid-cols-4 gap-3 py-3">
+      <div className="card grid grid-cols-1 md:grid-cols-5 gap-3 py-3">
+        <FilterSelect
+          label="Sales Window"
+          value={salesWindow}
+          onChange={(v) => setSalesWindow(v)}
+        />
         <FilterSelect
           label="Replenish Weeks"
           value={replenishWeeks}
@@ -447,7 +453,7 @@ function exportCSV() {
   </select>
 </div>
 
-<div className="flex items-end justify-end gap-2 md:col-span-4">
+<div className="flex items-end justify-end gap-2 md:col-span-5">
   <button
     onClick={exportCSV}
     className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition"
@@ -858,6 +864,7 @@ function FCAllocationSOPModal({ open, onClose }) {
             <h3 className="text-sm font-semibold text-slate-900 mb-1">Top controls</h3>
             <ul className="list-disc pl-5 space-y-0.5 text-xs">
               <li><b>Account</b> — Nexlev / Viomi / Audio Array / White Mulberry / Fossil</li>
+              <li><b>Sales Window</b> — last N weeks of FBA Sales used for velocity (default 12). If fewer weeks of data are available, the loader uses whatever's there.</li>
               <li><b>Replenish Weeks</b> — target weeks of cover at each FC (default 8)</li>
               <li><b>Channel</b> — sales channel filter for velocity (default All)</li>
             </ul>
@@ -886,7 +893,7 @@ function FCAllocationSOPModal({ open, onClose }) {
             <ul className="list-disc pl-5 space-y-0.5 text-xs">
               <li><b>Nexlev / Viomi / Audio Array / White Mulberry</b> → IXD items shipped at <b>35%</b> of need (IST governance); Non-IXD at 100%. FC-to-FC transfers allowed.</li>
               <li><b>Fossil</b> → No IST cap. Send Qty also subtracts <b>In-Transit</b> (Packing List Qty) and <b>Open PO</b> (PO Qty). <b>No transfers</b> between FCs (direct dispatch). Cluster PO computed for 6 clusters (BLR, BOM, TN, DEL, TEL, WB).</li>
-              <li>Velocity divisor = weeks spanned by the shipments file dates (not a fixed 12). Whatever the file covers, that's the window.</li>
+              <li>Velocity divisor = weeks actually loaded after the Sales Window filter (capped at the selected dropdown value, or fewer if not enough weeks of data exist).</li>
             </ul>
           </section>
 

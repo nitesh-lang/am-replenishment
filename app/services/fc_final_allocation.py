@@ -12,7 +12,8 @@ from app.services.file_cache import get, get_excel_sheet
 def calculate_final_allocation(
     replenish_weeks: int = 8,
     channel: str = "All",
-    account: str = "Nexlev"
+    account: str = "Nexlev",
+    sales_window: int = 12,
 ) -> pd.DataFrame:
 
 
@@ -24,7 +25,8 @@ def calculate_final_allocation(
     df_plan = calculate_fc_plan(
         replenish_weeks=replenish_weeks,
         channel=channel,
-        account=account
+        account=account,
+        sales_window=sales_window,
     )
 
     if df_plan is None or df_plan.empty:
