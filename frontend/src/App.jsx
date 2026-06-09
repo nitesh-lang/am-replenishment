@@ -66,19 +66,30 @@ function App() {
 
           {/* Module-gated pages */}
           <Route path="/dashboard"             element={<Gated moduleKey="dashboard"><Dashboard /></Gated>} />
-          <Route path="/replenishment"         element={<Gated moduleKey="replenishment"><Replenishment /></Gated>} />
-          <Route path="/replenishment-v2"      element={<Gated moduleKey="replenishment"><ReplenishmentV2 /></Gated>} />
-          <Route path="/fc-allocation"         element={<Gated moduleKey="fc-allocation"><FCAllocation /></Gated>} />
-          <Route path="/fc-allocation-v2"      element={<Gated moduleKey="fc-allocation"><FCAllocationV2 /></Gated>} />
+          {/* V2 now serves the main URL; v1 kept at /…-v1 as a fallback. */}
+          <Route path="/replenishment"         element={<Gated moduleKey="replenishment"><ReplenishmentV2 /></Gated>} />
+          <Route path="/replenishment-v1"      element={<Gated moduleKey="replenishment"><Replenishment /></Gated>} />
+          <Route path="/replenishment-v2"      element={<Navigate to="/replenishment" replace />} />
+
+          <Route path="/fc-allocation"         element={<Gated moduleKey="fc-allocation"><FCAllocationV2 /></Gated>} />
+          <Route path="/fc-allocation-v1"      element={<Gated moduleKey="fc-allocation"><FCAllocation /></Gated>} />
+          <Route path="/fc-allocation-v2"      element={<Navigate to="/fc-allocation" replace />} />
+
           <Route path="/sales-analytics"       element={<Gated moduleKey="sales-analytics"><SalesAnalytics /></Gated>} />
           <Route path="/region-sales"          element={<Gated moduleKey="region-sales"><RegionSales /></Gated>} />
           <Route path="/china-reorder"         element={<Gated moduleKey="china-reorder"><ChinaReorder /></Gated>} />
-          <Route path="/cb-replenishment"      element={<Gated moduleKey="cb-replenishment"><CBReplenishment /></Gated>} />
-          <Route path="/cb-replenishment-v2"   element={<Gated moduleKey="cb-replenishment"><CBReplenishmentV2 /></Gated>} />
-          <Route path="/wm-replenishment"      element={<Gated moduleKey="wm-replenishment"><WMReplenishment /></Gated>} />
-          <Route path="/wm-replenishment-v2"   element={<Gated moduleKey="wm-replenishment"><WMReplenishmentV2 /></Gated>} />
-          <Route path="/fossil-replenishment"  element={<Gated moduleKey="fossil-replenishment"><FossilReplenishment /></Gated>} />
-          <Route path="/fossil-replenishment-v2" element={<Gated moduleKey="fossil-replenishment"><FossilReplenishmentV2 /></Gated>} />
+
+          <Route path="/cb-replenishment"      element={<Gated moduleKey="cb-replenishment"><CBReplenishmentV2 /></Gated>} />
+          <Route path="/cb-replenishment-v1"   element={<Gated moduleKey="cb-replenishment"><CBReplenishment /></Gated>} />
+          <Route path="/cb-replenishment-v2"   element={<Navigate to="/cb-replenishment" replace />} />
+
+          <Route path="/wm-replenishment"      element={<Gated moduleKey="wm-replenishment"><WMReplenishmentV2 /></Gated>} />
+          <Route path="/wm-replenishment-v1"   element={<Gated moduleKey="wm-replenishment"><WMReplenishment /></Gated>} />
+          <Route path="/wm-replenishment-v2"   element={<Navigate to="/wm-replenishment" replace />} />
+
+          <Route path="/fossil-replenishment"  element={<Gated moduleKey="fossil-replenishment"><FossilReplenishmentV2 /></Gated>} />
+          <Route path="/fossil-replenishment-v1" element={<Gated moduleKey="fossil-replenishment"><FossilReplenishment /></Gated>} />
+          <Route path="/fossil-replenishment-v2" element={<Navigate to="/fossil-replenishment" replace />} />
           <Route path="/blinkit-replenishment" element={<Gated moduleKey="blinkit-replenishment"><BlinkitReplenishment /></Gated>} />
 
           {/* Admin-only */}
