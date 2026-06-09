@@ -52,6 +52,8 @@ export default function FCAllocationV2() {
   const [sorting, setSorting] = useState([]);
   const [expandedKey, setExpandedKey] = useState(null);
   const [density, setDensity] = useState("cozy");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 100;
 
   /* Fossil-specific */
   const [fossilEdits, setFossilEdits] = useState({});
@@ -200,6 +202,8 @@ export default function FCAllocationV2() {
   /* ============================================================
      DERIVED
   ============================================================ */
+  useEffect(() => { setPage(1); }, [search, view, account, channel, fromWeek, toWeek]);
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter(r => {
@@ -349,31 +353,39 @@ export default function FCAllocationV2() {
     return () => window.removeEventListener("mouseup", up);
   }, []);
 
-  const selectedCells = useMemo(() => {
-    if (!selRange) return [];
+  // Fast O(1) lookup set for selected cells (was O(N) .some() per cell render)
+  const selectedSet = useMemo(() => {
+    const s = new Set();
+    if (!selRange) return s;
+    const r0 = Math.min(selRange.fromRow, selRange.toRow);
+    const r1 = Math.max(selRange.fromRow, selRange.toRow);
+    const c0 = Math.min(selRange.fromCol, selRange.toCol);
+    const c1 = Math.max(selRange.fromCol, selRange.toCol);
+    for (let r = r0; r <= r1; r++) {
+      for (let c = c0; c <= c1; c++) s.add(`${r}-${c}`);
+    }
+    return s;
+  }, [selRange]);
+
+  const selectionSummary = useMemo(() => {
+    if (!selRange) return null;
     const r0 = Math.min(selRange.fromRow, selRange.toRow);
     const r1 = Math.max(selRange.fromRow, selRange.toRow);
     const c0 = Math.min(selRange.fromCol, selRange.toCol);
     const c1 = Math.max(selRange.fromCol, selRange.toCol);
     const sortedTable = table.getRowModel().rows;
-    const out = [];
+    let count = 0, sum = 0;
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
         const col = columns[c];
         const orig = sortedTable[r]?.original;
-        if (col && orig) {
-          out.push({ rowIdx: r, colIdx: c, value: orig[col.id], numeric: !!col.meta?.numeric });
-        }
+        if (!col || !orig) continue;
+        count++;
+        if (col.meta?.numeric) sum += Number(orig[col.id]) || 0;
       }
     }
-    return out;
+    return count ? { count, sum } : null;
   }, [selRange, table, columns]);
-
-  const selectionSummary = useMemo(() => {
-    if (!selectedCells.length) return null;
-    const nums = selectedCells.filter(c => c.numeric).map(c => Number(c.value) || 0);
-    return { count: selectedCells.length, sum: nums.reduce((a, b) => a + b, 0) };
-  }, [selectedCells]);
 
   useEffect(() => {
     function onCopy(e) {
@@ -675,7 +687,7 @@ export default function FCAllocationV2() {
               </thead>
 
               <tbody className="text-slate-700 [&_td]:px-3 [&_tr]:border-b [&_tr]:border-slate-100">
-                {table.getRowModel().rows.map((trow, ri) => {
+                {table.getRowModel().rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((trow, ri) => {
                   const r = trow.original;
                   const key = `${r.sku}|${r.fulfillment_center}`;
                   const isExpanded = expandedKey === key;
@@ -697,7 +709,8 @@ export default function FCAllocationV2() {
                         {trow.getVisibleCells().map((cell, ci) => {
                           const colId = cell.column.id;
                           const meta = cell.column.columnDef.meta || {};
-                          const isSelected = selectedCells.some(s => s.rowIdx === ri && s.colIdx === ci);
+                          const globalRowIdx = (page - 1) * PAGE_SIZE + ri;
+                          const isSelected = selectedSet.has(`${globalRowIdx}-${ci}`);
 
                           let content;
                           if (colId === "model") {
@@ -786,8 +799,8 @@ export default function FCAllocationV2() {
                           return (
                             <td
                               key={cell.id}
-                              onMouseDown={meta.numeric ? (e) => onCellMouseDown(ri, ci, e) : undefined}
-                              onMouseEnter={() => onCellMouseEnter(ri, ci)}
+                              onMouseDown={meta.numeric ? (e) => onCellMouseDown(globalRowIdx, ci, e) : undefined}
+                              onMouseEnter={() => onCellMouseEnter(globalRowIdx, ci)}
                               className={cn(
                                 meta.numeric ? "text-right" : "text-left",
                                 meta.sticky === 1 && "sticky left-0 bg-white z-[1] shadow-[1px_0_0_#e2e8f0]",
@@ -832,8 +845,29 @@ export default function FCAllocationV2() {
                 <>Drag numeric cells to range-select · <kbd className="px-1 py-0.5 rounded bg-slate-200 text-[10px] font-mono">⌘K</kbd> command palette</>
               )}
             </div>
-            <div>
-              Showing <span className="font-semibold text-slate-900">{filteredRows.length}</span> of {rows.length} rows
+            <div className="flex items-center gap-3">
+              <span>
+                Showing <span className="font-semibold text-slate-900">
+                  {Math.min((page - 1) * PAGE_SIZE + 1, filteredRows.length)}–{Math.min(page * PAGE_SIZE, filteredRows.length)}
+                </span> of {filteredRows.length}
+              </span>
+              {filteredRows.length > PAGE_SIZE && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40"
+                  >‹</button>
+                  <span className="px-2 font-semibold text-slate-900 tabular-nums">
+                    Page {page} / {Math.ceil(filteredRows.length / PAGE_SIZE)}
+                  </span>
+                  <button
+                    onClick={() => setPage(p => Math.min(Math.ceil(filteredRows.length / PAGE_SIZE), p + 1))}
+                    disabled={page >= Math.ceil(filteredRows.length / PAGE_SIZE)}
+                    className="px-2 py-1 rounded border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40"
+                  >›</button>
+                </div>
+              )}
             </div>
           </div>
         </div>
