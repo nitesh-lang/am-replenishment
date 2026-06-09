@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
-import { LogOut, ChevronDown, Search } from "lucide-react";
+import { LogOut, ChevronDown, Search, MoreHorizontal } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 
 /**
@@ -10,15 +10,16 @@ import { useAuth } from "../auth/AuthContext";
  */
 export default function Layout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const menuRef = useRef(null);
+  const moreRef = useRef(null);
   const navigate = useNavigate();
   const { user, logout, canAccess } = useAuth();
 
   useEffect(() => {
     function onClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -34,25 +35,25 @@ export default function Layout({ children }) {
     .slice(0, 2)
     .toUpperCase();
 
+  // Primary (operational) modules — always visible in the top bar
   const navItems = [
-    { name: "Dashboard",       path: "/dashboard",              moduleKey: "dashboard" },
-    { name: "Replenishment",   path: "/replenishment",          moduleKey: "replenishment" },
-    { name: "FC Allocation",   path: "/fc-allocation",          moduleKey: "fc-allocation" },
-    { name: "Reorder",         path: "/china-reorder",          moduleKey: "china-reorder" },
-    { name: "Sales",           path: "/sales-analytics",        moduleKey: "sales-analytics" },
-    { name: "Region",          path: "/region-sales",           moduleKey: "region-sales" },
-    { name: "CB",              path: "/cb-replenishment",       moduleKey: "cb-replenishment" },
-    { name: "Clicktech",       path: "/wm-replenishment",       moduleKey: "wm-replenishment" },
-    { name: "Fossil",          path: "/fossil-replenishment",   moduleKey: "fossil-replenishment" },
-    { name: "Blinkit",         path: "/blinkit-replenishment",  moduleKey: "blinkit-replenishment" },
+    { name: "Dashboard",     path: "/dashboard",              moduleKey: "dashboard" },
+    { name: "Replenishment", path: "/replenishment",          moduleKey: "replenishment" },
+    { name: "FC Allocation", path: "/fc-allocation",          moduleKey: "fc-allocation" },
+    { name: "Reorder",       path: "/china-reorder",          moduleKey: "china-reorder" },
+    { name: "CB",            path: "/cb-replenishment",       moduleKey: "cb-replenishment" },
+    { name: "Clicktech",     path: "/wm-replenishment",       moduleKey: "wm-replenishment" },
+    { name: "Fossil",        path: "/fossil-replenishment",   moduleKey: "fossil-replenishment" },
+    { name: "Blinkit",       path: "/blinkit-replenishment",  moduleKey: "blinkit-replenishment" },
   ].filter(item => canAccess(item.moduleKey));
 
-  const adminItems = user?.role === "admin"
-    ? [
-        { name: "Users", path: "/admin" },
-        { name: "Usage", path: "/usage" },
-      ]
-    : [];
+  // Secondary — analytics + admin. Tucked into a "More ▾" dropdown.
+  const moreItems = [
+    { name: "Sales Analytics", path: "/sales-analytics", moduleKey: "sales-analytics", show: canAccess("sales-analytics") },
+    { name: "Region Sales",    path: "/region-sales",    moduleKey: "region-sales",    show: canAccess("region-sales") },
+    { name: "Usage Analytics", path: "/usage",                                          show: user?.role === "admin" },
+    { name: "User Management", path: "/admin",                                          show: user?.role === "admin" },
+  ].filter(i => i.show);
 
   function openCommandPalette() {
     // Pages that mount the CommandPalette listen for Cmd/Ctrl+K globally
@@ -93,25 +94,42 @@ export default function Layout({ children }) {
               </NavLink>
             ))}
 
-            {adminItems.length > 0 && (
-              <>
-                <span className="mx-2 h-4 w-px bg-white/10" />
-                {adminItems.map(item => (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    className={({ isActive }) =>
-                      `px-3 py-1.5 rounded-md text-[13px] font-medium whitespace-nowrap transition-colors ${
-                        isActive
-                          ? "bg-white/10 text-white"
-                          : "text-white/60 hover:bg-white/5 hover:text-white/90"
-                      }`
-                    }
-                  >
-                    {item.name}
-                  </NavLink>
-                ))}
-              </>
+            {moreItems.length > 0 && (
+              <div className="relative" ref={moreRef}>
+                <button
+                  onClick={() => setMoreOpen(v => !v)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium whitespace-nowrap transition-colors ${
+                    moreOpen
+                      ? "bg-white/10 text-white"
+                      : "text-white/60 hover:bg-white/5 hover:text-white/90"
+                  }`}
+                >
+                  <MoreHorizontal className="w-3.5 h-3.5" />
+                  More
+                  <ChevronDown className={`w-3 h-3 transition-transform ${moreOpen ? "rotate-180" : ""}`} />
+                </button>
+                {moreOpen && (
+                  <div className="absolute left-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 overflow-hidden">
+                    <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.08em] text-slate-400 font-semibold">Analytics & Admin</div>
+                    {moreItems.map(item => (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setMoreOpen(false)}
+                        className={({ isActive }) =>
+                          `block px-3 py-2 text-xs font-medium transition-colors ${
+                            isActive
+                              ? "bg-indigo-50 text-indigo-700"
+                              : "text-slate-700 hover:bg-slate-50"
+                          }`
+                        }
+                      >
+                        {item.name}
+                      </NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </nav>
 
