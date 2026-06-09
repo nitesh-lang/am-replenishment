@@ -8,6 +8,7 @@ import Layout from "./layout/Layout";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import Replenishment from "./pages/Replenishment";
+import ReplenishmentV2 from "./pages/ReplenishmentV2";
 import FCAllocation from "./pages/FCAllocation";
 import SalesAnalytics from "./pages/SalesAnalytics";
 import RegionSales from "./pages/RegionSales";
@@ -62,6 +63,7 @@ function App() {
           {/* Module-gated pages */}
           <Route path="/dashboard"             element={<Gated moduleKey="dashboard"><Dashboard /></Gated>} />
           <Route path="/replenishment"         element={<Gated moduleKey="replenishment"><Replenishment /></Gated>} />
+          <Route path="/replenishment-v2"      element={<Gated moduleKey="replenishment"><ReplenishmentV2 /></Gated>} />
           <Route path="/fc-allocation"         element={<Gated moduleKey="fc-allocation"><FCAllocation /></Gated>} />
           <Route path="/sales-analytics"       element={<Gated moduleKey="sales-analytics"><SalesAnalytics /></Gated>} />
           <Route path="/region-sales"          element={<Gated moduleKey="region-sales"><RegionSales /></Gated>} />

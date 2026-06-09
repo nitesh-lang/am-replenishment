@@ -10,11 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
     "axios": "^1.6.0",
+    "clsx": "^2.1.1",
     "lucide-react": "^0.574.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.23.0"
+    "react-router-dom": "^6.23.0",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@eslint/js": "^8.57.0",

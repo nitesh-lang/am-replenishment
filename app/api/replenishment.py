@@ -92,6 +92,8 @@ def get_replenishment(
             "cartons_needed": int(row.get("cartons_needed", 0)),
             "excess_units": int(row.get("excess_units", 0)),
             "working_value": saved_map.get(sku, ""),
+            "weekly_sales":  list(row.get("weekly_sales", []) or []),
+            "weekly_window": list(row.get("weekly_window", []) or []),
         })
 
     return response

@@ -591,6 +591,47 @@ def calculate_replenishment(
     df["recommended_qty"] = df[["recommended_qty", "ampm_inventory"]].min(axis=1).astype(int)
 
     # ---------------------------------------------
+    # WEEKLY SALES ARRAY (for sparklines + detail-row 12-wk chart)
+    # ASIN → SKU → Model cascade, same as velocity. Returns one int per
+    # ISO week in chronological order matching `weekly_window`.
+    # ---------------------------------------------
+    sales_for_spark = sales_n.copy()
+    sales_for_spark["_asin"] = sales_for_spark.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    sales_for_spark["_sku"]  = sales_for_spark.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+
+    if "week_num" not in sales_for_spark.columns:
+        sales_for_spark = normalize_week_column(sales_for_spark)
+
+    weeks_sorted = sorted(int(w) for w in sales_for_spark["week_num"].dropna().unique())
+    n_weeks = max(len(weeks_sorted), 1)
+
+    def _weekly_dict(key_col, frame):
+        if frame.empty:
+            return {}
+        piv = (
+            frame.pivot_table(index=key_col, columns="week_num", values="units_sold", aggfunc="sum")
+            .reindex(columns=weeks_sorted, fill_value=0)
+            .fillna(0)
+            .astype(int)
+        )
+        return {k: row.tolist() for k, row in piv.iterrows()}
+
+    wk_by_asin  = _weekly_dict("_asin",  sales_for_spark[sales_for_spark["_asin"] != ""])
+    wk_by_sku   = _weekly_dict("_sku",   sales_for_spark[(sales_for_spark["_asin"] == "") & (sales_for_spark["_sku"] != "")])
+    wk_by_model = _weekly_dict("model",  sales_for_spark[(sales_for_spark["_asin"] == "") & (sales_for_spark["_sku"] == "")])
+
+    _asin_keys = df["ASIN"].astype(str).str.strip().str.upper() if "ASIN" in df.columns else pd.Series([""] * len(df))
+    _sku_keys  = df["SKU"].astype(str).str.strip().str.upper() if "SKU" in df.columns else pd.Series([""] * len(df))
+    _mod_keys  = df["Model"].astype(str).str.strip() if "Model" in df.columns else pd.Series([""] * len(df))
+
+    blank = [0] * n_weeks
+    df["weekly_sales"] = [
+        wk_by_asin.get(a) or wk_by_sku.get(s) or wk_by_model.get(m) or list(blank)
+        for a, s, m in zip(_asin_keys, _sku_keys, _mod_keys)
+    ]
+    df["weekly_window"] = [list(weeks_sorted)] * len(df)
+
+    # ---------------------------------------------
     # FINAL SHAPING FOR API
     # ---------------------------------------------
     df = df.drop(columns=["model", "_ixd_type"], errors="ignore")
