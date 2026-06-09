@@ -376,43 +376,7 @@ export default function ReplenishmentV2() {
   ============================================================ */
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      {/* Dark sub-header */}
-      <header className="bg-slate-950 text-white">
-        <div className="max-w-[1700px] mx-auto px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div className="text-lg font-semibold tracking-tight">Replenishment <span className="text-white/40 font-normal">v2</span></div>
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/5 text-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-white/80">
-                {pastWeekMeta?.label || currentWeekMeta?.label || `Week ${toWeek}`}
-                {isReadOnly ? " (view only)" : currentWeekMeta?.locked ? " (locked)" : ""}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <button
-              onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10"
-            >
-              <Search className="w-3.5 h-3.5 text-white/60" />
-              <span className="text-white/60">Quick find…</span>
-              <kbd className="ml-2 px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-white/70 font-mono">⌘K</kbd>
-            </button>
-            {!isReadOnly && (
-              <button
-                onClick={saveWeek}
-                disabled={saving || currentWeekMeta?.locked}
-                className="px-3 py-1.5 rounded-md bg-indigo-500 hover:bg-indigo-600 font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
-              >
-                <Save className="w-3.5 h-3.5" />
-                {saving ? "Saving…" : "Save Week"}
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-[1700px] mx-auto px-6 pt-5 pb-10">
+      <div className="w-full px-6 pt-5 pb-10">
         {/* Header row */}
         <div className="flex items-end justify-between mb-4">
           <div>
@@ -432,10 +396,28 @@ export default function ReplenishmentV2() {
               <span className="text-slate-500 text-lg font-medium">Replenishment</span>
             </h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-md bg-white border border-slate-200 text-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-slate-700">
+                {pastWeekMeta?.label || currentWeekMeta?.label || `Week ${toWeek}`}
+                {isReadOnly && <span className="text-slate-400"> · view only</span>}
+                {!isReadOnly && currentWeekMeta?.locked && <span className="text-amber-700"> · locked</span>}
+              </span>
+            </div>
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
+            {!isReadOnly && (
+              <button
+                onClick={saveWeek}
+                disabled={saving || currentWeekMeta?.locked}
+                className="px-3 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {saving ? "Saving…" : "Save Week"}
+              </button>
+            )}
           </div>
         </div>
 
