@@ -242,35 +242,41 @@ export default function ReplenishmentV2() {
     return () => window.removeEventListener("mouseup", up);
   }, []);
 
-  const selectedCells = useMemo(() => {
-    if (!selRange) return [];
+  // Fast O(1) lookup set for selected cells
+  const selectedSet = useMemo(() => {
+    const s = new Set();
+    if (!selRange) return s;
+    const r0 = Math.min(selRange.fromRow, selRange.toRow);
+    const r1 = Math.max(selRange.fromRow, selRange.toRow);
+    const c0 = Math.min(selRange.fromCol, selRange.toCol);
+    const c1 = Math.max(selRange.fromCol, selRange.toCol);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) s.add(`${r}-${c}`);
+    return s;
+  }, [selRange]);
+
+  const selectionSummary = useMemo(() => {
+    if (!selRange) return null;
     const r0 = Math.min(selRange.fromRow, selRange.toRow);
     const r1 = Math.max(selRange.fromRow, selRange.toRow);
     const c0 = Math.min(selRange.fromCol, selRange.toCol);
     const c1 = Math.max(selRange.fromCol, selRange.toCol);
     const sortedRows = table.getRowModel().rows;
-    const out = [];
+    let count = 0, sum = 0;
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
         const col = columns[c];
-        if (!col) continue;
-        const original = sortedRows[r]?.original;
-        if (!original) continue;
-        out.push({ rowIdx: r, colIdx: c, value: original[col.id], numeric: !!col.meta?.numeric });
+        const orig = sortedRows[r]?.original;
+        if (!col || !orig) continue;
+        count++;
+        if (col.meta?.numeric) sum += Number(orig[col.id]) || 0;
       }
     }
-    return out;
+    return count ? { count, sum } : null;
   }, [selRange, table, columns]);
-
-  const selectionSummary = useMemo(() => {
-    if (selectedCells.length === 0) return null;
-    const nums = selectedCells.filter(c => c.numeric).map(c => Number(c.value) || 0);
-    return { count: selectedCells.length, sum: nums.reduce((a, b) => a + b, 0) };
-  }, [selectedCells]);
 
   useEffect(() => {
     function onCopy(e) {
-      if (!selRange || selectedCells.length === 0) return;
+      if (!selRange) return;
       e.preventDefault();
       const r0 = Math.min(selRange.fromRow, selRange.toRow);
       const r1 = Math.max(selRange.fromRow, selRange.toRow);
@@ -291,7 +297,7 @@ export default function ReplenishmentV2() {
     }
     document.addEventListener("copy", onCopy);
     return () => document.removeEventListener("copy", onCopy);
-  }, [selRange, selectedCells, columns, table]);
+  }, [selRange, columns, table]);
 
   /* ============================================================
      GROUPED HEADER BAND
@@ -580,7 +586,7 @@ export default function ReplenishmentV2() {
                         {trow.getVisibleCells().map((cell, ci) => {
                           const colId = cell.column.id;
                           const meta = cell.column.columnDef.meta || {};
-                          const isSelected = selectedCells.some(s => s.rowIdx === ri && s.colIdx === ci);
+                          const isSelected = selectedSet.has(`${ri}-${ci}`);
 
                           let content;
                           if (colId === "model") {

@@ -389,7 +389,7 @@ export default function FCAllocationV2() {
 
   useEffect(() => {
     function onCopy(e) {
-      if (!selRange || selectedCells.length === 0) return;
+      if (!selRange) return;
       e.preventDefault();
       const r0 = Math.min(selRange.fromRow, selRange.toRow);
       const r1 = Math.max(selRange.fromRow, selRange.toRow);
@@ -410,7 +410,7 @@ export default function FCAllocationV2() {
     }
     document.addEventListener("copy", onCopy);
     return () => document.removeEventListener("copy", onCopy);
-  }, [selRange, selectedCells, columns, table]);
+  }, [selRange, columns, table]);
 
   /* ============================================================
      GROUPED HEADER BAND
