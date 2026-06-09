@@ -311,7 +311,7 @@ function exportCSV() {
   const fossilHeaders = [
     "model", "assortment", "sku", "asin",
     "fulfillment_center", "cluster",
-    "fc_inventory", "ampm_inventory",
+    "fc_inventory", "ampm_inventory", "b2b_inventory",
     "weekly_velocity", "total_units_sold",
     "in_transit_qty", "open_po_qty",
     "send_qty", "cluster_po", "cluster_in_transit",
@@ -320,7 +320,7 @@ function exportCSV() {
 
   const defaultHeaders = [
     "model", "category", "sku", "asin", "listing_status",
-    "weekly_velocity", "total_units_sold", "fc_inventory", "ampm_inventory",
+    "weekly_velocity", "total_units_sold", "fc_inventory", "ampm_inventory", "b2b_inventory",
     "target_cover_units", "expected_units", "send_qty",
     "fill_pct", "velocity_flag", "fulfillment_center",
     "hazmat_type", "master_carton",
@@ -340,6 +340,7 @@ function exportCSV() {
     total_units_sold: "TOTAL SOLD",
     fc_inventory: "FC SOH",
     ampm_inventory: account === "Fossil" ? "FOSSIL SOH" : "Mother Warehouse",
+    b2b_inventory: "B2B INVENTORY",
     target_cover_units: "TARGET COVER UNITS",
     expected_units: "ORIGINAL REQUIRED",
     send_qty: account === "Fossil" ? "PO REQUIREMENT" : "To Send QTY",
@@ -642,6 +643,7 @@ function exportCSV() {
       FC SOH {getSortArrow("fc_inventory")}
     </th>
     <th onClick={() => toggleSort("ampm_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">{account === "Fossil" ? "Fossil SOH" : "Mother Warehouse"} {getSortArrow("ampm_inventory")}</th>
+    <th onClick={() => toggleSort("b2b_inventory")} className="px-4 py-3 cursor-pointer whitespace-nowrap">B2B Inv {getSortArrow("b2b_inventory")}</th>
     <th onClick={() => toggleSort("weekly_velocity")} className="px-4 py-3 cursor-pointer whitespace-nowrap">
       Avg Weekly Sales {getSortArrow("weekly_velocity")}
     </th>
@@ -706,6 +708,8 @@ function exportCSV() {
                         <td className="px-4 py-3">{row.fc_inventory ?? 0}</td>
                         {/* Mother Warehouse / Fossil SOH */}
                         <td className="px-4 py-3">{row.ampm_inventory ?? 0}</td>
+                        {/* B2B Inventory (display only) */}
+                        <td className="px-4 py-3">{row.b2b_inventory ?? 0}</td>
                         {/* Avg Weekly Sales */}
                         <td className="px-4 py-3">{row.weekly_velocity ?? 0}</td>
                         {/* Total Sold */}

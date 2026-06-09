@@ -79,6 +79,7 @@ def get_replenishment(
             "amazon_inventory": int(row["amazon_inventory"]),
             "inbound_inventory": int(row["inbound_inventory"]),
             "ampm_inventory": int(row["ampm_inventory"]),
+            "b2b_inventory":  int(row.get("b2b_inventory", 0)),
             "required_units": int(row["required_units"]),
             "replenishment_qty": int(row["replenishment_qty"]),
             "warehouse_shortfall": int(row["warehouse_shortfall"]),

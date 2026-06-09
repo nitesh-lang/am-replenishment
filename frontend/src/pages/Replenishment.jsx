@@ -254,6 +254,7 @@ export default function Replenishment() {
     "amazon_inventory",
     "inbound_inventory",
     "ampm_inventory",
+    "b2b_inventory",
     "required_units",
     "replenishment_qty",
     "working_value",
@@ -274,6 +275,7 @@ export default function Replenishment() {
       last_4_velocity: "4WK AVG",
       total_units_sold: "TOTAL",
       ampm_inventory: "MOTHER WH",
+      b2b_inventory: "B2B INV",
       amazon_inventory: "AZ INV",
       inbound_inventory: "INBOUND",
       replenishment_qty: "REPLEN",
@@ -423,7 +425,7 @@ export default function Replenishment() {
   const NUMERIC_COLS = new Set([
     "sales_velocity", "last_4_velocity", "total_units_sold",
     "amazon_inventory", "inbound_inventory",
-    "ampm_inventory", "required_units", "replenishment_qty", "warehouse_shortfall",
+    "ampm_inventory", "b2b_inventory", "required_units", "replenishment_qty", "warehouse_shortfall",
   ]);
 
   function getStatusBadge(status) {
@@ -514,6 +516,7 @@ function exportCSV() {
     amazon_inventory: "AMAZON INVENTORY",
     inbound_inventory: "INBOUND INVENTORY",
     ampm_inventory: "Mother Warehouse",
+    b2b_inventory: "B2B INVENTORY",
     required_units: "REQUIRED UNITS",
     replenishment_qty: "REPLENISHMENT QTY",
     recommended_qty: "RECOMMENDED QTY",

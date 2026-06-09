@@ -490,6 +490,40 @@ def calculate_replenishment(
     df["ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
 
     # ---------------------------------------------
+    # B2B INVENTORY (display only — does not feed required_units / replen)
+    # Same ASIN→SKU→Model exclusive cascade as AMPM, filtered to
+    # Channel == "B2B - AMPM" in the inventory snapshot.
+    # ---------------------------------------------
+    b2b_inv = inventory[
+        inventory["Channel"].astype(str).str.strip().str.lower() == "b2b - ampm"
+    ].copy()
+    b2b_inv["_asin"]  = b2b_inv.get("ASIN", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    b2b_inv["_sku"]   = b2b_inv.get("SKU",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    b2b_inv["_model"] = b2b_inv["Model"].astype(str).str.strip().str.lower()
+
+    b2b_by_asin = (
+        b2b_inv[b2b_inv["_asin"] != ""]
+        .groupby("_asin", as_index=False)["Qty"].sum()
+        .set_index("_asin")["Qty"].to_dict()
+    )
+    b2b_by_sku = (
+        b2b_inv[b2b_inv["_sku"] != ""]
+        .groupby("_sku", as_index=False)["Qty"].sum()
+        .set_index("_sku")["Qty"].to_dict()
+    )
+    b2b_by_model = (
+        b2b_inv[(b2b_inv["_asin"] == "") & (b2b_inv["_sku"] == "")]
+        .groupby("_model", as_index=False)["Qty"].sum()
+        .set_index("_model")["Qty"].to_dict()
+    )
+
+    df["b2b_inventory"] = [
+        b2b_by_asin.get(a, b2b_by_sku.get(s, b2b_by_model.get(m, 0)))
+        for a, s, m in zip(_master_asin, _master_sku, _master_mod)
+    ]
+    df["b2b_inventory"] = pd.to_numeric(df["b2b_inventory"], errors="coerce").fillna(0)
+
+    # ---------------------------------------------
     # REQUIREMENT CALCULATION
     # ---------------------------------------------
     df["required_units"] = (df["sales_velocity"] * replenish_weeks).round(0)

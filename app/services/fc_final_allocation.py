@@ -355,6 +355,7 @@ def calculate_final_allocation(
                         "fossil_assortment":  safe(mr.get("fossil_assortment", "-"), "-"),
                         "listing_status":     "-",
                         "ampm_inventory":     0,
+                        "b2b_inventory":      0,
                         "fulfillment_center": fc,
                         "weekly_velocity":    0,
                         "total_units_sold":   0,
@@ -625,6 +626,42 @@ def calculate_final_allocation(
         errors="coerce",
     ).fillna(0)
 
+    # =========================
+    # B2B INVENTORY (display only — no calc logic)
+    # Same ASIN→SKU→Model cascade as AMPM, filtered to Channel == "B2B - AMPM".
+    # =========================
+    b2b_raw = get(ampm_file.replace("data/input/", ""))
+    b2b_raw = b2b_raw.copy()
+    b2b_raw.columns = b2b_raw.columns.str.lower().str.strip()
+    b2b_df = b2b_raw[b2b_raw["channel"].str.lower() == "b2b - ampm"].copy()
+    b2b_df["_asin"]  = b2b_df.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    b2b_df["_sku"]   = b2b_df.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    b2b_df["_model"] = b2b_df["model"].astype(str).str.strip().str.lower()
+
+    b2b_by_asin = (
+        b2b_df[b2b_df["_asin"] != ""]
+        .groupby("_asin", as_index=False)["qty"].sum()
+        .set_index("_asin")["qty"].to_dict()
+    )
+    b2b_by_sku = (
+        b2b_df[b2b_df["_sku"] != ""]
+        .groupby("_sku", as_index=False)["qty"].sum()
+        .set_index("_sku")["qty"].to_dict()
+    )
+    b2b_by_model = (
+        b2b_df[(b2b_df["_asin"] == "") & (b2b_df["_sku"] == "")]
+        .groupby("_model", as_index=False)["qty"].sum()
+        .set_index("_model")["qty"].to_dict()
+    )
+
+    df_plan["b2b_inventory"] = pd.to_numeric(
+        pd.Series([
+            b2b_by_asin.get(a, b2b_by_sku.get(s, b2b_by_model.get(m, 0)))
+            for a, s, m in zip(_asin_col, _sku_col, _mod_col)
+        ], index=df_plan.index),
+        errors="coerce",
+    ).fillna(0)
+
     if "category" in df_plan.columns:
         df_plan["category"] = df_plan["category"].fillna("-").astype(str).str.strip().replace("nan", "-")
     else:
@@ -643,6 +680,7 @@ def calculate_final_allocation(
         "category",
         "listing_status",
         "ampm_inventory",
+        "b2b_inventory",
         "fulfillment_center",
         "weekly_velocity",
         "total_units_sold",
