@@ -54,6 +54,8 @@ export default function FCAllocationV2() {
   const [density, setDensity] = useState("cozy");
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 100;
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedStatuses,   setSelectedStatuses]   = useState([]);
 
   /* Fossil-specific */
   const [fossilEdits, setFossilEdits] = useState({});
@@ -202,7 +204,16 @@ export default function FCAllocationV2() {
   /* ============================================================
      DERIVED
   ============================================================ */
-  useEffect(() => { setPage(1); }, [search, view, account, channel, fromWeek, toWeek]);
+  useEffect(() => { setPage(1); }, [search, view, account, channel, fromWeek, toWeek, selectedCategories, selectedStatuses]);
+
+  const categories = useMemo(
+    () => [...new Set(rows.map(r => r.category).filter(Boolean))].sort(),
+    [rows]
+  );
+  const listingStatuses = useMemo(
+    () => [...new Set(rows.map(r => r.listing_status).filter(Boolean))].sort(),
+    [rows]
+  );
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -213,6 +224,8 @@ export default function FCAllocationV2() {
         (r.asin  || "").toLowerCase().includes(q) ||
         (r.fulfillment_center || "").toLowerCase().includes(q)
       )) return false;
+      if (selectedCategories.length > 0 && !selectedCategories.includes(r.category)) return false;
+      if (selectedStatuses.length   > 0 && !selectedStatuses.includes(r.listing_status)) return false;
       if (view === "send")    return (r.send_qty || 0) > 0;
       if (view === "high")    return (r.send_qty || 0) > 500;
       if (view === "low")     return (r.send_qty || 0) > 0 && (r.send_qty || 0) < 50;
@@ -220,7 +233,7 @@ export default function FCAllocationV2() {
       if (view === "no_send") return (r.send_qty || 0) === 0;
       return true;
     });
-  }, [rows, search, view]);
+  }, [rows, search, view, selectedCategories, selectedStatuses]);
 
   const views = useMemo(() => [
     { key: "all",      label: "All",            count: rows.length },
@@ -639,6 +652,72 @@ export default function FCAllocationV2() {
               </button>
             </div>
           </div>
+
+          {/* Category + Status chip filters */}
+          {(categories.length > 0 || listingStatuses.length > 0) && !isFossil && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+              {categories.length > 0 && (
+                <>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Category</span>
+                  {categories.map(cat => {
+                    const on = selectedCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategories(p => p.includes(cat) ? p.filter(c => c !== cat) : [...p, cat])}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium rounded-md border transition-colors",
+                          on
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                  {selectedCategories.length > 0 && (
+                    <button onClick={() => setSelectedCategories([])} className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
+                  )}
+                </>
+              )}
+
+              {categories.length > 0 && listingStatuses.length > 0 && (
+                <span className="text-slate-200 mx-2">·</span>
+              )}
+
+              {listingStatuses.length > 0 && (
+                <>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Status</span>
+                  {listingStatuses.map(ls => {
+                    const on = selectedStatuses.includes(ls);
+                    const dot =
+                      ls === "Active" ? "bg-emerald-500" :
+                      ls === "EOL"    ? "bg-red-500" :
+                                        "bg-slate-400";
+                    return (
+                      <button
+                        key={ls}
+                        onClick={() => setSelectedStatuses(p => p.includes(ls) ? p.filter(s => s !== ls) : [...p, ls])}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 transition-colors",
+                          on
+                            ? "bg-slate-900 text-white border-slate-900"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        <span className={cn("w-1.5 h-1.5 rounded-full", dot)} />
+                        {ls}
+                      </button>
+                    );
+                  })}
+                  {selectedStatuses.length > 0 && (
+                    <button onClick={() => setSelectedStatuses([])} className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* TABLE */}

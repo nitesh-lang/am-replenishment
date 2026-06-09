@@ -136,9 +136,9 @@ export default function ChinaReorderV2() {
     { id: "category_l0",       accessorKey: "category_l0",       header: "L0",         size: 110, meta: { group: "id" } },
     { id: "last_12w_sales",    accessorKey: "last_12w_sales",    header: "12W Sales",  size: 95,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "avg_weekly_sales",  accessorKey: "avg_weekly_sales",  header: "Avg/Wk",     size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
-    { id: "current_inventory", accessorKey: "current_inventory", header: "Inventory",  size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "open_order_qty",    accessorKey: "open_order_qty",    header: "Open Order", size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "pipeline_qty",      accessorKey: "pipeline_qty",      header: "Pipeline",   size: 90,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    { id: "current_inventory", accessorKey: "current_inventory", header: "Inventory",       size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    { id: "open_order_qty",    accessorKey: "open_order_qty",    header: "PO Yet to Pickup",size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    { id: "pipeline_qty",      accessorKey: "pipeline_qty",      header: "PO Picked Up",    size: 105, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "weeks_cover",       accessorKey: "weeks_cover",       header: "Cover (wk)", size: 90,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "suggested_reorder", accessorKey: "suggested_reorder", header: "Reorder",    size: 95,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "avg_rating",        accessorKey: "avg_rating",        header: "Rating",     size: 80,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
@@ -536,7 +536,16 @@ export default function ChinaReorderV2() {
                               w < 4       ? "text-red-700 font-semibold" :
                               w < 8       ? "text-amber-700" :
                                             "text-emerald-700";
-                            content = <span className={cn("tabular-nums", tone)}>{w == null ? "—" : `${w}`}</span>;
+                            content = <span className={cn("tabular-nums", tone)}>{w == null ? "—" : Number(w).toFixed(1)}</span>;
+                          } else if (
+                            colId === "last_12w_sales" ||
+                            colId === "current_inventory" ||
+                            colId === "open_order_qty" ||
+                            colId === "pipeline_qty" ||
+                            colId === "rating_count"
+                          ) {
+                            const v = Number(r[colId] || 0);
+                            content = <span className="tabular-nums">{Math.round(v).toLocaleString()}</span>;
                           } else if (colId === "suggested_reorder") {
                             content = <span className="font-bold tabular-nums text-indigo-700">{Math.round(r.suggested_reorder || 0)}</span>;
                           } else if (colId === "avg_rating") {

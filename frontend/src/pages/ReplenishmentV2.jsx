@@ -46,6 +46,8 @@ export default function ReplenishmentV2() {
   const [sorting, setSorting] = useState([]);
   const [expandedSku, setExpandedSku] = useState(null);
   const [density, setDensity] = useState("cozy");
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [selectedStatuses, setSelectedStatuses]     = useState([]);
 
   /* ─────────── week-save flow ─────────── */
   const [weekStart, setWeekStart] = useState(null);
@@ -156,6 +158,11 @@ export default function ReplenishmentV2() {
     [rows]
   );
 
+  const listingStatuses = useMemo(
+    () => [...new Set(rows.map(r => r.listing_status).filter(Boolean))].sort(),
+    [rows]
+  );
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter(r => {
@@ -164,6 +171,8 @@ export default function ReplenishmentV2() {
         (r.sku   || "").toLowerCase().includes(q) ||
         (r.asin  || "").toLowerCase().includes(q)
       )) return false;
+      if (selectedCategories.length > 0 && !selectedCategories.includes(r.category)) return false;
+      if (selectedStatuses.length   > 0 && !selectedStatuses.includes(r.listing_status)) return false;
       if (view === "critical")  return r.is_risky;
       if (view === "bumped")    return r.velocity_basis === "4wk";
       if (view === "shortfall") return (r.warehouse_shortfall || 0) > 0;
@@ -174,7 +183,7 @@ export default function ReplenishmentV2() {
       }
       return true;
     });
-  }, [rows, search, view]);
+  }, [rows, search, view, selectedCategories, selectedStatuses]);
 
   const views = useMemo(() => [
     { key: "all",       label: "All",            count: rows.length },
@@ -195,6 +204,7 @@ export default function ReplenishmentV2() {
     { id: "model",            accessorKey: "model",            header: "Model",     size: 150, meta: { sticky: 1, group: "id" } },
     { id: "sku",              accessorKey: "sku",              header: "SKU",       size: 110, meta: { sticky: 2, group: "id" } },
     { id: "asin",             accessorKey: "asin",             header: "ASIN",      size: 110, meta: { group: "list" } },
+    { id: "category",         accessorKey: "category",         header: "Category",  size: 110, meta: { group: "list" } },
     { id: "listing_status",   accessorKey: "listing_status",   header: "Status",    size: 80,  meta: { group: "list" } },
     { id: "trend",            accessorFn: r => classifyTrend(r.weekly_sales || []), header: "Trend", size: 130, meta: { group: "vel" } },
     { id: "sales_velocity",   accessorKey: "sales_velocity",   header: "Avg/Wk",    size: 90,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
@@ -207,8 +217,11 @@ export default function ReplenishmentV2() {
     { id: "required_units",   accessorKey: "required_units",   header: "Req",       size: 70,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "warehouse_shortfall", accessorKey: "warehouse_shortfall", header: "Shortfall", size: 90, meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "replenishment_qty",accessorKey: "replenishment_qty",header: "Replen Qty",size: 100, meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "recommended_qty",  accessorKey: "recommended_qty",  header: "Rec Qty",   size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "cartons_needed",   accessorKey: "cartons_needed",   header: "Cartons",   size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "working_value",    accessorKey: "working_value",    header: "Working",   size: 90,  meta: { group: "rep" } },
     { id: "ixd_type",         accessorKey: "ixd_type",         header: "IXD",       size: 70,  meta: { group: "log" } },
+    { id: "hazmat_type",      accessorKey: "hazmat_type",      header: "Hazmat",    size: 100, meta: { group: "log" } },
     { id: "master_carton",    accessorKey: "master_carton",    header: "MC",        size: 60,  meta: { group: "log" } },
   ], []);
 
@@ -518,6 +531,72 @@ export default function ReplenishmentV2() {
               </button>
             </div>
           </div>
+
+          {/* Category + Status chip filters */}
+          {(categories.length > 0 || listingStatuses.length > 0) && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+              {categories.length > 0 && (
+                <>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Category</span>
+                  {categories.map(cat => {
+                    const on = selectedCategories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategories(p => p.includes(cat) ? p.filter(c => c !== cat) : [...p, cat])}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium rounded-md border transition-colors",
+                          on
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                  {selectedCategories.length > 0 && (
+                    <button onClick={() => setSelectedCategories([])} className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
+                  )}
+                </>
+              )}
+
+              {categories.length > 0 && listingStatuses.length > 0 && (
+                <span className="text-slate-200 mx-2">·</span>
+              )}
+
+              {listingStatuses.length > 0 && (
+                <>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Status</span>
+                  {listingStatuses.map(ls => {
+                    const on = selectedStatuses.includes(ls);
+                    const dot =
+                      ls === "Active" ? "bg-emerald-500" :
+                      ls === "EOL"    ? "bg-red-500" :
+                                        "bg-slate-400";
+                    return (
+                      <button
+                        key={ls}
+                        onClick={() => setSelectedStatuses(p => p.includes(ls) ? p.filter(s => s !== ls) : [...p, ls])}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 transition-colors",
+                          on
+                            ? "bg-slate-900 text-white border-slate-900"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        <span className={cn("w-1.5 h-1.5 rounded-full", dot)} />
+                        {ls}
+                      </button>
+                    );
+                  })}
+                  {selectedStatuses.length > 0 && (
+                    <button onClick={() => setSelectedStatuses([])} className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* TABLE */}
@@ -629,6 +708,50 @@ export default function ReplenishmentV2() {
                             );
                           } else if (colId === "replenishment_qty") {
                             content = <span className="font-bold tabular-nums text-slate-900">{r.replenishment_qty}</span>;
+                          } else if (colId === "recommended_qty") {
+                            const recQty     = r.recommended_qty ?? r.replenishment_qty ?? 0;
+                            const rawQty     = r.replenishment_qty ?? 0;
+                            const breakFlag  = r.carton_break_flag ?? false;
+                            const noCarton   = !r.master_carton || r.master_carton === 0;
+                            if (rawQty === 0) content = <span className="text-slate-300">—</span>;
+                            else if (noCarton) content = <span className="text-slate-400 text-[10px] italic">no carton</span>;
+                            else content = (
+                              <span
+                                title={`Raw replenishment: ${rawQty} → Rounded ${breakFlag ? "(carton break)" : "to full cartons"}: ${recQty}`}
+                                className={cn(
+                                  "font-bold tabular-nums",
+                                  breakFlag ? "text-orange-600" : r.ixd_type === "IXD" ? "text-blue-700" : "text-slate-900"
+                                )}
+                              >
+                                {recQty}{breakFlag && <span className="ml-1 text-orange-500">⚠</span>}
+                              </span>
+                            );
+                          } else if (colId === "cartons_needed") {
+                            const cartons = r.cartons_needed ?? 0;
+                            const rawQty  = r.replenishment_qty ?? 0;
+                            const noCarton = !r.master_carton || r.master_carton === 0;
+                            if (rawQty === 0 || noCarton) content = <span className="text-slate-300">—</span>;
+                            else content = (
+                              <span
+                                title={r.ixd_type === "IXD" ? "IXD — full cartons mandatory" : "Non-IXD — carton break allowed"}
+                                className={cn(
+                                  "inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium border rounded tabular-nums",
+                                  r.ixd_type === "IXD"
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-slate-50 text-slate-600 border-slate-200"
+                                )}
+                              >
+                                {cartons} {cartons !== 1 ? "ctns" : "ctn"}
+                              </span>
+                            );
+                          } else if (colId === "category") {
+                            content = <span className="text-slate-600 text-xs">{r.category || "—"}</span>;
+                          } else if (colId === "hazmat_type") {
+                            const h = (r.hazmat_type || "").toLowerCase();
+                            const isHaz = h && !h.includes("non");
+                            content = isHaz
+                              ? <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-800">{r.hazmat_type}</span>
+                              : <span className="text-slate-500 text-xs">{r.hazmat_type || "—"}</span>;
                           } else if (colId === "working_value") {
                             content = (
                               <input
@@ -640,7 +763,8 @@ export default function ReplenishmentV2() {
                                   setWorkingValues(p => ({ ...p, [r.sku]: e.target.value }));
                                   setDirty(true);
                                 }}
-                                className="w-16 text-right px-1.5 py-1 border border-slate-200 rounded text-xs font-mono disabled:bg-slate-50"
+                                className="w-16 text-right px-1.5 py-1 border border-amber-300 rounded text-xs font-mono bg-amber-50/60 disabled:bg-amber-50/40 font-semibold"
+                                placeholder="—"
                               />
                             );
                           } else if (colId === "master_carton") {
