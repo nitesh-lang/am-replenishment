@@ -17,6 +17,7 @@ import ChinaReorder from "./pages/ChinaReorder";
 import CBReplenishment from "./pages/CBReplenishment";
 import CBReplenishmentV2 from "./pages/CBReplenishmentV2";
 import WMReplenishment from "./pages/WMReplenishment";
+import WMReplenishmentV2 from "./pages/WMReplenishmentV2";
 import FossilReplenishment from "./pages/FossilReplenishment";
 import BlinkitReplenishment from "./pages/BlinkitReplenishment";
 import Dashboard from "./pages/Dashboard";
@@ -74,6 +75,7 @@ function App() {
           <Route path="/cb-replenishment"      element={<Gated moduleKey="cb-replenishment"><CBReplenishment /></Gated>} />
           <Route path="/cb-replenishment-v2"   element={<Gated moduleKey="cb-replenishment"><CBReplenishmentV2 /></Gated>} />
           <Route path="/wm-replenishment"      element={<Gated moduleKey="wm-replenishment"><WMReplenishment /></Gated>} />
+          <Route path="/wm-replenishment-v2"   element={<Gated moduleKey="wm-replenishment"><WMReplenishmentV2 /></Gated>} />
           <Route path="/fossil-replenishment"  element={<Gated moduleKey="fossil-replenishment"><FossilReplenishment /></Gated>} />
           <Route path="/blinkit-replenishment" element={<Gated moduleKey="blinkit-replenishment"><BlinkitReplenishment /></Gated>} />
 
