@@ -10,6 +10,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Replenishment from "./pages/Replenishment";
 import ReplenishmentV2 from "./pages/ReplenishmentV2";
 import FCAllocation from "./pages/FCAllocation";
+import FCAllocationV2 from "./pages/FCAllocationV2";
 import SalesAnalytics from "./pages/SalesAnalytics";
 import RegionSales from "./pages/RegionSales";
 import ChinaReorder from "./pages/ChinaReorder";
@@ -65,6 +66,7 @@ function App() {
           <Route path="/replenishment"         element={<Gated moduleKey="replenishment"><Replenishment /></Gated>} />
           <Route path="/replenishment-v2"      element={<Gated moduleKey="replenishment"><ReplenishmentV2 /></Gated>} />
           <Route path="/fc-allocation"         element={<Gated moduleKey="fc-allocation"><FCAllocation /></Gated>} />
+          <Route path="/fc-allocation-v2"      element={<Gated moduleKey="fc-allocation"><FCAllocationV2 /></Gated>} />
           <Route path="/sales-analytics"       element={<Gated moduleKey="sales-analytics"><SalesAnalytics /></Gated>} />
           <Route path="/region-sales"          element={<Gated moduleKey="region-sales"><RegionSales /></Gated>} />
           <Route path="/china-reorder"         element={<Gated moduleKey="china-reorder"><ChinaReorder /></Gated>} />
