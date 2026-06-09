@@ -19,7 +19,7 @@ ACCOUNT_FILES = {
         "ledger":      "inventory_ledger_nexlev.csv",
     },
     "viomi": {
-        "fba_aliases": ["vibc"],
+        "fba_aliases": ["vibc", "viomi"],
         "ledger":      "inventory_ledger_viomi.csv",
     },
     "white mulberry": {
