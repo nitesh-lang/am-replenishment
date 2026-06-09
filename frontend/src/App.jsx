@@ -15,6 +15,7 @@ import SalesAnalytics from "./pages/SalesAnalytics";
 import RegionSales from "./pages/RegionSales";
 import ChinaReorder from "./pages/ChinaReorder";
 import CBReplenishment from "./pages/CBReplenishment";
+import CBReplenishmentV2 from "./pages/CBReplenishmentV2";
 import WMReplenishment from "./pages/WMReplenishment";
 import FossilReplenishment from "./pages/FossilReplenishment";
 import BlinkitReplenishment from "./pages/BlinkitReplenishment";
@@ -71,6 +72,7 @@ function App() {
           <Route path="/region-sales"          element={<Gated moduleKey="region-sales"><RegionSales /></Gated>} />
           <Route path="/china-reorder"         element={<Gated moduleKey="china-reorder"><ChinaReorder /></Gated>} />
           <Route path="/cb-replenishment"      element={<Gated moduleKey="cb-replenishment"><CBReplenishment /></Gated>} />
+          <Route path="/cb-replenishment-v2"   element={<Gated moduleKey="cb-replenishment"><CBReplenishmentV2 /></Gated>} />
           <Route path="/wm-replenishment"      element={<Gated moduleKey="wm-replenishment"><WMReplenishment /></Gated>} />
           <Route path="/fossil-replenishment"  element={<Gated moduleKey="fossil-replenishment"><FossilReplenishment /></Gated>} />
           <Route path="/blinkit-replenishment" element={<Gated moduleKey="blinkit-replenishment"><BlinkitReplenishment /></Gated>} />
