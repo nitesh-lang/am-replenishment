@@ -19,6 +19,7 @@ import CBReplenishmentV2 from "./pages/CBReplenishmentV2";
 import WMReplenishment from "./pages/WMReplenishment";
 import WMReplenishmentV2 from "./pages/WMReplenishmentV2";
 import FossilReplenishment from "./pages/FossilReplenishment";
+import FossilReplenishmentV2 from "./pages/FossilReplenishmentV2";
 import BlinkitReplenishment from "./pages/BlinkitReplenishment";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
@@ -77,6 +78,7 @@ function App() {
           <Route path="/wm-replenishment"      element={<Gated moduleKey="wm-replenishment"><WMReplenishment /></Gated>} />
           <Route path="/wm-replenishment-v2"   element={<Gated moduleKey="wm-replenishment"><WMReplenishmentV2 /></Gated>} />
           <Route path="/fossil-replenishment"  element={<Gated moduleKey="fossil-replenishment"><FossilReplenishment /></Gated>} />
+          <Route path="/fossil-replenishment-v2" element={<Gated moduleKey="fossil-replenishment"><FossilReplenishmentV2 /></Gated>} />
           <Route path="/blinkit-replenishment" element={<Gated moduleKey="blinkit-replenishment"><BlinkitReplenishment /></Gated>} />
 
           {/* Admin-only */}
