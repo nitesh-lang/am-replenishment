@@ -33,11 +33,28 @@ export async function getKPIs(weeks) {
 
 /* =========================================================
    FC FINAL ALLOCATION (AMPM → FC)
+   - fromWeek / toWeek (ISO week numbers) define the sales-window range.
+   - salesWindow is kept as a fallback when no range is provided.
    ========================================================= */
-  export async function getFCFinal(replenishWeeks, channel, account, salesWindow = 12) {
-  return fetchJSON(
-    `${BASE}/fc-final-allocation?replenish_weeks=${replenishWeeks}&channel=${channel}&account=${account}&sales_window=${salesWindow}`
-  );
+export async function getFCFinal(
+  replenishWeeks,
+  channel,
+  account,
+  salesWindow = 12,
+  fromWeek = null,
+  toWeek = null,
+) {
+  const params = new URLSearchParams({
+    replenish_weeks: replenishWeeks,
+    channel,
+    account,
+    sales_window: salesWindow,
+  });
+  if (fromWeek != null && toWeek != null) {
+    params.set("from_week", fromWeek);
+    params.set("to_week", toWeek);
+  }
+  return fetchJSON(`${BASE}/fc-final-allocation?${params.toString()}`);
 }
 
 /* =========================================================

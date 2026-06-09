@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, Request
 from app.services.replenishment import calculate_replenishment
 from app.services.fc_final_allocation import calculate_final_allocation
-from app.services.fc_planning import calculate_fc_plan, load_fc_data, count_available_fba_weeks
+from app.services.fc_planning import calculate_fc_plan, load_fc_data, count_available_fba_weeks, list_available_fba_weeks
 from app.services.validation_engine import run_full_validation
 from app.services import replenishment_saved
 from app.services.week_helper import (
@@ -71,7 +71,11 @@ def get_replenishment(
             "listing_status": str(row["listing_status"]) if row.get("listing_status") == row.get("listing_status") else "-",
             "master_carton": int(row["Master Carton"]) if row.get("Master Carton") == row.get("Master Carton") else 0,
             "sales_velocity": int(row["sales_velocity"]),
+            "window_velocity": int(row.get("window_velocity", row["sales_velocity"])),
+            "last_4_velocity": int(row.get("last_4_velocity", 0)),
+            "velocity_basis": str(row.get("velocity_basis", "window")),
             "total_units_sold": int(row["total_units_sold"]),
+            "units_last_4w": int(row.get("units_last_4w", 0)),
             "amazon_inventory": int(row["amazon_inventory"]),
             "inbound_inventory": int(row["inbound_inventory"]),
             "ampm_inventory": int(row["ampm_inventory"]),
@@ -188,12 +192,16 @@ def get_fc_final(
     channel: str = Query(default="All"),
     account: str = Query(default="NEXLEV"),
     sales_window: int = Query(default=12, ge=1, le=52),
+    from_week: int | None = Query(default=None, ge=1, le=53),
+    to_week:   int | None = Query(default=None, ge=1, le=53),
 ):
     df = calculate_final_allocation(
         replenish_weeks=replenish_weeks,
         channel=channel,
         account=account,
         sales_window=sales_window,
+        from_week=from_week,
+        to_week=to_week,
     )
 
     # ── Fossil: load remarks + master_carton from DB only, send_qty always fresh ──
@@ -344,7 +352,7 @@ def get_fc_final(
             r["cluster_in_transit"] = None
     return {
         "data": records,
-        "available_weeks": count_available_fba_weeks(),
+        "available_weeks": list_available_fba_weeks(),
     }
 
 

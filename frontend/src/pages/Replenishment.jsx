@@ -249,6 +249,7 @@ export default function Replenishment() {
     "asin",
     "sku",
     "sales_velocity",
+    "last_4_velocity",
     "total_units_sold",
     "amazon_inventory",
     "inbound_inventory",
@@ -270,6 +271,7 @@ export default function Replenishment() {
       recommended_qty: "REC QTY",
       cartons_needed: "CARTONS",
       sales_velocity: "AVG/WK",
+      last_4_velocity: "4WK AVG",
       total_units_sold: "TOTAL",
       ampm_inventory: "MOTHER WH",
       amazon_inventory: "AZ INV",
@@ -419,7 +421,8 @@ export default function Replenishment() {
   }
 
   const NUMERIC_COLS = new Set([
-    "sales_velocity", "total_units_sold", "amazon_inventory", "inbound_inventory",
+    "sales_velocity", "last_4_velocity", "total_units_sold",
+    "amazon_inventory", "inbound_inventory",
     "ampm_inventory", "required_units", "replenishment_qty", "warehouse_shortfall",
   ]);
 
@@ -506,6 +509,7 @@ function exportCSV() {
     sku: "SKU",
     listing_status: "LISTING STATUS",
     sales_velocity: "AVG WEEKLY SALES",
+    last_4_velocity: "LAST 4WK AVG",
     total_units_sold: "TOTAL SOLD",
     amazon_inventory: "AMAZON INVENTORY",
     inbound_inventory: "INBOUND INVENTORY",

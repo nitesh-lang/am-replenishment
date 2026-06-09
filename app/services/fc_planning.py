@@ -41,35 +41,50 @@ ACCOUNT_FILES = {
 _FBA_SALES_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "input" / "FBA Sales"
 
 
-def count_available_fba_weeks() -> int:
-    """Return the number of `Week N/` folders present under data/input/FBA Sales/.
+def list_available_fba_weeks() -> list[int]:
+    """Return sorted ISO-week numbers present under data/input/FBA Sales/.
 
-    Used by the API to cap the Sales Window dropdown — UI shouldn't offer
-    a window larger than the actual data available.
+    e.g., [12, 13, 14, ..., 23]. Used by the API so the UI Range picker
+    can populate the From/To dropdowns with actual week numbers.
     """
     if not _FBA_SALES_ROOT.exists():
-        return 0
-    week_pat = re.compile(r"^Week\s+\d+$", re.IGNORECASE)
-    return sum(1 for p in _FBA_SALES_ROOT.iterdir() if p.is_dir() and week_pat.match(p.name))
+        return []
+    week_pat = re.compile(r"^Week\s+(\d+)$", re.IGNORECASE)
+    weeks = []
+    for p in _FBA_SALES_ROOT.iterdir():
+        if p.is_dir():
+            m = week_pat.match(p.name)
+            if m:
+                weeks.append(int(m.group(1)))
+    return sorted(weeks)
 
 
-def _load_weekly_fba_shipments(brand_aliases: list[str], sales_window: int = 12) -> pd.DataFrame:
-    """Concatenate per-week FBA Sales CSVs for a brand, restricted to the
-    last `sales_window` weeks.
+def count_available_fba_weeks() -> int:
+    """Legacy helper — keep for backward compat."""
+    return len(list_available_fba_weeks())
 
-    Walks every `Week N/` folder under data/input/FBA Sales/, sorts by week
-    number descending, takes the most recent N folders, then loads any CSV
-    whose stem matches one of the brand aliases (case-insensitive).
 
-    If fewer than N weeks of data exist, returns whatever is available
-    (no error). Default window matches the dashboard convention (12 weeks).
+def _load_weekly_fba_shipments(
+    brand_aliases: list[str],
+    sales_window: int = 12,
+    from_week: int | None = None,
+    to_week:   int | None = None,
+) -> pd.DataFrame:
+    """Concatenate per-week FBA Sales CSVs for a brand.
+
+    Selection priority:
+      1. If BOTH from_week AND to_week are provided → use that inclusive
+         ISO-week range (e.g. from=12, to=20 includes 12,13,...,20).
+      2. Else → fall back to "last N weeks" via sales_window.
+
+    Returns empty DataFrame if no matching files. Weeks in the requested
+    range that don't have folders are silently skipped.
     """
     if not _FBA_SALES_ROOT.exists():
         return pd.DataFrame()
     aliases = {a.strip().lower() for a in brand_aliases}
     week_pat = re.compile(r"^Week\s+(\d+)$", re.IGNORECASE)
 
-    # Collect (week_num, folder_path) for valid week folders
     week_folders = []
     for wf in _FBA_SALES_ROOT.iterdir():
         if not wf.is_dir():
@@ -82,10 +97,14 @@ def _load_weekly_fba_shipments(brand_aliases: list[str], sales_window: int = 12)
     if not week_folders:
         return pd.DataFrame()
 
-    # Take the most recent `sales_window` weeks (desc by week number)
-    week_folders.sort(key=lambda x: x[0], reverse=True)
-    window = max(int(sales_window), 1)
-    selected = week_folders[:window]
+    if from_week is not None and to_week is not None:
+        lo, hi = sorted([int(from_week), int(to_week)])
+        selected = [(w, p) for (w, p) in week_folders if lo <= w <= hi]
+    else:
+        # last N weeks (desc by week number)
+        week_folders.sort(key=lambda x: x[0], reverse=True)
+        window = max(int(sales_window), 1)
+        selected = week_folders[:window]
 
     frames: list[pd.DataFrame] = []
     for _, wf in selected:
@@ -103,13 +122,23 @@ def _load_weekly_fba_shipments(brand_aliases: list[str], sales_window: int = 12)
 # =================================================
 # DATA LOADERS — reads directly from repo files
 # =================================================
-def load_fc_data(account: str, sales_window: int = 12):
+def load_fc_data(
+    account: str,
+    sales_window: int = 12,
+    from_week: int | None = None,
+    to_week:   int | None = None,
+):
     key = account.strip().lower()
     if key not in ACCOUNT_FILES:
         raise ValueError(f"Unknown account for FC data: {account}")
 
     files = ACCOUNT_FILES[key]
-    shipments = _load_weekly_fba_shipments(files["fba_aliases"], sales_window=sales_window)
+    shipments = _load_weekly_fba_shipments(
+        files["fba_aliases"],
+        sales_window=sales_window,
+        from_week=from_week,
+        to_week=to_week,
+    )
     ledger    = get(files["ledger"]).copy()
 
     shipments.columns = shipments.columns.str.strip()
@@ -127,6 +156,8 @@ def calculate_fc_plan(
     channel: str,
     account: str,
     sales_window: int = 12,
+    from_week: int | None = None,
+    to_week:   int | None = None,
 ) -> pd.DataFrame:
     """
     FC-Level Planning Engine
@@ -144,7 +175,12 @@ def calculate_fc_plan(
     -------------------------------------------------
     """
 
-    shipments, ledger = load_fc_data(account, sales_window=sales_window)
+    shipments, ledger = load_fc_data(
+        account,
+        sales_window=sales_window,
+        from_week=from_week,
+        to_week=to_week,
+    )
 
     # =================================================
     # VALIDATE SHIPMENTS STRUCTURE

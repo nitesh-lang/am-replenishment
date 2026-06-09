@@ -353,6 +353,80 @@ def calculate_replenishment(
         "_asin", "_sku",
     ] if c in df.columns])
 
+    # ---------------------------------------------
+    # LAST 4 WEEKS VELOCITY BUMP (all accounts)
+    # Velocity = max(window-avg, last-4-ISO-week avg) so recent demand
+    # spikes flow through to required_units / replenishment_qty. Last 4
+    # weeks = the 4 most recent ISO weeks in the loaded sales data,
+    # independent of the user's From/To selector.
+    # ---------------------------------------------
+    df["window_velocity"]    = df["sales_velocity"]
+    df["window_units_sold"]  = df["total_units_sold"]
+
+    sales_4 = get_last_n_weeks_sales(sales, 4)
+    if "brand" in sales_4.columns:
+        if account.upper() in ("NEXLEV", "VIOMI"):
+            sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "Nexlev"]
+        elif account.upper() == "AUDIO ARRAY":
+            sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "Audio Array"]
+        elif account.upper() == "WHITE MULBERRY":
+            sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "White Mulberry"]
+    if account.upper() == "AUDIO ARRAY":
+        sales_4 = sales_4[sales_4["channel"] == "Amazon"]
+    elif account.upper() in ("NEXLEV", "VIOMI", "WHITE MULBERRY"):
+        sales_4 = sales_4[sales_4["channel"].isin(["Amazon", "1p Sales"])]
+
+    sales_4 = sales_4.copy()
+    sales_4["_asin"] = sales_4.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    sales_4["_sku"]  = sales_4.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+
+    v4_asin = (
+        sales_4[sales_4["_asin"] != ""]
+        .groupby("_asin", as_index=False)
+        .agg(units_4w_asin=("units_sold", "sum"))
+    )
+    v4_sku = (
+        sales_4[(sales_4["_asin"] == "") & (sales_4["_sku"] != "")]
+        .groupby("_sku", as_index=False)
+        .agg(units_4w_sku=("units_sold", "sum"))
+    )
+    v4_model = (
+        sales_4[(sales_4["_asin"] == "") & (sales_4["_sku"] == "")]
+        .groupby("model", as_index=False)
+        .agg(units_4w_model=("units_sold", "sum"))
+        .rename(columns={"model": "_model_key"})
+    )
+
+    actual_weeks_4 = max(sales_4["week"].nunique(), 1) if len(sales_4) else 1
+
+    df["_asin"] = df["ASIN"].astype(str).str.strip().str.upper()
+    df["_sku"]  = df["SKU"].astype(str).str.strip().str.upper() if "SKU" in df.columns else ""
+
+    df = df.merge(v4_asin,  on="_asin", how="left")
+    df = df.merge(v4_sku,   on="_sku",  how="left")
+    df = df.merge(v4_model, left_on="Model", right_on="_model_key", how="left")
+
+    for c in ("units_4w_asin", "units_4w_sku", "units_4w_model"):
+        if c not in df.columns:
+            df[c] = 0
+
+    df["units_last_4w"] = (
+        df["units_4w_asin"]
+        .fillna(df["units_4w_sku"])
+        .fillna(df["units_4w_model"])
+        .fillna(0)
+    )
+    df["last_4_velocity"] = (df["units_last_4w"] / actual_weeks_4).round(0)
+
+    df["sales_velocity"] = df[["window_velocity", "last_4_velocity"]].max(axis=1)
+    df["velocity_basis"] = "window"
+    df.loc[df["last_4_velocity"] > df["window_velocity"], "velocity_basis"] = "4wk"
+
+    df = df.drop(columns=[c for c in [
+        "units_4w_asin", "units_4w_sku", "units_4w_model",
+        "_asin", "_sku", "_model_key",
+    ] if c in df.columns])
+
     df = df.merge(amazon_inventory, left_on="ASIN", right_on="asin", how="left")
 
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
@@ -361,8 +435,11 @@ def calculate_replenishment(
     # ---------------------------------------------
     # NULL SAFETY
     # ---------------------------------------------
-    df["sales_velocity"] = df["sales_velocity"].fillna(0)
-    df["total_units_sold"] = df["total_units_sold"].fillna(0)
+    df["sales_velocity"]    = df["sales_velocity"].fillna(0)
+    df["window_velocity"]   = df["window_velocity"].fillna(0)
+    df["last_4_velocity"]   = df["last_4_velocity"].fillna(0)
+    df["total_units_sold"]  = df["total_units_sold"].fillna(0)
+    df["units_last_4w"]     = df["units_last_4w"].fillna(0)
 
     # ---------------------------------------------
     # AMPM INVENTORY — ASIN primary, SKU fallback, Model fallback (exclusive)

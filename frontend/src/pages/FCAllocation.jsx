@@ -12,8 +12,11 @@ export default function FCAllocation() {
   ============================================================ */
 
   const [replenishWeeks, setReplenishWeeks] = useState(8);
-  const [salesWindow, setSalesWindow] = useState(12);
-  const [availableWeeks, setAvailableWeeks] = useState(12);
+  // ISO-week numbers available under data/input/FBA Sales/Week N/ — populated from API.
+  const [availableWeeks, setAvailableWeeks] = useState([]);
+  // From/To pickers operate over actual ISO week numbers (e.g. 12..23).
+  const [fromWeek, setFromWeek] = useState(null);
+  const [toWeek, setToWeek]     = useState(null);
   const [channel, setChannel] = useState("All");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -126,20 +129,31 @@ export default function FCAllocation() {
   useEffect(() => {
     setLoading(true);
     setFossilEdits({});
-    getFCFinal(replenishWeeks, channel, account, salesWindow)
+    // Default sales-window fallback = number of weeks currently selected (or all loaded).
+    const fallbackWindow = (fromWeek != null && toWeek != null)
+      ? Math.abs(Number(toWeek) - Number(fromWeek)) + 1
+      : (availableWeeks.length || 12);
+    getFCFinal(replenishWeeks, channel, account, fallbackWindow, fromWeek, toWeek)
       .then((res) => {
-        // Response shape: {data: [...], available_weeks: N}.
-        // Tolerate older array-only shape too, just in case.
+        // Response shape: {data: [...], available_weeks: [12,13,...]}.
+        // Tolerate older shapes (array-only, or number-valued available_weeks).
         const rows = Array.isArray(res) ? res : (res?.data ?? []);
-        const avail = (res && typeof res === "object" && typeof res.available_weeks === "number")
-          ? res.available_weeks
-          : null;
-        if (avail != null && avail !== availableWeeks) {
-          setAvailableWeeks(avail);
-          // Clamp current selection if it exceeds what's actually loaded
-          if (salesWindow > avail && avail > 0) {
-            setSalesWindow(avail);
+        let availList = null;
+        if (res && typeof res === "object") {
+          if (Array.isArray(res.available_weeks)) {
+            availList = res.available_weeks.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+          } else if (typeof res.available_weeks === "number") {
+            // Backward-compat: server returned just the count → fabricate 1..N.
+            availList = Array.from({ length: res.available_weeks }, (_, i) => i + 1);
           }
+        }
+        if (availList && availList.length) {
+          setAvailableWeeks(availList);
+          // Initialise/clamp From/To to the loaded range on first load or when out of bounds.
+          const lo = availList[0];
+          const hi = availList[availList.length - 1];
+          if (fromWeek == null || !availList.includes(Number(fromWeek))) setFromWeek(lo);
+          if (toWeek   == null || !availList.includes(Number(toWeek)))   setToWeek(hi);
         }
         setData(rows);
 
@@ -168,7 +182,7 @@ export default function FCAllocation() {
         }
       })
       .finally(() => setLoading(false));
-  }, [replenishWeeks, channel, account]);
+  }, [replenishWeeks, channel, account, fromWeek, toWeek]);
 
   /* ============================================================
      FILTER
@@ -408,12 +422,40 @@ function exportCSV() {
 
       {/* FILTER PANEL */}
       <div className="card grid grid-cols-1 md:grid-cols-5 gap-3 py-3">
-        <FilterSelect
-          label="Sales Window"
-          value={salesWindow}
-          onChange={(v) => setSalesWindow(v)}
-          max={availableWeeks}
-        />
+        {/* Sales Window — From / To range over actual ISO week numbers loaded */}
+        <div>
+          <label className="text-xs uppercase text-slate-400">
+            Sales Window (Range)
+          </label>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <select
+              value={fromWeek ?? ""}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setFromWeek(Number(e.target.value));
+              }}
+              className="px-2 py-2 border rounded-lg text-sm"
+              disabled={!availableWeeks.length}
+            >
+              {availableWeeks.map((w) => (
+                <option key={`from-${w}`} value={w}>From Wk {w}</option>
+              ))}
+            </select>
+            <select
+              value={toWeek ?? ""}
+              onChange={(e) => {
+                setCurrentPage(1);
+                setToWeek(Number(e.target.value));
+              }}
+              className="px-2 py-2 border rounded-lg text-sm"
+              disabled={!availableWeeks.length}
+            >
+              {availableWeeks.map((w) => (
+                <option key={`to-${w}`} value={w}>To Wk {w}</option>
+              ))}
+            </select>
+          </div>
+        </div>
         <FilterSelect
           label="Replenish Weeks"
           value={replenishWeeks}

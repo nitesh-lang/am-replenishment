@@ -14,6 +14,8 @@ def calculate_final_allocation(
     channel: str = "All",
     account: str = "Nexlev",
     sales_window: int = 12,
+    from_week: int | None = None,
+    to_week:   int | None = None,
 ) -> pd.DataFrame:
 
 
@@ -27,6 +29,8 @@ def calculate_final_allocation(
         channel=channel,
         account=account,
         sales_window=sales_window,
+        from_week=from_week,
+        to_week=to_week,
     )
 
     if df_plan is None or df_plan.empty:
