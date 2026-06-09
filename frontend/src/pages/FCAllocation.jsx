@@ -13,6 +13,7 @@ export default function FCAllocation() {
 
   const [replenishWeeks, setReplenishWeeks] = useState(8);
   const [salesWindow, setSalesWindow] = useState(12);
+  const [availableWeeks, setAvailableWeeks] = useState(12);
   const [channel, setChannel] = useState("All");
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -127,7 +128,19 @@ export default function FCAllocation() {
     setFossilEdits({});
     getFCFinal(replenishWeeks, channel, account, salesWindow)
       .then((res) => {
-        const rows = Array.isArray(res) ? res : [];
+        // Response shape: {data: [...], available_weeks: N}.
+        // Tolerate older array-only shape too, just in case.
+        const rows = Array.isArray(res) ? res : (res?.data ?? []);
+        const avail = (res && typeof res === "object" && typeof res.available_weeks === "number")
+          ? res.available_weeks
+          : null;
+        if (avail != null && avail !== availableWeeks) {
+          setAvailableWeeks(avail);
+          // Clamp current selection if it exceeds what's actually loaded
+          if (salesWindow > avail && avail > 0) {
+            setSalesWindow(avail);
+          }
+        }
         setData(rows);
 
         // Pre-populate edits from DB values so inputs show saved data after refresh
@@ -399,6 +412,7 @@ function exportCSV() {
           label="Sales Window"
           value={salesWindow}
           onChange={(v) => setSalesWindow(v)}
+          max={availableWeeks}
         />
         <FilterSelect
           label="Replenish Weeks"
@@ -930,7 +944,11 @@ function FCAllocationSOPModal({ open, onClose }) {
   );
 }
 
-function FilterSelect({ label, value, onChange }) {
+function FilterSelect({ label, value, onChange, max = 12 }) {
+  // Cap the dropdown options at `max` (default 12). Used to limit the
+  // Sales Window to the number of week-folders actually loaded.
+  const safeMax = Math.max(1, Math.min(52, Number(max) || 12));
+  const opts = Array.from({ length: safeMax }, (_, i) => i + 1);
   return (
     <div>
       <label className="text-xs uppercase text-slate-400">
@@ -941,7 +959,7 @@ function FilterSelect({ label, value, onChange }) {
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-2 w-full px-4 py-2 border rounded-lg"
       >
-        {[1,2,3,4,5,6,7,8,9,10,11,12].map((w) => (
+        {opts.map((w) => (
           <option key={w} value={w}>
             {w} Week{w > 1 ? "s" : ""}
           </option>

@@ -41,6 +41,18 @@ ACCOUNT_FILES = {
 _FBA_SALES_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "input" / "FBA Sales"
 
 
+def count_available_fba_weeks() -> int:
+    """Return the number of `Week N/` folders present under data/input/FBA Sales/.
+
+    Used by the API to cap the Sales Window dropdown — UI shouldn't offer
+    a window larger than the actual data available.
+    """
+    if not _FBA_SALES_ROOT.exists():
+        return 0
+    week_pat = re.compile(r"^Week\s+\d+$", re.IGNORECASE)
+    return sum(1 for p in _FBA_SALES_ROOT.iterdir() if p.is_dir() and week_pat.match(p.name))
+
+
 def _load_weekly_fba_shipments(brand_aliases: list[str], sales_window: int = 12) -> pd.DataFrame:
     """Concatenate per-week FBA Sales CSVs for a brand, restricted to the
     last `sales_window` weeks.

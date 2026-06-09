@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, Request
 from app.services.replenishment import calculate_replenishment
 from app.services.fc_final_allocation import calculate_final_allocation
-from app.services.fc_planning import calculate_fc_plan, load_fc_data
+from app.services.fc_planning import calculate_fc_plan, load_fc_data, count_available_fba_weeks
 from app.services.validation_engine import run_full_validation
 from app.services import replenishment_saved
 from app.services.week_helper import (
@@ -342,7 +342,10 @@ def get_fc_final(
             r["cluster_po"] = None
         if r.get("cluster_in_transit") == "BLANK":
             r["cluster_in_transit"] = None
-    return records
+    return {
+        "data": records,
+        "available_weeks": count_available_fba_weeks(),
+    }
 
 
 # =================================================
