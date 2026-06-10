@@ -388,23 +388,127 @@ def run_services_smoke():
         from app.services.blinkit_replenishment import load_blinkit_replenishment, load_blinkit_statewise
         sku_df, _ = load_blinkit_replenishment(cover_weeks=8)
         st_df, _ = load_blinkit_statewise(cover_weeks=8)
-        out.append({
-            "Service": "blinkit_per_sku",
-            "Status": "PASS",
-            "Rows": len(sku_df),
-            "NaN_cells": int(sku_df.select_dtypes(include=[np.number]).isna().sum().sum()),
-            "AMPM_pop": int((sku_df.get("ampm_inv", pd.Series([0])) > 0).sum()),
-        })
-        out.append({
-            "Service": "blinkit_per_state",
-            "Status": "PASS",
-            "Rows": len(st_df),
-            "NaN_cells": int(st_df.select_dtypes(include=[np.number]).isna().sum().sum()),
-        })
+        out.append(_module_smoke(
+            "blinkit_per_sku", sku_df,
+            non_zero_cols=["ampm_inv"],
+        ))
+        out.append(_module_smoke(
+            "blinkit_per_state", st_df,
+            non_zero_cols=[],
+        ))
     except Exception as e:
         out.append({"Service": "blinkit", "Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
 
+    # CB Replenishment — would have caught the 2026-06-10 final_cb_qty
+    # collapse-to-zero regression
+    try:
+        from app.services.cb_replenishment import load_cb_replenishment
+        cb_df = load_cb_replenishment(cover_weeks=8)
+        out.append(_module_smoke(
+            "cb_replenishment", cb_df,
+            non_zero_cols=["final_cb_qty", "ampm_inventory", "cb_3m_sales",
+                           "cambium_3m_sales", "open_po", "china_in_transit"],
+        ))
+    except Exception as e:
+        out.append({"Service": "cb_replenishment", "Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
+
+    # Clicktech (WM) Replenishment
+    try:
+        from app.services.wm_replenishment import load_wm_replenishment
+        wm_df = load_wm_replenishment(cover_weeks=8)
+        out.append(_module_smoke(
+            "wm_replenishment", wm_df,
+            non_zero_cols=["final_cb_qty", "ampm_inventory", "cb_3m_sales",
+                           "amazon_3m_sales", "open_po"],
+        ))
+    except Exception as e:
+        out.append({"Service": "wm_replenishment", "Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
+
+    # Fossil Replenishment (returns tuple: DataFrame + available_weeks list)
+    try:
+        from app.services.fossil_replenishment_service import load_fossil_replenishment
+        r = load_fossil_replenishment()
+        fossil_df = r[0] if isinstance(r, tuple) else r
+        out.append(_module_smoke(
+            "fossil_replenishment", fossil_df,
+            non_zero_cols=["Cambium SOH", "Required Inventory",
+                           "Fossil Weekly Sales", "Total Inventory"],
+        ))
+    except Exception as e:
+        out.append({"Service": "fossil_replenishment", "Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
+
+    # Reorder Intelligence (China Reorder) — per brand. Service returns list-of-dicts.
+    # Viomi isn't a supported brand on the underlying service (its data
+    # flows through the Nexlev seller account), so skip it.
+    try:
+        from app.services.china_reorder import china_reorder_logic
+        for brand in ["Nexlev", "Audio Array", "White Mulberry", "Tonor"]:
+            try:
+                raw = china_reorder_logic(brand=brand, months=3)
+                rr_df = pd.DataFrame(raw) if isinstance(raw, list) else raw
+                out.append(_module_smoke(
+                    f"china_reorder ({brand})", rr_df,
+                    non_zero_cols=["current_inventory", "last_12w_sales",
+                                   "avg_weekly_sales", "suggested_reorder"],
+                ))
+            except Exception as e:
+                out.append({"Service": f"china_reorder ({brand})", "Status": "FAIL",
+                            "Error": f"{type(e).__name__}: {e}"})
+    except Exception as e:
+        out.append({"Service": "china_reorder", "Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
+
+    # FC Allocation — per account (one row per SKU × FC)
+    try:
+        from app.services.fc_final_allocation import calculate_final_allocation
+        for acct in ["Nexlev", "Viomi", "Audio Array", "White Mulberry", "Fossil"]:
+            try:
+                fc_df = calculate_final_allocation(
+                    replenish_weeks=8, channel="All", account=acct
+                )
+                out.append(_module_smoke(
+                    f"fc_allocation ({acct})", fc_df,
+                    non_zero_cols=["fc_inventory", "weekly_velocity",
+                                   "total_units_sold"],
+                ))
+            except Exception as e:
+                out.append({"Service": f"fc_allocation ({acct})", "Status": "FAIL",
+                            "Error": f"{type(e).__name__}: {e}"})
+    except Exception as e:
+        out.append({"Service": "fc_allocation", "Status": "FAIL", "Error": f"{type(e).__name__}: {e}"})
+
     return out
+
+
+def _module_smoke(name: str, df, non_zero_cols: list[str]) -> dict:
+    """
+    Generic smoke test: assert dataframe has rows, no NaN/Inf, and that
+    every column in `non_zero_cols` has a non-zero aggregate (catches
+    value-level collapses like the CB final_cb_qty=0 regression).
+    """
+    if df is None or len(df) == 0:
+        return {"Service": name, "Status": "FAIL", "Error": "empty result"}
+    num = df.select_dtypes(include=[np.number])
+    nan_cells = int(num.isna().sum().sum())
+    inf_cells = int(np.isinf(num).sum().sum())
+
+    zero_cols = []
+    for col in non_zero_cols:
+        if col not in df.columns:
+            zero_cols.append(f"{col} (missing)")
+            continue
+        total = pd.to_numeric(df[col], errors="coerce").fillna(0).sum()
+        if total == 0:
+            zero_cols.append(col)
+
+    status = "FAIL" if zero_cols else ("WARN" if nan_cells + inf_cells > 0 else "PASS")
+    return {
+        "Service":           name,
+        "Status":            status,
+        "Rows":              len(df),
+        "NaN_cells":         nan_cells,
+        "Inf_cells":         inf_cells,
+        "Zero_value_cols":   ", ".join(zero_cols) if zero_cols else "—",
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────
