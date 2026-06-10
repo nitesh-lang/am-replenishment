@@ -204,15 +204,25 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
                 inventory_df["channel"].str.lower() == "1p"
             ]
 
-        # Group 1P inventory by ASIN — one model can have multiple ASINs
+        # Group 1P inventory. The 1p channel rows ship with ASIN populated
+        # but Model often NaN (Cambium 1P feed doesn't include Model). Pandas
+        # groupby drops rows where ANY key is NaN, so we have to either group
+        # on the always-populated keys OR pass dropna=False. We use the ASIN
+        # path when ASIN exists; the merge downstream is on `asin` only, so
+        # model isn't needed in the group key. Bug discovered 2026-06-10 —
+        # previously all 1p rows were silently dropped, making final_cb_qty
+        # 0 for every SKU.
         if "asin" in inventory_df.columns:
             inventory_df = (
-                inventory_df.groupby(["brand", "model", "asin"], as_index=False)
+                inventory_df.groupby(["brand", "asin"], as_index=False, dropna=False)
                 .sum(numeric_only=True)
             )
+            # Re-add a placeholder model column so model_join below doesn't KeyError
+            if "model" not in inventory_df.columns:
+                inventory_df["model"] = ""
         else:
             inventory_df = (
-                inventory_df.groupby(["brand", "model"], as_index=False)
+                inventory_df.groupby(["brand", "model"], as_index=False, dropna=False)
                 .sum(numeric_only=True)
             )
         inventory_df["model_join"] = inventory_df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
