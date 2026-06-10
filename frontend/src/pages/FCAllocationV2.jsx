@@ -621,8 +621,8 @@ export default function FCAllocationV2() {
               <select value={channel} onChange={e => setChannel(e.target.value)}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
                 <option value="All">All</option>
-                <option value="Amazon">Amazon</option>
-                <option value="1p Sales">1p Sales</option>
+                <option value="amazon.in">Amazon.in</option>
+                <option value="Non-Amazon">D2C (MCF / Non-Amazon)</option>
               </select>
             </div>
 
