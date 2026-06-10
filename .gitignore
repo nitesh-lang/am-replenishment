@@ -9,3 +9,6 @@ __pycache__/
 
 # Excel lock files (created when a workbook is open)
 ~$*
+
+# Amazon Seller Central browser sessions (saved cookies for the scraper)
+.amazon_session*.json
