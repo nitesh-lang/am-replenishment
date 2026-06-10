@@ -411,7 +411,7 @@ export default function WMReplenishmentV2() {
               <Label>Cover Wks</Label>
               <select value={coverWeeks} onChange={e => setCoverWeeks(Number(e.target.value))}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
-                {[4, 6, 8, 10, 12].map(n => <option key={n}>{n}</option>)}
+                {[2, 4, 6, 8, 10, 12].map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
 

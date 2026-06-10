@@ -435,7 +435,7 @@ export default function FossilReplenishmentV2() {
               <select value={coverWeeks ?? ""} onChange={e => setCoverWeeks(e.target.value ? Number(e.target.value) : null)}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
                 <option value="">Matrix default</option>
-                {[4, 6, 8, 9, 10, 12].map(n => <option key={n}>{n}</option>)}
+                {[2, 4, 6, 8, 9, 10, 12].map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
 
