@@ -23,6 +23,14 @@ const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
 const BRAND_OPTIONS = ["Nexlev", "Audio Array", "White Mulberry", "Viomi", "Tonor"];
 
+// Status derived from weeks_cover — thresholds match V1 (12 / 16).
+function reorderStatus(row) {
+  const w = Number(row?.weeks_cover) || 0;
+  if (w < 12)               return "CRITICAL";
+  if (w >= 12 && w <= 16)   return "MODERATE";
+  return "NO REORDER";
+}
+
 export default function ChinaReorderV2() {
   const [selectedBrands, setSelectedBrands] = useState(["Nexlev"]);
   const [selectedMonths, setSelectedMonths] = useState(3);
@@ -100,7 +108,8 @@ export default function ChinaReorderV2() {
         (r.asin  || "").toLowerCase().includes(q)
       )) return false;
       if (view === "reorder")       return (r.suggested_reorder || 0) > 0;
-      if (view === "critical")      return (r.weeks_cover != null) && r.weeks_cover < 4;
+      if (view === "critical")      return (r.weeks_cover != null) && r.weeks_cover < 12;
+      if (view === "moderate")      return (r.weeks_cover != null) && r.weeks_cover >= 12 && r.weeks_cover <= 16;
       if (view === "high_returns")  return (r.returns_pct || 0) > 10;
       if (view === "neg_margin")    return (r.net_margin_pct || 0) < 0;
       if (view === "top_rated")     return (r.avg_rating || 0) >= 4;
@@ -110,8 +119,9 @@ export default function ChinaReorderV2() {
 
   const views = useMemo(() => [
     { key: "all",          label: "All",              count: rows.length },
-    { key: "reorder",      label: "Has Reorder",      count: rows.filter(r => (r.suggested_reorder || 0) > 0).length, accent: "bg-red-100 text-red-700" },
-    { key: "critical",     label: "Cover < 4 wks",    count: rows.filter(r => (r.weeks_cover != null) && r.weeks_cover < 4).length },
+    { key: "reorder",      label: "Has Reorder",      count: rows.filter(r => (r.suggested_reorder || 0) > 0).length },
+    { key: "critical",     label: "Critical (<12wk)", count: rows.filter(r => (r.weeks_cover != null) && r.weeks_cover < 12).length, accent: "bg-red-100 text-red-700" },
+    { key: "moderate",     label: "Moderate (12-16wk)", count: rows.filter(r => (r.weeks_cover != null) && r.weeks_cover >= 12 && r.weeks_cover <= 16).length },
     { key: "high_returns", label: "Returns > 10%",    count: rows.filter(r => (r.returns_pct || 0) > 10).length },
     { key: "neg_margin",   label: "Neg. Margin",      count: rows.filter(r => (r.net_margin_pct || 0) < 0).length },
     { key: "top_rated",    label: "4★+",              count: rows.filter(r => (r.avg_rating || 0) >= 4).length },
@@ -121,7 +131,7 @@ export default function ChinaReorderV2() {
     const totalReorder = filteredRows.reduce((a, r) => a + (Number(r.suggested_reorder) || 0), 0);
     const totalCover   = filteredRows.reduce((a, r) => a + (Number(r.weeks_cover) || 0), 0);
     const avgCover     = filteredRows.length ? (totalCover / filteredRows.length) : 0;
-    const critical     = filteredRows.filter(r => (r.weeks_cover != null) && r.weeks_cover < 4).length;
+    const critical     = filteredRows.filter(r => (r.weeks_cover != null) && r.weeks_cover < 12).length;
     return { totalReorder: Math.round(totalReorder), avgCover: avgCover.toFixed(1), critical };
   }, [filteredRows]);
 
@@ -141,6 +151,7 @@ export default function ChinaReorderV2() {
     { id: "pipeline_qty",      accessorKey: "pipeline_qty",      header: "PO Picked Up",    size: 105, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "weeks_cover",       accessorKey: "weeks_cover",       header: "Cover (wk)", size: 90,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "suggested_reorder", accessorKey: "suggested_reorder", header: "Reorder",    size: 95,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
+    { id: "status",            accessorFn: r => reorderStatus(r), header: "Status",    size: 110, meta: { group: "plan" } },
     { id: "avg_rating",        accessorKey: "avg_rating",        header: "Rating",     size: 80,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
     { id: "rating_count",      accessorKey: "rating_count",      header: "Reviews",    size: 85,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
     { id: "returns_pct",       accessorKey: "returns_pct",       header: "Returns %",  size: 90,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
@@ -334,7 +345,7 @@ export default function ChinaReorderV2() {
           <KPICard label="In View"          value={filteredRows.length} hint={view !== "all" ? view : "all rows"} />
           <KPICard label="Total Reorder"    value={kpis.totalReorder}   hint="suggested units"  tone="brand" />
           <KPICard label="Avg Cover"        value={`${kpis.avgCover} wks`} hint="across view" />
-          <KPICard label="Critical Cover"   value={kpis.critical}       hint="< 4 weeks"  tone="bad" />
+          <KPICard label="Critical Cover"   value={kpis.critical}       hint="< 12 weeks"  tone="bad" />
         </div>
 
         <div className="mb-3">
@@ -531,12 +542,20 @@ export default function ChinaReorderV2() {
                             content = <span className="tabular-nums font-semibold">{(r.avg_weekly_sales || 0).toFixed(2)}</span>;
                           } else if (colId === "weeks_cover") {
                             const w = r.weeks_cover ?? null;
+                            // V1 thresholds: <12 CRITICAL, 12-16 MODERATE, >16 NO REORDER
                             const tone =
-                              w == null   ? "text-slate-300" :
-                              w < 4       ? "text-red-700 font-semibold" :
-                              w < 8       ? "text-amber-700" :
-                                            "text-emerald-700";
+                              w == null         ? "text-slate-300" :
+                              w < 12            ? "text-red-700 font-semibold" :
+                              w <= 16           ? "text-amber-700" :
+                                                  "text-emerald-700";
                             content = <span className={cn("tabular-nums", tone)}>{w == null ? "—" : Number(w).toFixed(1)}</span>;
+                          } else if (colId === "status") {
+                            const s = reorderStatus(r);
+                            const tone =
+                              s === "CRITICAL"   ? "bg-red-100 text-red-700" :
+                              s === "MODERATE"   ? "bg-amber-100 text-amber-700" :
+                                                   "bg-emerald-100 text-emerald-700";
+                            content = <span className={cn("inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold rounded", tone)}>{s}</span>;
                           } else if (
                             colId === "last_12w_sales" ||
                             colId === "current_inventory" ||
@@ -646,9 +665,9 @@ export default function ChinaReorderV2() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-5 text-xs text-slate-500 px-1">
-          <Legend swatch="bg-red-100"    label="Critical cover (< 4 wks)" />
-          <Legend swatch="bg-amber-100"  label="Watch (4–8 wks / high returns)" />
-          <Legend swatch="bg-emerald-100" label="Healthy (8+ wks / 4★+)" />
+          <Legend swatch="bg-red-100"    label="Critical (< 12 wks cover)" />
+          <Legend swatch="bg-amber-100"  label="Moderate (12–16 wks)" />
+          <Legend swatch="bg-emerald-100" label="No Reorder (> 16 wks)" />
           <Legend swatch="bg-indigo-100" label="Range-selected" />
         </div>
       </div>
