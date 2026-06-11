@@ -11,6 +11,8 @@ import {
 
 import { CommandPalette } from "../components/CommandPalette";
 import { SavedViews } from "../components/SavedViews";
+import { SOPModal, SOPButton } from "../components/SOPModal";
+import { FossilReplenishmentSOPContent } from "../components/SOPContents";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -54,6 +56,9 @@ export default function FossilReplenishmentV2() {
   /* Range-select */
   const [selRange, setSelRange] = useState(null);
   const draggingRef = useRef(null);
+
+  /* SOP modal */
+  const [sopOpen, setSopOpen] = useState(false);
 
   /* ============================================================
      LOAD
@@ -336,6 +341,7 @@ export default function FossilReplenishmentV2() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <SOPButton onClick={() => setSopOpen(true)} />
             <button onClick={() => setShowMatrix(s => !s)}
               className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50">
               {showMatrix ? "Hide" : "Show"} WOC Matrix
@@ -649,6 +655,10 @@ export default function FossilReplenishmentV2() {
           <span className="ml-auto text-slate-400">Read-only · WOC matrix governs Required Inventory</span>
         </div>
       </div>
+
+      <SOPModal open={sopOpen} onClose={() => setSopOpen(false)} title="Fossil Replenishment">
+        <FossilReplenishmentSOPContent />
+      </SOPModal>
 
       <CommandPalette
         rows={rows.map(r => ({ ...r, sku: r["SKU"], asin: r["ASIN"], model: r["Item No"] }))}

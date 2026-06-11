@@ -15,6 +15,8 @@ import { Sparkline, classifyTrend } from "../components/Sparkline";
 import { DetailRow } from "../components/DetailRow";
 import { CommandPalette } from "../components/CommandPalette";
 import { SavedViews } from "../components/SavedViews";
+import { SOPModal, SOPButton } from "../components/SOPModal";
+import { ReplenishmentSOPContent } from "../components/SOPContents";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -64,6 +66,9 @@ export default function ReplenishmentV2() {
   /* ─────────── range-select ─────────── */
   const [selRange, setSelRange] = useState(null);
   const draggingRef = useRef(null);
+
+  /* ─────────── SOP modal ─────────── */
+  const [sopOpen, setSopOpen] = useState(false);
 
   /* ============================================================
      LOAD
@@ -424,6 +429,7 @@ export default function ReplenishmentV2() {
                 {!isReadOnly && currentWeekMeta?.locked && <span className="text-amber-700"> · locked</span>}
               </span>
             </div>
+            <SOPButton onClick={() => setSopOpen(true)} />
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
@@ -440,13 +446,41 @@ export default function ReplenishmentV2() {
           </div>
         </div>
 
-        {/* KPI strip */}
-        <div className="grid grid-cols-5 gap-3 mb-5">
-          <KPICard label="Total Models" value={rows.length} hint={`across ${categories.length} categories`} />
-          <KPICard label="Critical"     value={rows.filter(r => r.is_risky).length}                               hint="below 1-week cover" tone="bad" />
-          <KPICard label="Replen Qty"   value={rows.reduce((a, r) => a + (r.replenishment_qty || 0), 0)}          hint="units to ship this week" />
-          <KPICard label="WH Shortfall" value={rows.reduce((a, r) => a + (r.warehouse_shortfall || 0), 0)}        hint="AMPM can't cover" tone="warn" />
-          <KPICard label="4wk Bump"     value={rows.filter(r => r.velocity_basis === "4wk").length}              hint="SKUs using 4-wk avg" tone="brand" />
+        {/* KPI strip — derivations match V1 conventions */}
+        <div className="grid grid-cols-6 gap-3 mb-5">
+          <KPICard
+            label="Units to Ship"
+            value={rows.reduce((a, r) => a + (r.recommended_qty || r.replenishment_qty || 0), 0)}
+            hint={`${rows.filter(r => (r.recommended_qty || r.replenishment_qty || 0) > 0).length} models need stock`}
+            tone="brand"
+          />
+          <KPICard
+            label="China PO Gap"
+            value={rows.reduce((a, r) => a + (r.warehouse_shortfall || 0), 0)}
+            hint={rows.reduce((a, r) => a + (r.warehouse_shortfall || 0), 0) > 0 ? "Raise a new China PO" : "WH covers full need"}
+            tone="warn"
+          />
+          <KPICard
+            label="Critical SKUs"
+            value={rows.filter(r => r.is_risky).length}
+            hint="below 1-week cover"
+            tone="bad"
+          />
+          <KPICard
+            label="Cartons Needed"
+            value={rows.reduce((a, r) => a + (r.cartons_needed || 0), 0)}
+            hint={`${rows.filter(r => !r.is_risky && !r.is_overstock).length} SKUs healthy`}
+          />
+          <KPICard
+            label="4wk Bump"
+            value={rows.filter(r => r.velocity_basis === "4wk").length}
+            hint="SKUs using 4-wk avg"
+          />
+          <KPICard
+            label="Total Models"
+            value={rows.length}
+            hint={`across ${categories.length} categories`}
+          />
         </div>
 
         {/* Saved views */}
@@ -861,6 +895,11 @@ export default function ReplenishmentV2() {
           <Legend swatch="bg-indigo-100"  label="Range-selected (drag numeric cells)" />
         </div>
       </div>
+
+      {/* SOP modal */}
+      <SOPModal open={sopOpen} onClose={() => setSopOpen(false)} title="Replenishment">
+        <ReplenishmentSOPContent />
+      </SOPModal>
 
       {/* Command palette */}
       <CommandPalette

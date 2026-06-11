@@ -12,6 +12,8 @@ import {
 import { logUsage } from "../auth/usage";
 import { CommandPalette } from "../components/CommandPalette";
 import { SavedViews } from "../components/SavedViews";
+import { SOPModal, SOPButton } from "../components/SOPModal";
+import { WMReplenishmentSOPContent } from "../components/SOPContents";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -48,6 +50,9 @@ export default function WMReplenishmentV2() {
   /* Range-select */
   const [selRange, setSelRange] = useState(null);
   const draggingRef = useRef(null);
+
+  /* SOP modal */
+  const [sopOpen, setSopOpen] = useState(false);
 
   /* ============================================================
      LOAD
@@ -340,6 +345,7 @@ export default function WMReplenishmentV2() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <SOPButton onClick={() => setSopOpen(true)} />
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
@@ -650,6 +656,10 @@ export default function WMReplenishmentV2() {
           <span className="ml-auto text-slate-400">PO Req + Remarks save on blur</span>
         </div>
       </div>
+
+      <SOPModal open={sopOpen} onClose={() => setSopOpen(false)} title="Clicktech (WM) Replenishment">
+        <WMReplenishmentSOPContent />
+      </SOPModal>
 
       <CommandPalette
         rows={rows.map(r => ({ ...r, sku: r.model, asin: r.asin || "", model: r.model }))}

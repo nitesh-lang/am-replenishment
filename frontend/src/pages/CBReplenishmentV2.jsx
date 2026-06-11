@@ -13,6 +13,8 @@ import {
 import { logUsage } from "../auth/usage";
 import { CommandPalette } from "../components/CommandPalette";
 import { SavedViews } from "../components/SavedViews";
+import { SOPModal, SOPButton } from "../components/SOPModal";
+import { CBReplenishmentSOPContent } from "../components/SOPContents";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -63,6 +65,9 @@ export default function CBReplenishmentV2() {
   /* Range-select */
   const [selRange, setSelRange] = useState(null);
   const draggingRef = useRef(null);
+
+  /* SOP modal */
+  const [sopOpen, setSopOpen] = useState(false);
 
   /* ============================================================
      LOAD
@@ -416,6 +421,7 @@ export default function CBReplenishmentV2() {
                 {!isReadOnly && currentWeekMeta?.locked && <span className="text-amber-700"> · locked</span>}
               </span>
             </div>
+            <SOPButton onClick={() => setSopOpen(true)} />
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
@@ -766,6 +772,10 @@ export default function CBReplenishmentV2() {
           <span className="ml-auto text-slate-400">Working/Remarks auto-save 500 ms after typing stops</span>
         </div>
       </div>
+
+      <SOPModal open={sopOpen} onClose={() => setSopOpen(false)} title="CB Replenishment">
+        <CBReplenishmentSOPContent />
+      </SOPModal>
 
       <CommandPalette
         rows={rows.map(r => ({ ...r, sku: r.model, asin: r.asin, model: r.model }))}
