@@ -229,6 +229,7 @@ export default function CBReplenishmentV2() {
     { id: "estimated_qty",    accessorKey: "estimated_qty",    header: "Estimated",      size: 90,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "deficiency",       accessorKey: "deficiency",       header: "Deficiency",     size: 95,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "po_requirement",   accessorKey: "po_requirement",   header: "PO Req",         size: 90,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
+    { id: "asin_sort_details",accessorKey: "asin_sort_details",header: "ASIN Sort",      size: 95,  meta: { group: "plan" } },
     { id: "working_value",    accessorKey: "working_value",    header: "Working",        size: 100, meta: { group: "edit" } },
     { id: "remarks",          accessorKey: "remarks",          header: "Remarks",        size: 200, meta: { group: "edit" } },
   ], []);
@@ -626,6 +627,16 @@ export default function CBReplenishmentV2() {
                             );
                           } else if (colId === "po_requirement") {
                             content = <span className="font-bold tabular-nums text-slate-900">{Math.round(r.po_requirement || 0)}</span>;
+                          } else if (colId === "asin_sort_details") {
+                            const s = String(r.asin_sort_details || "").trim();
+                            const tone = s === "IXD"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : s.toLowerCase().includes("non")
+                                ? "bg-slate-50 text-slate-600 border-slate-200"
+                                : "bg-slate-50 text-slate-500 border-slate-200";
+                            content = s
+                              ? <span className={cn("inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium border rounded", tone)}>{s}</span>
+                              : <span className="text-slate-300 text-xs">—</span>;
                           } else if (colId === "working_value") {
                             const status = savingMap[r.model];
                             content = (
