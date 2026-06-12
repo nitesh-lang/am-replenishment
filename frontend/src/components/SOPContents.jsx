@@ -128,6 +128,7 @@ export function FCAllocationSOPContent() {
             <Row name="FC SOH"        desc="Current stock at that FC" />
             <Row name="Mother WH"     desc="AMPM warehouse balance for the SKU" />
             <Row name="B2B Inv"       desc="B2B-AMPM stock (display only)" />
+            <Row name="Inbound"       desc="Units shipped to this FC, not yet received (from SP-API getShipments). Sky-blue pill when > 0." />
             <Row name="Avg/Wk"        desc="Weekly velocity computed per-FC over the selected window" />
             <Row name="Target"        desc="FC SOH target = Avg/Wk × Replen Wks (governance applied)" />
             <Row name="Required"      desc="Pre-transfer expected need" />

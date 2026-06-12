@@ -1,5 +1,6 @@
 
 import pandas as pd
+from pathlib import Path
 from app.services.fc_planning import calculate_fc_plan
 from app.services.fc_transfer import calculate_fc_transfers
 from app.services.file_cache import get, get_excel_sheet
@@ -356,6 +357,7 @@ def calculate_final_allocation(
                         "listing_status":     "-",
                         "ampm_inventory":     0,
                         "b2b_inventory":      0,
+                        "inbound_to_fc":      0,
                         "fulfillment_center": fc,
                         "weekly_velocity":    0,
                         "total_units_sold":   0,
@@ -669,6 +671,52 @@ def calculate_final_allocation(
 
     if "listing_status" not in df_plan.columns:
         df_plan["listing_status"] = "-"
+
+    # ==========================================================
+    # INBOUND-TO-FC (display only — sourced from SP-API pull)
+    # Per (SKU, FC) sum of currently-in-flight units (Shipped not yet
+    # Received). Reads data/input/inbound_shipments_<account>.csv if it
+    # exists; silently defaults to 0 when the file isn't present for
+    # an account (so non-Nexlev accounts don't break until each has its
+    # own SP-API refresh token wired).
+    # ==========================================================
+    _acct_slug = {
+        "nexlev":         "nexlev",
+        "viomi":          "viomi",
+        "audio array":    "audio_array",
+        "white mulberry": "wm",
+        "fossil":         "fossil",
+    }.get(account.lower(), account.lower().replace(" ", "_"))
+
+    inbound_csv = Path("data/input") / f"inbound_shipments_{_acct_slug}.csv"
+    df_plan["inbound_to_fc"] = 0
+    if inbound_csv.exists():
+        try:
+            inb = pd.read_csv(inbound_csv)
+            inb["SellerSKU"]     = inb["SellerSKU"].astype(str).str.strip().str.upper()
+            inb["DestinationFC"] = inb["DestinationFC"].astype(str).str.strip().str.upper()
+            inb["_remaining"]    = (
+                pd.to_numeric(inb["QuantityShipped"],  errors="coerce").fillna(0)
+              - pd.to_numeric(inb["QuantityReceived"], errors="coerce").fillna(0)
+            ).clip(lower=0)
+            inb_agg = (
+                inb.groupby(["SellerSKU", "DestinationFC"], as_index=False)["_remaining"]
+                   .sum()
+                   .rename(columns={"_remaining": "inbound_to_fc",
+                                    "SellerSKU": "sku",
+                                    "DestinationFC": "fulfillment_center"})
+            )
+            df_plan["sku"]                = df_plan["sku"].astype(str).str.strip().str.upper()
+            df_plan["fulfillment_center"] = df_plan["fulfillment_center"].astype(str).str.strip().str.upper()
+            df_plan = df_plan.drop(columns=["inbound_to_fc"], errors="ignore")
+            df_plan = df_plan.merge(inb_agg, on=["sku", "fulfillment_center"], how="left")
+            df_plan["inbound_to_fc"] = pd.to_numeric(
+                df_plan["inbound_to_fc"], errors="coerce"
+            ).fillna(0).astype(int)
+        except Exception as e:
+            print(f"WARN: inbound merge failed for {account}: {e}")
+            df_plan["inbound_to_fc"] = 0
+
     # ==========================================================
     # FINAL DATASET
     # ==========================================================
@@ -681,6 +729,7 @@ def calculate_final_allocation(
         "listing_status",
         "ampm_inventory",
         "b2b_inventory",
+        "inbound_to_fc",
         "fulfillment_center",
         "weekly_velocity",
         "total_units_sold",

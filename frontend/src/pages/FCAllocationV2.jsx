@@ -294,6 +294,7 @@ export default function FCAllocationV2() {
       { id: "fc_inventory",   accessorKey: "fc_inventory",   header: "FC SOH",    size: 80, meta: { group: "inv", numeric: true, sortDescFirst: true } },
       { id: "ampm_inventory", accessorKey: "ampm_inventory", header: isFossil ? "Fossil SOH" : "Mother WH", size: 100, meta: { group: "inv", numeric: true, sortDescFirst: true } },
       { id: "b2b_inventory",  accessorKey: "b2b_inventory",  header: "B2B",       size: 65, meta: { group: "inv", numeric: true, sortDescFirst: true } },
+      { id: "inbound_to_fc",  accessorKey: "inbound_to_fc",  header: "Inbound",   size: 85, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     );
 
     if (isFossil) {
@@ -818,6 +819,11 @@ export default function FCAllocationV2() {
                             content = <span className="font-mono text-xs text-slate-500">{r.asin || "—"}</span>;
                           } else if (colId === "listing_status") {
                             content = <StatusPill status={r.listing_status} />;
+                          } else if (colId === "inbound_to_fc") {
+                            const v = r.inbound_to_fc || 0;
+                            content = v > 0
+                              ? <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold rounded bg-sky-50 text-sky-700 tabular-nums" title="Units shipped to this FC, not yet received">{v}</span>
+                              : <span className="text-slate-300 text-xs">—</span>;
                           } else if (colId === "send_qty") {
                             if (isFossil && meta.editable) {
                               content = (
@@ -1003,6 +1009,7 @@ function FCDetailRow({ row, colSpan, allRows, isFossil }) {
                   <tr>
                     <th className="px-2 py-1.5 text-left">FC</th>
                     <th className="px-2 py-1.5 text-right">SOH</th>
+                    <th className="px-2 py-1.5 text-right">Inbound</th>
                     <th className="px-2 py-1.5 text-right">Velocity</th>
                     {isFossil && <th className="px-2 py-1.5 text-right">In-Transit</th>}
                     {isFossil && <th className="px-2 py-1.5 text-right">Open PO</th>}
@@ -1015,6 +1022,11 @@ function FCDetailRow({ row, colSpan, allRows, isFossil }) {
                     <tr key={r.fulfillment_center} className={r.fulfillment_center === row.fulfillment_center ? "bg-indigo-50/40 font-semibold" : ""}>
                       <td className="px-2 py-1.5 font-mono">{r.fulfillment_center}</td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{r.fc_inventory ?? 0}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">
+                        {(r.inbound_to_fc ?? 0) > 0
+                          ? <span className="text-sky-700 font-semibold">{r.inbound_to_fc}</span>
+                          : <span className="text-slate-300">—</span>}
+                      </td>
                       <td className="px-2 py-1.5 text-right tabular-nums">{r.weekly_velocity ?? 0}</td>
                       {isFossil && <td className="px-2 py-1.5 text-right tabular-nums">{r.in_transit_qty ?? 0}</td>}
                       {isFossil && <td className="px-2 py-1.5 text-right tabular-nums">{r.open_po_qty ?? 0}</td>}
@@ -1027,6 +1039,7 @@ function FCDetailRow({ row, colSpan, allRows, isFossil }) {
                   <tr className="bg-slate-50 border-t border-slate-200 text-[11px] font-semibold">
                     <td className="px-2 py-1.5">Total</td>
                     <td className="px-2 py-1.5 text-right tabular-nums">{totalSoh}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-sky-700">{skuRows.reduce((a, r) => a + (r.inbound_to_fc || 0), 0) || "—"}</td>
                     <td className="px-2 py-1.5 text-right text-slate-400">—</td>
                     {isFossil && <td className="px-2 py-1.5 text-right text-slate-400">—</td>}
                     {isFossil && <td className="px-2 py-1.5 text-right text-slate-400">—</td>}
@@ -1045,6 +1058,7 @@ function FCDetailRow({ row, colSpan, allRows, isFossil }) {
               <KV label="FC SOH"          val={row.fc_inventory} />
               <KV label={isFossil ? "Fossil SOH" : "Mother WH"} val={row.ampm_inventory} accent />
               <KV label="B2B"             val={row.b2b_inventory} />
+              <KV label="Inbound"         val={row.inbound_to_fc || 0} />
               {isFossil && <KV label="In-Transit"  val={row.in_transit_qty} />}
               {isFossil && <KV label="Open PO"     val={row.open_po_qty} />}
               <KV label="Send Qty"        val={row.send_qty} />
