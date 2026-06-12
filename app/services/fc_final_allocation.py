@@ -695,6 +695,10 @@ def calculate_final_allocation(
             inb = pd.read_csv(inbound_csv)
             inb["SellerSKU"]     = inb["SellerSKU"].astype(str).str.strip().str.upper()
             inb["DestinationFC"] = inb["DestinationFC"].astype(str).str.strip().str.upper()
+            # Exclude RECEIVING — those units are physically at the FC and will
+            # land in FC SOH soon. Counting them as inbound would double-deduct.
+            inb["_status"] = inb["ShipmentStatus"].astype(str).str.strip().str.upper()
+            inb = inb[inb["_status"] != "RECEIVING"]
             inb["_remaining"]    = (
                 pd.to_numeric(inb["QuantityShipped"],  errors="coerce").fillna(0)
               - pd.to_numeric(inb["QuantityReceived"], errors="coerce").fillna(0)
