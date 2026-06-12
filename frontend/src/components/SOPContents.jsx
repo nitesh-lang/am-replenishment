@@ -183,7 +183,8 @@ export function CBReplenishmentSOPContent() {
           <tbody>
             <Row name="CB 3M"           desc="Last 3 months 1p Sales channel units" />
             <Row name="Cambium 3M"      desc="Last 3 months Amazon channel units" />
-            <Row name="Avg/Wk"          desc="(CB 3M + Cambium 3M) ÷ window weeks" />
+            <Row name="Avg/Wk"          desc="(CB 3M + Cambium 3M) ÷ window weeks. Shows 2wk pill when the 2-week top is higher and drives Estimated Qty." />
+            <Row name="2wk Top"         desc="Last 2 ISO weeks' weekly average (CB + Amazon combined). When higher than window Avg/Wk, replaces it for Estimated Qty." />
             <Row name="CB Inv"          desc="1P inventory currently with Amazon Vendor" />
             <Row name="Mother WH"       desc="AMPM stock available to ship" />
             <Row name="China IT"        desc="Stock in transit from China (Pipeline channel)" />

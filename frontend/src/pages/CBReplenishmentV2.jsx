@@ -226,6 +226,7 @@ export default function CBReplenishmentV2() {
     { id: "cb_3m_sales",      accessorKey: "cb_3m_sales",      header: "CB 3M",          size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "cambium_3m_sales", accessorKey: "cambium_3m_sales", header: "Cambium 3M",     size: 95,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "avg_weekly_sales", accessorKey: "avg_weekly_sales", header: "Avg/Wk",         size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    { id: "last_2_velocity",  accessorKey: "last_2_velocity",  header: "2wk Top",        size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "final_cb_qty",     accessorKey: "final_cb_qty",     header: "CB Inv",         size: 80,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "ampm_inventory",   accessorKey: "ampm_inventory",   header: "Mother WH",      size: 100, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "china_in_transit", accessorKey: "china_in_transit", header: "China IT",       size: 90,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
@@ -621,7 +622,20 @@ export default function CBReplenishmentV2() {
                           } else if (colId === "brand") {
                             content = <span className="text-slate-600">{r.brand || "—"}</span>;
                           } else if (colId === "avg_weekly_sales") {
-                            content = <span className="tabular-nums font-semibold">{Math.round(r.avg_weekly_sales || 0)}</span>;
+                            const bumped = r.velocity_basis === "2wk";
+                            content = (
+                              <span className="tabular-nums font-semibold">
+                                {Math.round(r.avg_weekly_sales || 0)}
+                                {bumped && (
+                                  <span className="inline-flex ml-1 px-1 py-0.5 text-[9px] font-bold rounded bg-indigo-100 text-indigo-700" title="Last-2-week top exceeds window avg — driving Estimated Qty">
+                                    2wk
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          } else if (colId === "last_2_velocity") {
+                            const v = Math.round(r.last_2_velocity || 0);
+                            content = <span className="tabular-nums text-indigo-700">{v > 0 ? v : "—"}</span>;
                           } else if (colId === "estimated_qty") {
                             content = <span className="tabular-nums">{Math.round(r.estimated_qty || 0)}</span>;
                           } else if (colId === "deficiency") {

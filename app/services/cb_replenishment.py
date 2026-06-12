@@ -357,7 +357,68 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         df["avg_weekly_sales"] = df["total_sales"] / window_size
 
-        df["estimated_qty"] = (df["avg_weekly_sales"] * cover_weeks).round()
+        # =========================
+        # LAST 2 WEEKS TOP — CB-specific recency-based velocity bump
+        # When the most-recent 2 weeks' weekly avg exceeds the window avg,
+        # use that higher number for estimated_qty so recent spikes flow
+        # through to PO Req. Combined 1p Sales + Amazon channels.
+        # =========================
+        if "week" in sales_df.columns and len(sales_df) > 0:
+            weeks_desc = sorted(
+                pd.to_numeric(sales_df["week"], errors="coerce").dropna().unique(),
+                reverse=True,
+            )
+            last_2_weeks = weeks_desc[:2]
+            l2_src = sales_df[sales_df["week"].isin(last_2_weeks)].copy()
+            l2_src = l2_src[l2_src["channel"].isin(["1p Sales", "Amazon"])]
+
+            l2_src["_asin"] = l2_src.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+            l2_src["_sku"]  = l2_src["sku"].astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+
+            l2_by_asin = (
+                l2_src[l2_src["_asin"] != ""]
+                .groupby("_asin", as_index=False)["units_sold"].sum()
+                .rename(columns={"units_sold": "_l2_units_asin"})
+            )
+            l2_by_sku = (
+                l2_src[(l2_src["_asin"] == "") & (l2_src["_sku"] != "")]
+                .groupby("_sku", as_index=False)["units_sold"].sum()
+                .rename(columns={"units_sold": "_l2_units_sku"})
+            )
+            l2_by_model = (
+                l2_src[(l2_src["_asin"] == "") & (l2_src["_sku"] == "")]
+                .groupby(["brand", "model_join"], as_index=False)["units_sold"].sum()
+                .rename(columns={"units_sold": "_l2_units_model"})
+            )
+
+            df["_asin"] = df["asin"].astype(str).str.strip().str.upper()
+            df["_sku"]  = df["sku"].astype(str).str.strip().str.upper()
+            df = df.merge(l2_by_asin,  on="_asin", how="left")
+            df = df.merge(l2_by_sku,   on="_sku",  how="left")
+            df = df.merge(l2_by_model, on=["brand", "model_join"], how="left")
+            df["last_2w_units"] = (
+                df["_l2_units_asin"]
+                .fillna(df["_l2_units_sku"])
+                .fillna(df["_l2_units_model"])
+                .fillna(0)
+            )
+            n_last = max(len(last_2_weeks), 1)
+            df["last_2_velocity"] = (df["last_2w_units"] / n_last).round(2)
+        else:
+            df["last_2w_units"]   = 0.0
+            df["last_2_velocity"] = 0.0
+
+        # MAX(window, last-2-week) so estimated_qty captures recent surges
+        df["window_velocity"]    = df["avg_weekly_sales"]
+        df["effective_velocity"] = df[["window_velocity", "last_2_velocity"]].max(axis=1)
+        df["velocity_basis"]     = "window"
+        df.loc[df["last_2_velocity"] > df["window_velocity"], "velocity_basis"] = "2wk"
+
+        df["estimated_qty"] = (df["effective_velocity"] * cover_weeks).round()
+
+        df = df.drop(columns=[c for c in [
+            "_asin", "_sku", "_l2_units_asin", "_l2_units_sku", "_l2_units_model",
+        ] if c in df.columns])
 
         df["deficiency"] = df["estimated_qty"] - df["final_cb_qty"]
 

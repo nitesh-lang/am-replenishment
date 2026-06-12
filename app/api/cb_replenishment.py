@@ -98,6 +98,8 @@ def get_cb_replenishment(
             "cb_3m_sales",
             "cambium_3m_sales",
             "avg_weekly_sales",
+            "last_2_velocity",
+            "velocity_basis",
             "estimated_qty",
             "deficiency",
             "open_po",
@@ -111,7 +113,7 @@ def get_cb_replenishment(
         # Master column "Hazmat Type" is actually ASIN Sort Details
         response_df = response_df.rename(columns={"hazmat_type": "asin_sort_details"})
 
-        for col in ["avg_weekly_sales", "estimated_qty", "deficiency", "cb_3m_sales", "cambium_3m_sales"]:
+        for col in ["avg_weekly_sales", "last_2_velocity", "estimated_qty", "deficiency", "cb_3m_sales", "cambium_3m_sales"]:
             if col in response_df.columns:
                 response_df[col] = response_df[col].round(0).astype(int)
 
