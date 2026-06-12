@@ -42,7 +42,7 @@ from dotenv import load_dotenv
 # Constants — India / amazon.in
 # ──────────────────────────────────────────────────────────────────────
 LWA_URL          = "https://api.amazon.com/auth/o2/token"
-SPAPI_HOST       = "https://sellingpartnerapi-fe.amazon.com"  # Far East region
+SPAPI_HOST       = "https://sellingpartnerapi-eu.amazon.com"  # EU region (amazon.in lives here per Amazon)
 MARKETPLACE_ID   = "A21TJRUUN4KGV"                            # amazon.in
 HEADER_REPORT    = "GET_FBA_FULFILLMENT_INBOUND_SHIPMENT_DATA"
 ITEM_REPORT      = "GET_FBA_FULFILLMENT_INBOUND_SHIPMENT_ITEM_DATA"
