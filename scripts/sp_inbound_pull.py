@@ -52,15 +52,45 @@ DEFAULT_STATUSES = (
 PER_ITEM_DELAY = 0.5
 
 REPO_ROOT  = Path(__file__).resolve().parent.parent
-OUTPUT_CSV = REPO_ROOT / "data" / "input" / "inbound_shipments_nexlev.csv"
+
+# Account → file slug (matches FC Allocation service)
+ACCOUNT_SLUGS = {
+    "nexlev":      "nexlev",
+    "viomi":       "viomi",
+    "audio_array": "audio_array",
+    "wm":          "wm",
+    "fossil":      "fossil",
+}
 
 
-def get_access_token() -> str:
+def output_path(account: str) -> Path:
+    slug = ACCOUNT_SLUGS.get(account, account.lower().replace(" ", "_"))
+    return REPO_ROOT / "data" / "input" / f"inbound_shipments_{slug}.csv"
+
+
+def get_access_token(account: str) -> str:
+    """Per-account LWA credentials. Some accounts (e.g. Viomi) live under
+    a different Amazon account and therefore have their own SP-API app
+    with its own Client ID/Secret. Falls back to the default
+    SP_LWA_CLIENT_ID / _SECRET if no per-account override is set."""
+    acct_upper = account.upper()
+
+    cid = os.environ.get(f"SP_LWA_CLIENT_ID_{acct_upper}")     or os.environ.get("SP_LWA_CLIENT_ID")
+    sec = os.environ.get(f"SP_LWA_CLIENT_SECRET_{acct_upper}") or os.environ.get("SP_LWA_CLIENT_SECRET")
+    rt  = os.environ.get(f"SP_REFRESH_TOKEN_{acct_upper}")
+
+    if not rt:
+        raise SystemExit(f"❌ Missing SP_REFRESH_TOKEN_{acct_upper} in .env")
+    if not cid or not sec:
+        raise SystemExit(f"❌ Missing LWA credentials. Provide either "
+                         f"SP_LWA_CLIENT_ID_{acct_upper} + SP_LWA_CLIENT_SECRET_{acct_upper}, "
+                         f"or the shared SP_LWA_CLIENT_ID + SP_LWA_CLIENT_SECRET.")
+
     r = requests.post(LWA_URL, data={
         "grant_type":    "refresh_token",
-        "refresh_token": os.environ["SP_REFRESH_TOKEN_NEXLEV"],
-        "client_id":     os.environ["SP_LWA_CLIENT_ID"],
-        "client_secret": os.environ["SP_LWA_CLIENT_SECRET"],
+        "refresh_token": rt,
+        "client_id":     cid,
+        "client_secret": sec,
     }, timeout=30)
     r.raise_for_status()
     return r.json()["access_token"]
@@ -148,6 +178,9 @@ def main():
                         help="Shortcut for the in-flight statuses only")
     parser.add_argument("--max-pages", type=int, default=None,
                         help="Stop after N pages (smoke test; default: all)")
+    parser.add_argument("--account", default="nexlev",
+                        choices=sorted(ACCOUNT_SLUGS.keys()),
+                        help="Which seller account to pull (uses SP_REFRESH_TOKEN_<ACCOUNT>)")
     args = parser.parse_args()
 
     if args.active_only:
@@ -156,12 +189,13 @@ def main():
         statuses = args.status
 
     load_dotenv(REPO_ROOT / ".env")
-    for k in ("SP_LWA_CLIENT_ID", "SP_LWA_CLIENT_SECRET", "SP_REFRESH_TOKEN_NEXLEV"):
+    for k in ("SP_LWA_CLIENT_ID", "SP_LWA_CLIENT_SECRET"):
         if not os.environ.get(k):
             print(f"❌ Missing env var: {k}"); sys.exit(1)
 
+    print(f"→ Account: {args.account}")
     print("→ Getting LWA access token…")
-    token = get_access_token()
+    token = get_access_token(args.account)
     print("  OK\n")
 
     print(f"→ Listing shipments (status: {statuses[:60]}…)")
@@ -200,18 +234,19 @@ def main():
             })
         time.sleep(PER_ITEM_DELAY)
 
-    OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+    out_csv = output_path(args.account)
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
     cols = ["ShipmentId", "ShipmentName", "ShipmentStatus", "DestinationFC",
             "ShipFrom", "SellerSKU", "FNSKU", "QuantityShipped",
             "QuantityReceived", "QuantityInCase"]
-    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+    with open(out_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         for r in rows:
             w.writerow(r)
 
     print(f"\n✓ Wrote {len(rows)} rows from {len(ships)} shipments")
-    print(f"  → {OUTPUT_CSV.relative_to(REPO_ROOT)}")
+    print(f"  → {out_csv.relative_to(REPO_ROOT)}")
 
 
 if __name__ == "__main__":

@@ -128,11 +128,11 @@ export function FCAllocationSOPContent() {
             <Row name="FC SOH"        desc="Current stock at that FC" />
             <Row name="Mother WH"     desc="AMPM warehouse balance for the SKU" />
             <Row name="B2B Inv"       desc="B2B-AMPM stock (display only)" />
-            <Row name="Inbound"       desc="Units shipped to this FC, not yet received (from SP-API getShipments). Sky-blue pill when > 0." />
+            <Row name="Inbound"       desc="Units shipped to this FC, not yet received (from SP-API getShipments). Sky-blue pill when > 0. Auto-deducted from To Send QTY so we don't double-ship." />
             <Row name="Avg/Wk"        desc="Weekly velocity computed per-FC over the selected window" />
             <Row name="Target"        desc="FC SOH target = Avg/Wk × Replen Wks (governance applied)" />
             <Row name="Required"      desc="Pre-transfer expected need" />
-            <Row name="To Send QTY"   desc="Final ship quantity from Mother WH to this FC" />
+            <Row name="To Send QTY"   desc="Final ship quantity from Mother WH to this FC. = max(0, shortfall after governance − inbound_to_fc). Inbound auto-deducted to prevent double-shipping." />
             <Row name="Fill %"        desc="Fill rate of Required against capacity" />
             <Row name="Vel Flag"      desc="STABLE / SHORT_30%+ / NO_SALES, etc." />
           </tbody>

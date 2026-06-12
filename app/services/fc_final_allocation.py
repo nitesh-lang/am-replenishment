@@ -718,6 +718,21 @@ def calculate_final_allocation(
             df_plan["inbound_to_fc"] = 0
 
     # ==========================================================
+    # DEDUCT INBOUND FROM SEND_QTY
+    # Units already in flight to a given FC shouldn't be re-shipped from
+    # the mother warehouse. For non-Fossil accounts we use the SP-API
+    # inbound_to_fc value; Fossil already deducts its own in_transit_qty
+    # + open_po_qty above, so we skip it there to avoid double-counting.
+    # ==========================================================
+    if account.lower() != "fossil" and "inbound_to_fc" in df_plan.columns:
+        df_plan["send_qty"] = (
+            pd.to_numeric(df_plan["send_qty"], errors="coerce").fillna(0)
+            - df_plan["inbound_to_fc"]
+        ).clip(lower=0)
+        # Round to nearest int — send_qty is always whole units
+        df_plan["send_qty"] = df_plan["send_qty"].round(0).astype(int)
+
+    # ==========================================================
     # FINAL DATASET
     # ==========================================================
 
