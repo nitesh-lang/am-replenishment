@@ -22,6 +22,7 @@ import WMReplenishmentV2 from "./pages/WMReplenishmentV2";
 import FossilReplenishment from "./pages/FossilReplenishment";
 import FossilReplenishmentV2 from "./pages/FossilReplenishmentV2";
 import BlinkitReplenishment from "./pages/BlinkitReplenishment";
+import FBAInboundV2 from "./pages/FBAInboundV2";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import UsageAnalytics from "./pages/UsageAnalytics";
@@ -71,6 +72,8 @@ function App() {
           <Route path="/replenishment"         element={<Gated moduleKey="replenishment"><ReplenishmentV2 /></Gated>} />
           <Route path="/replenishment-v1"      element={<Gated moduleKey="replenishment"><Replenishment /></Gated>} />
           <Route path="/replenishment-v2"      element={<Navigate to="/replenishment" replace />} />
+
+          <Route path="/fba-inbound"           element={<Gated moduleKey="replenishment"><FBAInboundV2 /></Gated>} />
 
           <Route path="/fc-allocation"         element={<Gated moduleKey="fc-allocation"><FCAllocationV2 /></Gated>} />
           <Route path="/fc-allocation-v1"      element={<Gated moduleKey="fc-allocation"><FCAllocation /></Gated>} />
