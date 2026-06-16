@@ -225,48 +225,48 @@ def load_wm_replenishment(from_week=None, to_week=None, cover_weeks: int = 8):
         df["po_requirement"] = df[["po_requirement", "ampm_inventory"]].min(axis=1)
 
         # =========================
-        # DB MERGE (remarks only)
+        # DB MERGE (remarks only) — best-effort; skip when DB unreachable.
         # =========================
 
-        from app.services.db import get_conn
+        try:
+            from app.services.db import get_conn
 
-        with get_conn() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS wm_inputs (
-                        model TEXT PRIMARY KEY,
-                        po_requirement INTEGER DEFAULT 0,
-                        remarks TEXT DEFAULT ''
-                    )
-                """)
-                cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
-                cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
-            conn.commit()
+            with get_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS wm_inputs (
+                            model TEXT PRIMARY KEY,
+                            po_requirement INTEGER DEFAULT 0,
+                            remarks TEXT DEFAULT ''
+                        )
+                    """)
+                    cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
+                    cursor.execute("ALTER TABLE wm_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
+                conn.commit()
 
-            # Load po_requirement and remarks — DB value wins if user saved it
-            db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM wm_inputs", conn)
+                db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM wm_inputs", conn)
 
-        if not db_df.empty and "model" in db_df.columns:
-            df = df.merge(
-                db_df[["model", "po_requirement", "remarks"]],
-                on="model",
-                how="left",
-                suffixes=("", "_db")
-            )
-            if "po_requirement_db" in df.columns:
-                df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
-                df = df.drop(columns=["po_requirement_db"], errors="ignore")
-            if "remarks_db" in df.columns:
-                df["remarks"] = df.get("remarks_db", pd.Series("", index=df.index)).fillna("")
-                df = df.drop(columns=["remarks_db"], errors="ignore")
+            if not db_df.empty and "model" in db_df.columns:
+                df = df.merge(
+                    db_df[["model", "po_requirement", "remarks"]],
+                    on="model",
+                    how="left",
+                    suffixes=("", "_db")
+                )
+                if "po_requirement_db" in df.columns:
+                    df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
+                    df = df.drop(columns=["po_requirement_db"], errors="ignore")
+                if "remarks_db" in df.columns:
+                    df["remarks"] = df.get("remarks_db", pd.Series("", index=df.index)).fillna("")
+                    df = df.drop(columns=["remarks_db"], errors="ignore")
+        except Exception as db_err:
+            print(f"WM Replenishment: DB overlay skipped ({db_err})")
 
         # Always ensure these columns exist (e.g. after reset when DB is empty)
         if "remarks" not in df.columns:
             df["remarks"] = ""
         if "po_requirement" not in df.columns:
             df["po_requirement"] = 0
-
-        conn.close()
 
         return df
 

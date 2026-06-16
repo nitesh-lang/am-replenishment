@@ -12,3 +12,5 @@ __pycache__/
 
 # Amazon Seller Central browser sessions (saved cookies for the scraper)
 .amazon_session*.json
+.amazon_profile_*/
+.debug_*.png

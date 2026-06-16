@@ -25,10 +25,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import functools
+import json
 import os
 import sys
 import time
-import functools
 from pathlib import Path
 
 import requests
@@ -140,32 +141,66 @@ def list_shipments(token: str, statuses: str, max_pages: int | None = None) -> l
     return out
 
 
-def fetch_items(token: str, shipment_id: str) -> list[dict]:
-    """Page through items of one shipment."""
+MAX_ITEMS_PAGES = 5  # safety cap; Amazon sometimes returns a stale NextToken forever
+
+
+def fetch_items(token: str, shipment_id: str, max_throttle_retries: int = 6) -> list[dict]:
+    """Page through items of one shipment. Backs off on 429 with exponential delay.
+    Guards against Amazon returning a stale NextToken indefinitely on certain shipments:
+    detects when a page returns the same ItemData hash as a prior page and breaks."""
+    import hashlib
     headers = {"x-amz-access-token": token}
     out = []
     next_token = None
+    throttle_count = 0
+    page = 0
+    seen_tokens: set[str] = set()
+    seen_page_hashes: set[str] = set()
     while True:
+        page += 1
+        if page > MAX_ITEMS_PAGES:
+            print(f"  ! {shipment_id} pagination cap {MAX_ITEMS_PAGES} hit — breaking", flush=True)
+            break
         if next_token:
             params = {"QueryType": "NEXT_TOKEN", "NextToken": next_token,
                       "MarketplaceId": MARKETPLACE_ID}
         else:
             params = {"MarketplaceId": MARKETPLACE_ID}
-        r = requests.get(
-            f"{SPAPI_HOST}/fba/inbound/v0/shipments/{shipment_id}/items",
-            params=params, headers=headers, timeout=30,
-        )
+        try:
+            r = requests.get(
+                f"{SPAPI_HOST}/fba/inbound/v0/shipments/{shipment_id}/items",
+                params=params, headers=headers, timeout=30,
+            )
+        except requests.RequestException as e:
+            print(f"  ! {shipment_id} request error: {e}", flush=True)
+            return out
         if r.status_code == 429:
-            time.sleep(5); continue
+            throttle_count += 1
+            if throttle_count > max_throttle_retries:
+                print(f"  ! {shipment_id} 429 after {throttle_count} retries — giving up")
+                return out
+            backoff = min(2 ** throttle_count, 30)  # 2,4,8,16,30,30
+            print(f"  ! {shipment_id} 429 throttled, backoff {backoff}s (retry {throttle_count}/{max_throttle_retries})")
+            time.sleep(backoff)
+            continue
         if r.status_code != 200:
             print(f"  ! {shipment_id} items HTTP {r.status_code}: {r.text[:120]}")
             return out
         payload = r.json().get("payload", {}) or {}
         items = payload.get("ItemData", []) or []
+        # Content-based dedup: if Amazon returns the same items as a prior page,
+        # treat it as the end of pagination (don't add, don't continue).
+        page_hash = hashlib.md5(json.dumps(items, sort_keys=True, default=str).encode()).hexdigest()
+        if page_hash in seen_page_hashes:
+            break
+        seen_page_hashes.add(page_hash)
         out.extend(items)
         next_token = payload.get("NextToken")
         if not next_token:
             break
+        if next_token in seen_tokens:
+            break
+        seen_tokens.add(next_token)
         time.sleep(PER_ITEM_DELAY)
     return out
 
@@ -189,9 +224,14 @@ def main():
         statuses = args.status
 
     load_dotenv(REPO_ROOT / ".env")
-    for k in ("SP_LWA_CLIENT_ID", "SP_LWA_CLIENT_SECRET"):
-        if not os.environ.get(k):
-            print(f"❌ Missing env var: {k}"); sys.exit(1)
+    acct_u = args.account.upper()
+    cid = os.environ.get(f"SP_LWA_CLIENT_ID_{acct_u}")     or os.environ.get("SP_LWA_CLIENT_ID")
+    sec = os.environ.get(f"SP_LWA_CLIENT_SECRET_{acct_u}") or os.environ.get("SP_LWA_CLIENT_SECRET")
+    if not cid or not sec:
+        print(f"❌ Missing LWA creds. Provide either "
+              f"SP_LWA_CLIENT_ID_{acct_u} + SP_LWA_CLIENT_SECRET_{acct_u}, "
+              f"or the shared SP_LWA_CLIENT_ID + SP_LWA_CLIENT_SECRET.")
+        sys.exit(1)
 
     print(f"→ Account: {args.account}")
     print("→ Getting LWA access token…")
@@ -216,9 +256,10 @@ def main():
         addr    = s.get("ShipFromAddress", {}) or {}
         ship_from = f"{addr.get('City','')}, {addr.get('StateOrProvinceCode','')}".strip(", ")
 
+        t0 = time.time()
         items = fetch_items(token, sid)
-        if i % 10 == 0 or i == len(ships):
-            print(f"  [{i:3d}/{len(ships)}] {sid:14s} {status:12s} {fc:6s} → {len(items)} items")
+        elapsed = time.time() - t0
+        print(f"  [{i:3d}/{len(ships)}] {sid:14s} {status:12s} {fc:6s} -> {len(items):3d} items ({elapsed:.1f}s)", flush=True)
         for it in items:
             rows.append({
                 "ShipmentId":      sid,

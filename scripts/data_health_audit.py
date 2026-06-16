@@ -97,7 +97,7 @@ ACCOUNTS = [
         "inv_snap":   "Inventory_snapshot_audio_array.xlsx",
         "amz_inv":    "inventory_amazon_audio_array.csv",
         "ledger":     "inventory_ledger_Audio Array.csv",
-        "shipments":  "fba_shipments_Audio Array.csv",
+        "shipments":  None,  # no SP-API inbound pull yet for AA (1P channel)
     },
     {
         "name": "WM",
@@ -105,7 +105,7 @@ ACCOUNTS = [
         "inv_snap":   "Inventory_snapshot_WM.xlsx",
         "amz_inv":    "inventory_amazon_WM.csv",
         "ledger":     "inventory_ledger_WM.csv",
-        "shipments":  "fba_shipments_WM.csv",
+        "shipments":  None,  # no SP-API inbound pull yet for WM (1P channel)
     },
     {
         "name": "CB",
@@ -121,7 +121,7 @@ ACCOUNTS = [
         "inv_snap":   "inventory_snapshot_nexlev.xlsx",
         "amz_inv":    "inventory_amazon_nexlev.csv",
         "ledger":     "inventory_ledger_nexlev.csv",
-        "shipments":  "fba_shipments_nexlev.csv",
+        "shipments":  "inbound_shipments_nexlev.csv",  # SP-API pull (scripts/sp_inbound_pull.py)
     },
     {
         "name": "Viomi",
@@ -129,7 +129,7 @@ ACCOUNTS = [
         "inv_snap":   "inventory_snapshot_nexlev.xlsx",  # Viomi shares Nexlev snapshot
         "amz_inv":    "inventory_amazon_viomi.csv",
         "ledger":     "inventory_ledger_viomi.csv",
-        "shipments":  "fba_shipments_viomi.csv",
+        "shipments":  None,  # Viomi SP-API blocked (different Amazon account); manual CSV fallback if needed
     },
     {
         "name": "Fossil",
@@ -137,7 +137,7 @@ ACCOUNTS = [
         "inv_snap":   "Fossil Replenishment/Fossil - SOH.xlsx",
         "amz_inv":    None,
         "ledger":     "Fossil Replenishment/inventory_ledger_fossil.csv",
-        "shipments":  "Fossil Replenishment/fba_shipments_fossil.csv",
+        "shipments":  None,  # Fossil has its own in-transit/PO workflow (In-Transit_Open_PO_Fossil.xlsx)
     },
 ]
 

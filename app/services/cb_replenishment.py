@@ -4,6 +4,45 @@ from app.services.file_cache import get
 
 DATA_PATH = Path("data/input")
 
+# Schema of the 1p slice that CB Replenishment expects from the inventory
+# snapshots: the same columns as Inventory_snapshot_<brand>.xlsx.
+_SNAPSHOT_COLS = ["SKU", "ASIN", "Brand", "Model",
+                  "category_l0", "category_l1", "category_l2",
+                  "NLC", "Qty", "Channel", "Type", "Week"]
+
+
+def _load_vendor_soh_1p() -> pd.DataFrame:
+    """Read SP-API vendor SOH CSVs and shape them as channel='1p' rows.
+
+    AA + Tonor 1p inventory moved out of the manual Inventory_snapshot_*.xlsx
+    files and is now produced by scripts/sp_vendor_soh_pull.py. The snapshot
+    xlsx files no longer contain a 1p slice. Pulling the SP-API CSVs back in
+    here keeps CB Replenishment's downstream `channel == '1p'` filter working.
+    """
+    rows = []
+    for fname, brand in [("vendor_soh_audio_array.csv", "Audio Array"),
+                         ("vendor_soh_tonor.csv",       "Tonor")]:
+        p = DATA_PATH / fname
+        if not p.exists():
+            continue
+        try:
+            df = pd.read_csv(p)
+        except Exception:
+            continue
+        if df.empty:
+            continue
+        # Ensure required cols exist (extra cols are dropped via reindex below)
+        df["Channel"] = "1p"
+        if "Brand" not in df.columns or df["Brand"].isna().all():
+            df["Brand"] = brand
+        for col in _SNAPSHOT_COLS:
+            if col not in df.columns:
+                df[col] = ""
+        rows.append(df[_SNAPSHOT_COLS])
+    if not rows:
+        return pd.DataFrame(columns=_SNAPSHOT_COLS)
+    return pd.concat(rows, ignore_index=True)
+
 def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: int = 8):
     """
     from_week   : start of sales window (inclusive), default 1
@@ -24,7 +63,7 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         po_df = get("In_Transit_PO data.xlsx")
 
         inventory_df = pd.concat(
-            [inv_audio_df, inv_tonor_df],
+            [inv_audio_df, inv_tonor_df, _load_vendor_soh_1p()],
             ignore_index=True
         )
 
@@ -436,40 +475,45 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         df["po_requirement"] = df[["po_requirement", "ampm_inventory"]].min(axis=1)
 
         # =========================
-        # DB MERGE (remarks only)
+        # DB MERGE (remarks only) — best-effort; if DB is unreachable
+        # (e.g. local dev without DATABASE_URL), return the computed report
+        # without the user-saved overlays rather than failing the whole call.
         # =========================
 
-        from app.services.db import get_conn
+        try:
+            from app.services.db import get_conn
 
-        with get_conn() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS cb_inputs (
-                        model TEXT PRIMARY KEY,
-                        po_requirement INTEGER DEFAULT 0,
-                        remarks TEXT DEFAULT ''
-                    )
-                """)
-                cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
-                cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
-            conn.commit()
+            with get_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS cb_inputs (
+                            model TEXT PRIMARY KEY,
+                            po_requirement INTEGER DEFAULT 0,
+                            remarks TEXT DEFAULT ''
+                        )
+                    """)
+                    cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS po_requirement INTEGER DEFAULT 0")
+                    cursor.execute("ALTER TABLE cb_inputs ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT ''")
+                conn.commit()
 
-            # Load po_requirement and remarks — DB value wins if user saved it
-            db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM cb_inputs", conn)
+                # Load po_requirement and remarks — DB value wins if user saved it
+                db_df = pd.read_sql("SELECT model, po_requirement, remarks FROM cb_inputs", conn)
 
-        if not db_df.empty and "model" in db_df.columns:
-            df = df.merge(
-                db_df[["model", "po_requirement", "remarks"]],
-                on="model",
-                how="left",
-                suffixes=("", "_db")
-            )
-            if "po_requirement_db" in df.columns:
-                df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
-                df = df.drop(columns=["po_requirement_db"], errors="ignore")
-            if "remarks_db" in df.columns:
-                df["remarks"] = df["remarks_db"].fillna("")
-                df = df.drop(columns=["remarks_db"], errors="ignore")
+            if not db_df.empty and "model" in db_df.columns:
+                df = df.merge(
+                    db_df[["model", "po_requirement", "remarks"]],
+                    on="model",
+                    how="left",
+                    suffixes=("", "_db")
+                )
+                if "po_requirement_db" in df.columns:
+                    df["po_requirement"] = df["po_requirement_db"].combine_first(df["po_requirement"])
+                    df = df.drop(columns=["po_requirement_db"], errors="ignore")
+                if "remarks_db" in df.columns:
+                    df["remarks"] = df["remarks_db"].fillna("")
+                    df = df.drop(columns=["remarks_db"], errors="ignore")
+        except Exception as db_err:
+            print(f"CB Replenishment: DB overlay skipped ({db_err})")
 
         return df
 
