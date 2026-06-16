@@ -1,6 +1,38 @@
 import os
+from pathlib import Path
 import pandas as pd
 from app.services.file_cache import get, get_excel_sheet
+
+
+_DATA_INPUT = Path("data/input")
+
+# AA + Tonor 1p inventory moved out of the manual Inventory_snapshot_*.xlsx
+# files (now produced by scripts/sp_vendor_soh_pull.py). China Reorder folds
+# the 1p slice into `current_inventory` (anything not "open order" or
+# "pipeline"), so we inject the SP-API rows into inv_df with channel='1p'
+# for the affected brands. Other brands (WM, Nexlev) keep their existing
+# snapshot 1p rows unchanged.
+def _vendor_soh_1p_for_brand(brand_clean: str) -> pd.DataFrame:
+    fname_map = {
+        "audio array": "vendor_soh_audio_array.csv",
+        "tonor":       "vendor_soh_tonor.csv",
+    }
+    fname = fname_map.get(brand_clean)
+    if not fname:
+        return pd.DataFrame()
+    p = _DATA_INPUT / fname
+    if not p.exists():
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(p)
+    except Exception:
+        return pd.DataFrame()
+    if df.empty:
+        return pd.DataFrame()
+    df = df.copy()
+    df.columns = df.columns.str.strip().str.lower()
+    df["channel"] = "1p"
+    return df
 
 
 # =================================================
@@ -211,6 +243,12 @@ def china_reorder_logic(
         .str.strip()
         .str.lower()
     )
+
+    # Inject SP-API 1p rows for AA + Tonor (the manual snapshots no longer
+    # ship a 1p slice for these brands). No-op for other brands.
+    vendor_1p = _vendor_soh_1p_for_brand(brand_clean)
+    if not vendor_1p.empty:
+        inv_df = pd.concat([inv_df, vendor_1p], ignore_index=True)
 
     # ============================================================
     # CLEAN IMPORTANT FIELDS
