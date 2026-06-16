@@ -110,18 +110,20 @@ export default function Layout({ children }) {
                   <ChevronDown className={`w-3 h-3 transition-transform ${moreOpen ? "rotate-180" : ""}`} />
                 </button>
                 {moreOpen && (
-                  <div className="absolute left-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 overflow-hidden">
-                    <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.08em] text-slate-400 font-semibold">Analytics & Admin</div>
+                  <div className="absolute left-0 mt-2 w-64 bg-white border border-slate-300 rounded-lg shadow-2xl py-1.5 z-50 overflow-hidden">
+                    <div className="px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-slate-500 font-bold border-b border-slate-100">
+                      Analytics & Admin
+                    </div>
                     {moreItems.map(item => (
                       <NavLink
                         key={item.path}
                         to={item.path}
                         onClick={() => setMoreOpen(false)}
                         className={({ isActive }) =>
-                          `block px-3 py-2 text-xs font-medium transition-colors ${
+                          `block px-4 py-2.5 text-sm font-semibold transition-colors ${
                             isActive
                               ? "bg-indigo-50 text-indigo-700"
-                              : "text-slate-700 hover:bg-slate-50"
+                              : "text-slate-800 hover:bg-slate-100"
                           }`
                         }
                       >
