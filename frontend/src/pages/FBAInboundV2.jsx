@@ -118,6 +118,27 @@ export default function FBAInboundV2() {
     return rows;
   }, [data.rows, statusFilter, fcFilter, search]);
 
+  /* ─────────── KPIs computed from the filtered set ─────────── */
+  const liveSummary = useMemo(() => {
+    const inFlight = new Set(["WORKING", "READY_TO_SHIP", "SHIPPED", "IN_TRANSIT"]);
+    const atFc     = new Set(["DELIVERED", "CHECKED_IN", "RECEIVING"]);
+    let in_flight_units = 0, at_fc_remaining = 0;
+    const shipmentIds = new Set();
+    for (const r of filtered) {
+      shipmentIds.add(r.ShipmentId);
+      const qs = Number(r.QuantityShipped) || 0;
+      const qr = Number(r.QuantityReceived) || 0;
+      if (inFlight.has(r.ShipmentStatus)) in_flight_units += qs;
+      else if (atFc.has(r.ShipmentStatus)) at_fc_remaining += Math.max(0, qs - qr);
+    }
+    return {
+      total_shipments: shipmentIds.size,
+      in_flight_units,
+      at_fc_remaining,
+      total_incoming: in_flight_units + at_fc_remaining,
+    };
+  }, [filtered]);
+
   /* ─────────── columns ─────────── */
   const columns = useMemo(
     () => [
@@ -233,7 +254,8 @@ export default function FBAInboundV2() {
     URL.revokeObjectURL(url);
   }
 
-  const sum = data.summary || {};
+  const sum = liveSummary;
+  const isFiltered = statusFilter.length || fcFilter.length || search.trim();
 
   return (
     <div className="px-6 py-5 max-w-[1600px] mx-auto">
@@ -259,13 +281,20 @@ export default function FBAInboundV2() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      {/* KPIs — recompute from the filtered set so they react to filters */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-1">
         <KpiCard label="Shipments"     value={sum.total_shipments} />
         <KpiCard label="In-flight Units" value={sum.in_flight_units} accent="sky" />
         <KpiCard label="At-FC Remaining" value={sum.at_fc_remaining} accent="violet" />
         <KpiCard label="Total Incoming" value={sum.total_incoming} accent="emerald" />
       </div>
+      {isFiltered ? (
+        <div className="text-[11px] text-indigo-700 font-medium mb-3">
+          KPIs reflect current filters · {filtered.length} of {data.rows.length} rows
+        </div>
+      ) : (
+        <div className="mb-3" />
+      )}
 
       {/* Filters */}
       <div className="bg-white border border-slate-200 rounded-lg p-3 mb-3 space-y-2.5">
