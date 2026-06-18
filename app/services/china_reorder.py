@@ -55,10 +55,10 @@ _MARGIN_FILES = [
 ]
 
 _FBA_RETURN_FILES = [
-    "Additional/returns/Audio Array FBA Returns.csv",
-    "Additional/returns/Nexlev.csv",
-    "Additional/returns/CRPL.csv",
-    "Additional/returns/viomi.csv",
+    "Additional/returns/Audio Array FBA Returns.xlsx",
+    "Additional/returns/Nexlev.xlsx",
+    "Additional/returns/CRPL.xlsx",
+    "Additional/returns/viomi.xlsx",
 ]
 
 _1P_RETURN_FILE = "Additional/returns/1p Returns.xlsx"

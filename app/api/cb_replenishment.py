@@ -10,10 +10,31 @@ from app.services.week_helper import (
     now_ist,
 )
 from datetime import date as _date
+from pathlib import Path
 import json
 import pandas as pd
 
 from app.services.db import get_conn
+
+
+def _cb_soh_synced_date() -> str:
+    """Return the SnapshotDate the SP-API CB SOH was last pulled for.
+
+    Reads the SnapshotDate column from data/input/vendor_soh_audio_array.csv
+    (every row carries the same date — Amazon's vendor inventory report is a
+    single-day snapshot). Falls back to "" when the file isn't present (eg
+    the operator hasn't run scripts/sp_vendor_soh_pull.py yet).
+    """
+    p = Path("data/input/vendor_soh_audio_array.csv")
+    if not p.exists():
+        return ""
+    try:
+        df = pd.read_csv(p, usecols=["SnapshotDate"], nrows=5)
+        s = df["SnapshotDate"].dropna().astype(str)
+        s = s[s != ""]
+        return str(s.iloc[0]) if not s.empty else ""
+    except Exception:
+        return ""
 
 router = APIRouter(
     prefix="/cb-replenishment",
@@ -132,7 +153,8 @@ def get_cb_replenishment(
         return {
             "data": response_df.to_dict(orient="records"),
             "total_models": len(response_df),
-            "available_weeks": available_weeks
+            "available_weeks": available_weeks,
+            "cb_soh_synced_date": _cb_soh_synced_date(),
         }
 
     except Exception as e:

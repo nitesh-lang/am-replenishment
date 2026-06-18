@@ -62,6 +62,9 @@ export default function CBReplenishmentV2() {
   const isReadOnly = weekStart !== null;
   const isLocked = isReadOnly || currentWeekMeta?.locked;
 
+  /* SP-API CB SOH last-synced date (from vendor_soh_audio_array.csv) */
+  const [cbSohSyncedDate, setCbSohSyncedDate] = useState("");
+
   /* Range-select */
   const [selRange, setSelRange] = useState(null);
   const draggingRef = useRef(null);
@@ -108,6 +111,7 @@ export default function CBReplenishmentV2() {
           const list = res.data || [];
           setRows(list);
           seed(list);
+          setCbSohSyncedDate(res.cb_soh_synced_date || "");
           if (res.available_weeks?.length) {
             const weeks = res.available_weeks;
             setAvailableWeeks(weeks);
@@ -412,6 +416,13 @@ export default function CBReplenishmentV2() {
             <h1 className="text-2xl font-semibold mt-0.5 tracking-tight">
               CB Replenishment <span className="text-slate-300 font-normal">·</span> <span className="text-slate-500 text-lg font-medium">{brand}</span>
             </h1>
+            {cbSohSyncedDate && (
+              <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-slate-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                CB SOH synced: <span className="font-semibold text-slate-700">{cbSohSyncedDate}</span>
+                <span className="text-slate-400">(via SP-API Vendor Inventory)</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-md bg-white border border-slate-200 text-sm">
