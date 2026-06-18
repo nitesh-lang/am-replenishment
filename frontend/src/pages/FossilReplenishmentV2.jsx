@@ -553,11 +553,11 @@ export default function FossilReplenishmentV2() {
                               </span>
                             );
                           } else if (colId === "Fossil Weekly Sales") {
-                            content = <span className="tabular-nums font-semibold">{(r["Fossil Weekly Sales"] || 0).toFixed(2)}</span>;
+                            content = <span className="tabular-nums font-semibold">{(r["Fossil Weekly Sales"] || 0).toFixed(1)}</span>;
                           } else if (colId === "Last 4 Weeks Top Avg") {
                             content = isVD
                               ? <span className="text-slate-300">—</span>
-                              : <span className="tabular-nums">{(r["Last 4 Weeks Top Avg"] || 0).toFixed(2)}</span>;
+                              : <span className="tabular-nums">{(r["Last 4 Weeks Top Avg"] || 0).toFixed(1)}</span>;
                           } else if (colId === "Required Inventory") {
                             content = <span className="font-semibold tabular-nums text-indigo-700">{Math.round(r["Required Inventory"] || 0)}</span>;
                           } else if (colId === "Replenishment Qty") {

@@ -523,7 +523,7 @@ export default function WMReplenishmentV2() {
                               ? <span className="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-amber-100 text-amber-800">{r.hazmat_type}</span>
                               : <span className="text-slate-500 text-xs">{r.hazmat_type || "—"}</span>;
                           } else if (colId === "avg_weekly_sales") {
-                            content = <span className="tabular-nums font-semibold">{(r.avg_weekly_sales || 0).toFixed(2)}</span>;
+                            content = <span className="tabular-nums font-semibold">{(r.avg_weekly_sales || 0).toFixed(1)}</span>;
                           } else if (colId === "estimated_qty") {
                             content = <span className="tabular-nums">{Math.round(r.estimated_qty || 0)}</span>;
                           } else if (colId === "deficiency") {
@@ -698,7 +698,7 @@ function WMDetailRow({ row, colSpan }) {
               </div>
               <div className="pt-1 border-t border-slate-100 flex justify-between">
                 <span className="text-slate-500">Avg / wk</span>
-                <span className="font-mono tabular-nums font-semibold">{(row.avg_weekly_sales || 0).toFixed(2)}</span>
+                <span className="font-mono tabular-nums font-semibold">{(row.avg_weekly_sales || 0).toFixed(1)}</span>
               </div>
             </div>
           </div>

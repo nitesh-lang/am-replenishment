@@ -722,7 +722,7 @@ export default function ReplenishmentV2() {
                           } else if (colId === "sales_velocity") {
                             content = (
                               <span className="font-semibold tabular-nums">
-                                {r.sales_velocity}
+                                {Number(r.sales_velocity ?? 0).toFixed(1)}
                                 {isBumped && (
                                   <span className="inline-flex ml-1 px-1 py-0.5 text-[9px] font-bold rounded bg-indigo-100 text-indigo-700">4wk</span>
                                 )}

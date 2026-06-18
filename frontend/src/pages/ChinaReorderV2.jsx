@@ -545,7 +545,7 @@ export default function ChinaReorderV2() {
                           } else if (colId === "category_l0") {
                             content = <span className="text-slate-600 text-xs">{r.category_l0 || "—"}</span>;
                           } else if (colId === "avg_weekly_sales") {
-                            content = <span className="tabular-nums font-semibold">{(r.avg_weekly_sales || 0).toFixed(2)}</span>;
+                            content = <span className="tabular-nums font-semibold">{(r.avg_weekly_sales || 0).toFixed(1)}</span>;
                           } else if (colId === "weeks_cover") {
                             const w = r.weeks_cover ?? null;
                             // V1 thresholds: <12 CRITICAL, 12-16 MODERATE, >16 NO REORDER
@@ -592,7 +592,7 @@ export default function ChinaReorderV2() {
                           } else if (colId === "net_margin_pct") {
                             const v = Number(r.net_margin_pct || 0);
                             const tone = v < 0 ? "text-red-700 font-semibold" : "text-slate-700";
-                            content = v ? <span className={cn("tabular-nums", tone)}>{v.toFixed(2)}%</span> : <span className="text-slate-300">—</span>;
+                            content = v ? <span className={cn("tabular-nums", tone)}>{v.toFixed(1)}%</span> : <span className="text-slate-300">—</span>;
                           } else {
                             content = (
                               <span className="tabular-nums">
@@ -723,8 +723,8 @@ function ReorderDetailRow({ row, colSpan }) {
             <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Demand & cover</div>
             <div className="bg-white rounded-md border border-slate-200 p-3 space-y-2 text-xs">
               <KV label="12-wk sales"      val={Math.round(row.last_12w_sales || 0)} />
-              <KV label="Avg / week"       val={(row.avg_weekly_sales || 0).toFixed(2)} accent />
-              <KV label="Weeks of cover"   val={row.weeks_cover != null ? `${row.weeks_cover} wks` : "—"} />
+              <KV label="Avg / week"       val={(row.avg_weekly_sales || 0).toFixed(1)} accent />
+              <KV label="Weeks of cover"   val={row.weeks_cover != null ? `${Number(row.weeks_cover).toFixed(1)} wks` : "—"} />
               <KV label="Suggested reorder" val={Math.round(row.suggested_reorder || 0)} accent />
               <div className="pt-2 border-t border-slate-100">
                 <div className="text-slate-500 text-[10px] uppercase tracking-wider mb-1">Category</div>
