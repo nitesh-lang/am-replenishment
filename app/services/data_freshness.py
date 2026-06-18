@@ -100,6 +100,10 @@ def _latest_fba_sales_week(account_hint: str = "") -> _date | None:
 # Use "fba_sales_folder" for the FBA Sales/Week N folder family (no path).
 ModuleSpec = list[tuple[str, str, str]]
 
+# Only weekly-refreshed *data* inputs belong here. Master sheets (e.g.
+# CB Replenishment Master, sku_master, brand replenishment masters) are
+# updated on an ad-hoc cadence (monthly or less) and would generate
+# noise if flagged each week — they're intentionally excluded.
 MODULES: dict[str, ModuleSpec] = {
     "replenishment": [
         ("Weekly Sales Snapshot",       "weekly_sales_snapshot.csv",             "max_sales_week"),
@@ -113,7 +117,6 @@ MODULES: dict[str, ModuleSpec] = {
         ("WM Amazon Inventory",         "inventory_amazon_WM.csv",               "mtime"),
     ],
     "cb-replenishment": [
-        ("CB Replenishment Master",     "CB Replenishment_Master.xlsx",          "mtime"),
         ("Weekly Sales Snapshot",       "weekly_sales_snapshot.csv",             "max_sales_week"),
         ("AA Inventory Snapshot",       "Inventory_snapshot_audio_array.xlsx",   "mtime"),
         ("Tonor Inventory Snapshot",    "Inventory_snapshot_tonor.xlsx",         "mtime"),
@@ -142,20 +145,18 @@ MODULES: dict[str, ModuleSpec] = {
         ("Viomi Ledger",                "inventory_ledger_viomi.csv",            "mtime"),
     ],
     "fossil-replenishment": [
-        ("Fossil Replenishment Master", "Fossil Replenishment/Fossil Replenishment.xlsx",    "mtime"),
-        ("Fossil SOH",                  "Fossil Replenishment/Fossil - SOH.xlsx",            "mtime"),
+        # Fossil SOH file (Fossil - SOH.xlsx) is redundant — ledger + in-transit
+        # cover the same surface. Master sheet is updated ad-hoc, not weekly.
         ("Fossil In-Transit/Open PO",   "Fossil Replenishment/In-Transit_Open_PO_Fossil.xlsx","mtime"),
         ("Fossil Ledger",               "Fossil Replenishment/inventory_ledger_fossil.csv",  "mtime"),
         ("FBA Sales (latest week)",     "",                                                    "fba_sales_folder"),
     ],
     "blinkit-replenishment": [
-        ("Blinkit Product Master",      "Blinkit/Input/Nexlev Product Master.xlsx",          "mtime"),
         ("Blinkit Replenishment Input", "Blinkit/Input/Replenishment_8-06-2026.xlsx",        "mtime"),
         ("Blinkit Sales (June 2026)",   "Blinkit/Sales/June 2026.xlsx",                      "mtime"),
     ],
     "fba-inbound": [
         ("Nexlev Inbound (SP-API)",     "inbound_shipments_nexlev.csv",          "mtime"),
-        ("sku_master",                  "sku_master.xlsx",                        "mtime"),
     ],
 }
 
