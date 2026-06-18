@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { logUsage } from "../auth/usage";
+import DataFreshnessBanner from "../components/DataFreshnessBanner";
 
 export default function BlinkitReplenishment() {
 
@@ -212,6 +213,7 @@ export default function BlinkitReplenishment() {
 
   return (
     <div className="space-y-4">
+      <div className="px-4 pt-2"><DataFreshnessBanner module="blinkit-replenishment" /></div>
 
       {/* HEADER */}
       <div className="rounded-xl px-5 py-3 bg-gradient-to-r from-emerald-900 via-slate-800 to-slate-900 text-white shadow flex items-center justify-between gap-3">

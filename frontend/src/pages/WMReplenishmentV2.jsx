@@ -14,6 +14,7 @@ import { CommandPalette } from "../components/CommandPalette";
 import { SavedViews } from "../components/SavedViews";
 import { SOPModal, SOPButton } from "../components/SOPModal";
 import { WMReplenishmentSOPContent } from "../components/SOPContents";
+import DataFreshnessBanner from "../components/DataFreshnessBanner";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -336,6 +337,7 @@ export default function WMReplenishmentV2() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <div className="w-full px-6 pt-5 pb-10">
+        <DataFreshnessBanner module="wm-replenishment" />
 
         <div className="flex items-end justify-between mb-4">
           <div>

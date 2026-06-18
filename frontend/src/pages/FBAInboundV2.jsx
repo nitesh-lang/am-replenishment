@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-table";
 import { Search, Download } from "lucide-react";
 import { cn } from "../lib/cn";
+import DataFreshnessBanner from "../components/DataFreshnessBanner";
 
 /* ============================================================
    FBA INBOUND V2 — Nexlev only (for now)
@@ -259,6 +260,7 @@ export default function FBAInboundV2() {
 
   return (
     <div className="px-6 py-5 max-w-[1600px] mx-auto">
+      <DataFreshnessBanner module="fba-inbound" />
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
