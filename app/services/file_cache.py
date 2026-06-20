@@ -61,6 +61,7 @@ def preload():
         "inventory_amazon_audio_array.csv",
         "inventory_amazon_WM.csv",
         "inbound_shipments_nexlev.csv",
+        "inbound_shipments_viomi.csv",
         "inventory_ledger_nexlev.csv",
         "inventory_ledger_viomi.csv",
         "inventory_ledger_WM.csv",

@@ -24,6 +24,7 @@ def load_inbound_shipments(account: str = "NEXLEV") -> pd.DataFrame:
     acct = account.strip().upper()
     fname_map = {
         "NEXLEV": "inbound_shipments_nexlev.csv",
+        "VIOMI":  "inbound_shipments_viomi.csv",
     }
     fname = fname_map.get(acct)
     if not fname:

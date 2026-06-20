@@ -37,7 +37,10 @@ function StatusPill({ status }) {
   );
 }
 
+const ACCOUNT_OPTIONS = ["NEXLEV", "VIOMI"];
+
 export default function FBAInboundV2() {
+  const [account, setAccount] = useState("NEXLEV");
   const [data, setData] = useState({ rows: [], summary: {} });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -51,7 +54,8 @@ export default function FBAInboundV2() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${BASE}/inbound-shipments?account=NEXLEV`)
+    setStatusFilter([]); setFcFilter([]); setSearch("");
+    fetch(`${BASE}/inbound-shipments?account=${account}`)
       .then((r) => r.json())
       .then((j) => {
         const rows = j.rows || [];
@@ -64,7 +68,7 @@ export default function FBAInboundV2() {
       })
       .catch(() => setData({ rows: [], summary: {} }))
       .finally(() => setLoading(false));
-  }, []);
+  }, [account]);
 
   async function saveRemark(shipmentId, sellerSku, value) {
     const key = `${shipmentId}::${sellerSku}`;
@@ -75,7 +79,7 @@ export default function FBAInboundV2() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          account: "NEXLEV",
+          account,
           rows: [{ shipment_id: shipmentId, seller_sku: sellerSku, remarks: value }],
         }),
       });
@@ -250,7 +254,7 @@ export default function FBAInboundV2() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `fba_inbound_nexlev_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `fba_inbound_${account.toLowerCase()}_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -264,12 +268,31 @@ export default function FBAInboundV2() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Nexlev FBA Inbound Shipments</h1>
+          <h1 className="text-xl font-semibold text-slate-900">
+            {account === "NEXLEV" ? "Nexlev" : "Viomi"} FBA Inbound Shipments
+          </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Live SP-API pull. ASIN + Model enriched via sku_master. Source: <code className="text-[11px]">inbound_shipments_nexlev.csv</code>
+            Live SP-API pull. ASIN + Model enriched via sku_master. Source: <code className="text-[11px]">inbound_shipments_{account.toLowerCase()}.csv</code>
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Account selector */}
+          <div className="inline-flex rounded-md border border-slate-300 bg-white overflow-hidden">
+            {ACCOUNT_OPTIONS.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => setAccount(opt)}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-semibold",
+                  account === opt
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-100"
+                )}
+              >
+                {opt === "NEXLEV" ? "Nexlev" : "Viomi"}
+              </button>
+            ))}
+          </div>
           {saveMsg && (
             <span className="text-[11px] text-slate-600">{saveMsg}</span>
           )}
