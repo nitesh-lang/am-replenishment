@@ -91,6 +91,25 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
 
         po_df["model"] = po_df["model"].fillna(po_df["sku"]).astype(str).str.strip()
 
+        # Defensive: a few text-y columns can land as float64 if the source
+        # workbook has all-NaN values (e.g. vendor_soh CSVs ship Type/Week
+        # as empty, which concat promotes back through Inventory_snapshot's
+        # object dtype to float64 in some pandas versions on Render).
+        # Coerce every column we run .str on into strings up-front so the
+        # downstream .str.strip()/lower()/split() chains are safe regardless
+        # of the inferred dtype.
+        if "channel" in inventory_df.columns:
+            inventory_df["channel"] = inventory_df["channel"].astype(str)
+        for _c in ("model", "asin", "sku", "delivery status"):
+            if _c in po_df.columns:
+                po_df[_c] = po_df[_c].astype(str)
+        for _c in ("asin", "sku", "model"):
+            if _c in inventory_df.columns:
+                inventory_df[_c] = inventory_df[_c].astype(str)
+        for _c in ("asin", "sku", "model", "channel"):
+            if _c in sales_df.columns:
+                sales_df[_c] = sales_df[_c].astype(str)
+
         # =========================
         # BRAND FILTER
         # =========================
