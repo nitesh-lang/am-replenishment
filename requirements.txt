@@ -1,7 +1,7 @@
 openpyxl
 fastapi
 uvicorn
-pandas
+pandas==2.3.3
 sqlalchemy
 psycopg2-binary
 python-dotenv

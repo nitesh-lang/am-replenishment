@@ -203,8 +203,12 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             print("AMPM ROWS FOUND:", len(ampm_raw))
 
             if "qty" in ampm_raw.columns and len(ampm_raw) > 0:
-                ampm_raw["_asin"] = ampm_raw.get("asin", "").astype(str).str.strip().str.upper()
-                ampm_raw["_sku"]  = ampm_raw.get("sku", "").astype(str).str.strip().str.upper()
+                # fillna BEFORE astype to avoid pandas dtype-coercion quirks
+                # across versions when the source column is float64 (all-NaN).
+                _aa = ampm_raw["asin"] if "asin" in ampm_raw.columns else pd.Series("", index=ampm_raw.index)
+                _ak = ampm_raw["sku"]  if "sku"  in ampm_raw.columns else pd.Series("", index=ampm_raw.index)
+                ampm_raw["_asin"] = _aa.fillna("").astype(str).str.strip().str.upper()
+                ampm_raw["_sku"]  = _ak.fillna("").astype(str).str.strip().str.upper()
                 ampm_by_asin = (
                     ampm_raw[ampm_raw["_asin"] != ""]
                     .groupby("_asin", as_index=False)["qty"].sum()
@@ -229,9 +233,12 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             pipe_by_model = pd.DataFrame(columns=["model_join", "china_in_transit_model"])
 
             if "qty" in pipeline_raw.columns and len(pipeline_raw) > 0:
-                pipeline_raw["_asin"] = pipeline_raw.get("asin", "").astype(str).str.strip().str.upper()
-                pipeline_raw["_sku"]  = pipeline_raw.get("sku", "").astype(str).str.strip().str.upper()
-                pipeline_raw["model_join"] = pipeline_raw["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
+                _pa = pipeline_raw["asin"]  if "asin"  in pipeline_raw.columns else pd.Series("", index=pipeline_raw.index)
+                _pk = pipeline_raw["sku"]   if "sku"   in pipeline_raw.columns else pd.Series("", index=pipeline_raw.index)
+                _pm = pipeline_raw["model"] if "model" in pipeline_raw.columns else pd.Series("", index=pipeline_raw.index)
+                pipeline_raw["_asin"] = _pa.fillna("").astype(str).str.strip().str.upper()
+                pipeline_raw["_sku"]  = _pk.fillna("").astype(str).str.strip().str.upper()
+                pipeline_raw["model_join"] = _pm.fillna("").astype(str).str.split("(").str[0].str.strip().str.lower()
                 # Cascade levels must be EXCLUSIVE — each Pipeline row counts
                 # at exactly one level. Without this, the Model fallback would
                 # re-attribute Pipeline qty already counted via ASIN to every
