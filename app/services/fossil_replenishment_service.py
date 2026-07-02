@@ -185,24 +185,6 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     master_df = master_df.drop(columns=["_last_4_sum"])
 
     # =====================
-    # TOP-4 WEEKS PEAK AVG (over selected sales window)
-    # Handles stockout-suppressed demand: if Fossil ran out of stock in
-    # several weeks, the 12-week avg gets dragged down. Averaging the
-    # 4 highest-selling weeks in the window recovers the "in-stock demand
-    # rate" for FP / Discount SKUs. Stockout weeks (low/zero sales) simply
-    # don't make the top-4 and drop out of the average.
-    # =====================
-
-    top4_peak_agg = (
-        filtered_sales.groupby("sku")["units_sold"]
-        .apply(lambda s: s.nlargest(4).mean() if len(s) else 0.0)
-        .reset_index()
-        .rename(columns={"sku": "SKU", "units_sold": "Top 4 Weeks Peak Avg"})
-    )
-    master_df = master_df.merge(top4_peak_agg, on="SKU", how="left")
-    master_df["Top 4 Weeks Peak Avg"] = master_df["Top 4 Weeks Peak Avg"].fillna(0)
-
-    # =====================
     # WEEKS OF COVER (per row)
     # Driven by Brand x Assortment Type matrix
     # Unless cover_weeks override is passed
@@ -238,11 +220,7 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     def _effective_weekly_sales(row):
         a = str(row.get("Assortment Type", "")).strip().upper()
         if a in ("FP", "FULL PRICE", "DISCOUNT", "DISCOUNTED"):
-            return max(
-                row["Fossil Weekly Sales"],
-                row["Last 4 Weeks Top Avg"],
-                row["Top 4 Weeks Peak Avg"],
-            )
+            return max(row["Fossil Weekly Sales"], row["Last 4 Weeks Top Avg"])
         return row["Fossil Weekly Sales"]
 
     effective_sales = master_df.apply(_effective_weekly_sales, axis=1)
