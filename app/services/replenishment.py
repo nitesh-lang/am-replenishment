@@ -199,14 +199,27 @@ def calculate_replenishment(
     master, sales, inventory, amazon_inventory = load_data(account)
 
 
-    amazon_inventory["amazon_inventory"] = (
-        amazon_inventory["afn-total-quantity"]
+    # FBA Inv = units physically at Amazon FCs (excludes unsellable + inbound)
+    #        = fulfillable + reserved (or equivalently, warehouse - unsellable)
+    amazon_inventory["fba_inv"] = (
+        amazon_inventory["afn-warehouse-quantity"]
         - amazon_inventory["afn-unsellable-quantity"]
     )
 
+    # Inbound = every unit not yet counted in warehouse-quantity
+    #        = working (plan created, not shipped) + shipped (in-transit)
+    #          + receiving (arrived at FC, being checked in)
     amazon_inventory["inbound_inventory"] = (
         amazon_inventory["afn-inbound-working-quantity"]
         + amazon_inventory["afn-inbound-shipped-quantity"]
+        + amazon_inventory["afn-inbound-receiving-quantity"]
+    )
+
+    # amazon_inventory (kept as-is for downstream math + labelled "Final Inv"
+    # in UI) = FBA Inv + Inbound = afn-total - afn-unsellable
+    amazon_inventory["amazon_inventory"] = (
+        amazon_inventory["afn-total-quantity"]
+        - amazon_inventory["afn-unsellable-quantity"]
     )
 
     amazon_inventory = (
@@ -214,7 +227,8 @@ def calculate_replenishment(
         .groupby("asin", as_index=False)
         .agg(
             amazon_inventory=("amazon_inventory", "sum"),
-            inbound_inventory=("inbound_inventory", "sum")
+            fba_inv=("fba_inv", "sum"),
+            inbound_inventory=("inbound_inventory", "sum"),
         )
     )
 
@@ -430,6 +444,7 @@ def calculate_replenishment(
     df = df.merge(amazon_inventory, left_on="ASIN", right_on="asin", how="left")
 
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
+    df["fba_inv"] = df["fba_inv"].fillna(0)
     df["inbound_inventory"] = df["inbound_inventory"].fillna(0)
 
     # ---------------------------------------------
@@ -641,8 +656,9 @@ def calculate_replenishment(
         "listing_status",
         "sales_velocity",
         "total_units_sold",
-        "amazon_inventory",
+        "fba_inv",
         "inbound_inventory",
+        "amazon_inventory",
         "ampm_inventory",
         "required_units",
         "replenishment_qty",
