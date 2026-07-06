@@ -77,6 +77,7 @@ def get_replenishment(
             "total_units_sold": int(row["total_units_sold"]),
             "units_last_4w": int(row.get("units_last_4w", 0)),
             "amazon_inventory": int(row["amazon_inventory"]),
+            "fba_inv": int(row["fba_inv"]),
             "inbound_inventory": int(row["inbound_inventory"]),
             "ampm_inventory": int(row["ampm_inventory"]),
             "b2b_inventory":  int(row.get("b2b_inventory", 0)),
