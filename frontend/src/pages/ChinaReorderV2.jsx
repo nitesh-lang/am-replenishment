@@ -24,7 +24,9 @@ import { cn } from "../lib/cn";
 
 const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
-const BRAND_OPTIONS = ["Nexlev", "Audio Array", "White Mulberry", "Viomi", "Tonor"];
+// Viomi excluded — it shares Nexlev's manufactured SKUs (rebrand for
+// separate Amazon listings), so reordering is done at the Nexlev level.
+const BRAND_OPTIONS = ["Nexlev", "Audio Array", "White Mulberry", "Tonor"];
 
 // Status derived from weeks_cover — thresholds match V1 (12 / 16).
 function reorderStatus(row) {
