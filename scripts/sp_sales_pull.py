@@ -61,6 +61,60 @@ ACCOUNTS = {
 # out MFN (merchant-fulfilled) orders since it's Amazon-fulfilled only.
 REPORT_TYPE = "GET_AMAZON_FULFILLED_SHIPMENTS_DATA_GENERAL"
 
+# SP-API returns kebab-case headers; manual Seller Central download uses
+# Title Case. Downstream consumers (fc_planning.py etc.) expect the
+# manual schema. Map explicitly so concatenation with older weekly files
+# doesn't produce duplicate columns.
+HEADER_MAP = {
+    "amazon-order-id":            "Amazon Order Id",
+    "merchant-order-id":          "Merchant Order Id",
+    "shipment-id":                "Shipment ID",
+    "shipment-item-id":           "Shipment Item Id",
+    "amazon-order-item-id":       "Amazon Order Item Id",
+    "merchant-order-item-id":     "Merchant Order Item Id",
+    "purchase-date":              "Purchase Date",
+    "payments-date":              "Payments Date",
+    "shipment-date":              "Shipment Date",
+    "reporting-date":             "Reporting Date",
+    "buyer-email":                "Buyer Email",
+    "buyer-name":                 "Buyer Name",
+    "buyer-phone-number":         "Buyer Phone Number",
+    "sku":                        "Merchant SKU",
+    "product-name":               "Title",
+    "quantity-shipped":           "Shipped Quantity",
+    "currency":                   "Currency",
+    "item-price":                 "Item Price",
+    "item-tax":                   "Item Tax",
+    "shipping-price":             "Shipping Price",
+    "shipping-tax":               "Shipping Tax",
+    "gift-wrap-price":            "Gift Wrap Price",
+    "gift-wrap-tax":              "Gift Wrap Tax",
+    "ship-service-level":         "Ship Service Level",
+    "recipient-name":             "Recipient Name",
+    "ship-address-1":             "Shipping Address 1",
+    "ship-address-2":             "Shipping Address 2",
+    "ship-address-3":             "Shipping Address 3",
+    "ship-city":                  "Shipping City",
+    "ship-state":                 "Shipping State",
+    "ship-postal-code":           "Shipping Postal Code",
+    "ship-country":               "Shipping Country Code",
+    "ship-phone-number":          "Shipping Phone Number",
+    "bill-address-1":             "Billing Address 1",
+    "bill-address-2":             "Billing Address 2",
+    "bill-address-3":             "Billing Address 3",
+    "bill-city":                  "Billing City",
+    "bill-state":                 "Billing State",
+    # bill-postal-code + bill-country stay lowercase — matches manual
+    "item-promotion-discount":    "Item Promo Discount",
+    "ship-promotion-discount":    "Shipment Promo Discount",
+    "carrier":                    "Carrier",
+    "tracking-number":            "Tracking Number",
+    "estimated-arrival-date":     "Estimated Arrival Date",
+    "fulfillment-center-id":      "FC",
+    "fulfillment-channel":        "Fulfillment Channel",
+    "sales-channel":              "Sales Channel",
+}
+
 
 def get_access_token(acct: str) -> str:
     cid = os.environ.get(f"SP_LWA_CLIENT_ID_{acct}")     or os.environ.get("SP_LWA_CLIENT_ID")
@@ -179,14 +233,18 @@ def tsv_to_csv(raw: bytes, out_path: Path, filter_master_skus: bool = True) -> t
             csv.writer(f).writerows(rows)
         return 0, 0
 
-    header = rows[0]
+    # Normalize headers to match the manual Seller Central download schema
+    # (Title Case) so downstream code that concats these files with older
+    # weekly drops doesn't see duplicate columns.
+    header_raw = rows[0]
+    header = [HEADER_MAP.get(h.strip().lower(), h) for h in header_raw]
     body   = rows[1:]
 
     kept, dropped = body, []
     if filter_master_skus:
         master_skus = _load_master_skus()
         if master_skus is not None:
-            # Merchant SKU column position — case-insensitive header match
+            # After the rename, the SKU column is "Merchant SKU"
             sku_idx = next(
                 (i for i, h in enumerate(header)
                  if h.strip().lower() in ("merchant sku", "sku", "seller sku")),
