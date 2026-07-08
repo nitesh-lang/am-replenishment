@@ -300,9 +300,33 @@ def calculate_fc_plan(
     ledger["Ending Warehouse Balance"] = pd.to_numeric(
         ledger["Ending Warehouse Balance"], errors="coerce"
     ).fillna(0)
+    if "In Transit Between Warehouses" in ledger.columns:
+        ledger["In Transit Between Warehouses"] = pd.to_numeric(
+            ledger["In Transit Between Warehouses"], errors="coerce"
+        ).fillna(0)
+    else:
+        ledger["In Transit Between Warehouses"] = 0
 
     # Filter only SELLABLE inventory
-    ledger = ledger[ledger["Disposition"] == "SELLABLE"].copy() 
+    ledger = ledger[ledger["Disposition"] == "SELLABLE"].copy()
+
+    # Filter to latest date only — SP-API ledger returns multi-day history
+    # (typically 7-8 days); without this filter fc_inventory would sum the
+    # SAME per-FC balance across every day, over-counting inventory by
+    # (n_days)x. Manual drops used to have 1 day so this bug was silent.
+    if "Date" in ledger.columns:
+        ledger["_date_ord"] = pd.to_datetime(ledger["Date"], errors="coerce",
+                                             format="%m/%d/%Y")
+        # Fallback for dd-mm-yyyy legacy format
+        _missing = ledger["_date_ord"].isna()
+        if _missing.any():
+            ledger.loc[_missing, "_date_ord"] = pd.to_datetime(
+                ledger.loc[_missing, "Date"], errors="coerce", format="%d-%m-%Y"
+            )
+        _latest = ledger["_date_ord"].max()
+        if pd.notna(_latest):
+            ledger = ledger[ledger["_date_ord"] == _latest].copy()
+
     # =================================================
     # AGGREGATE LEDGER BY SKU + FC
     # =================================================
@@ -315,7 +339,8 @@ def calculate_fc_plan(
     fc_inventory = (
         ledger
         .groupby(["MSKU", "Location"], as_index=False)
-        .agg(fc_inventory=("Ending Warehouse Balance", "sum"))
+        .agg(fc_inventory=("Ending Warehouse Balance", "sum"),
+             fc_in_transit=("In Transit Between Warehouses", "sum"))
     )
 
     # DEBUG — log ledger values for Fossil

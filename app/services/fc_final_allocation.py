@@ -272,6 +272,21 @@ def calculate_final_allocation(
                 from app.services.fc_planning import load_fc_data
                 _, ledger_raw = load_fc_data("fossil")
                 ledger_raw = ledger_raw[ledger_raw["Disposition"] == "SELLABLE"].copy()
+                # Filter to latest date only — SP-API ledger returns multi-day
+                # history; without this fc_inventory over-counts by (n_days)x.
+                if "Date" in ledger_raw.columns:
+                    ledger_raw["_dt"] = pd.to_datetime(
+                        ledger_raw["Date"], errors="coerce", format="%m/%d/%Y"
+                    )
+                    _miss = ledger_raw["_dt"].isna()
+                    if _miss.any():
+                        ledger_raw.loc[_miss, "_dt"] = pd.to_datetime(
+                            ledger_raw.loc[_miss, "Date"], errors="coerce",
+                            format="%d-%m-%Y"
+                        )
+                    _lat = ledger_raw["_dt"].max()
+                    if pd.notna(_lat):
+                        ledger_raw = ledger_raw[ledger_raw["_dt"] == _lat].copy()
                 ledger_raw["MSKU"] = ledger_raw["MSKU"].astype(str).str.strip().str.upper()
                 ledger_raw["MSKU"] = ledger_raw["MSKU"].str.replace(r"^FB[^A]", "FBA", regex=True)
                 ledger_raw["Location"] = ledger_raw["Location"].astype(str).str.strip().str.upper()
