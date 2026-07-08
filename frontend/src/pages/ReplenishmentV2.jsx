@@ -180,7 +180,7 @@ export default function ReplenishmentV2() {
       if (selectedCategories.length > 0 && !selectedCategories.includes(r.category)) return false;
       if (selectedStatuses.length   > 0 && !selectedStatuses.includes(r.listing_status)) return false;
       if (view === "critical")  return r.is_risky;
-      if (view === "bumped")    return r.velocity_basis === "4wk";
+      if (view === "bumped")    return r.velocity_basis === "2wk";
       if (view === "shortfall") return (r.warehouse_shortfall || 0) > 0;
       if (view === "overstock") return r.is_overstock;
       if (view === "hazmat") {
@@ -194,7 +194,7 @@ export default function ReplenishmentV2() {
   const views = useMemo(() => [
     { key: "all",       label: "All",            count: rows.length },
     { key: "critical",  label: "Critical",       count: rows.filter(r => r.is_risky).length, accent: "bg-red-100 text-red-700" },
-    { key: "bumped",    label: "4wk Bumped",     count: rows.filter(r => r.velocity_basis === "4wk").length },
+    { key: "bumped",    label: "2wk Bumped",     count: rows.filter(r => r.velocity_basis === "2wk").length },
     { key: "shortfall", label: "Has Shortfall",  count: rows.filter(r => (r.warehouse_shortfall || 0) > 0).length },
     { key: "overstock", label: "Overstock",      count: rows.filter(r => r.is_overstock).length },
     { key: "hazmat",    label: "Hazmat only",    count: rows.filter(r => {
@@ -214,7 +214,7 @@ export default function ReplenishmentV2() {
     { id: "listing_status",   accessorKey: "listing_status",   header: "Status",    size: 80,  meta: { group: "list" } },
     { id: "trend",            accessorFn: r => classifyTrend(r.weekly_sales || []), header: "Trend", size: 130, meta: { group: "vel" } },
     { id: "sales_velocity",   accessorKey: "sales_velocity",   header: "Avg/Wk",    size: 90,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
-    { id: "last_4_velocity",  accessorKey: "last_4_velocity",  header: "4wk",       size: 70,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
+    { id: "last_2_velocity",  accessorKey: "last_2_velocity",  header: "2wk",       size: 70,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
     { id: "total_units_sold", accessorKey: "total_units_sold", header: "Total",     size: 80,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
     { id: "fba_inv",          accessorKey: "fba_inv",          header: "FBA Inv",     size: 80,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "inbound_inventory",accessorKey: "inbound_inventory",header: "Inbound",     size: 80,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
@@ -477,8 +477,8 @@ export default function ReplenishmentV2() {
             hint={`${rows.filter(r => !r.is_risky && !r.is_overstock).length} SKUs healthy`}
           />
           <KPICard
-            label="4wk Bump"
-            value={rows.filter(r => r.velocity_basis === "4wk").length}
+            label="2wk Bump"
+            value={rows.filter(r => r.velocity_basis === "2wk").length}
             hint="SKUs using 4-wk avg"
           />
           <KPICard
@@ -688,7 +688,7 @@ export default function ReplenishmentV2() {
                   const r = trow.original;
                   const isExpanded = expandedSku === r.sku;
                   const isCritical = r.is_risky;
-                  const isBumped   = r.velocity_basis === "4wk";
+                  const isBumped   = r.velocity_basis === "2wk";
 
                   return (
                     <React.Fragment key={r.sku || ri}>
@@ -729,7 +729,7 @@ export default function ReplenishmentV2() {
                               <span className="font-semibold tabular-nums">
                                 {Number(r.sales_velocity ?? 0).toFixed(1)}
                                 {isBumped && (
-                                  <span className="inline-flex ml-1 px-1 py-0.5 text-[9px] font-bold rounded bg-indigo-100 text-indigo-700">4wk</span>
+                                  <span className="inline-flex ml-1 px-1 py-0.5 text-[9px] font-bold rounded bg-indigo-100 text-indigo-700">2wk</span>
                                 )}
                               </span>
                             );

@@ -73,6 +73,7 @@ def get_replenishment(
             "sales_velocity": int(row["sales_velocity"]),
             "window_velocity": int(row.get("window_velocity", row["sales_velocity"])),
             "last_4_velocity": int(row.get("last_4_velocity", 0)),
+            "last_2_velocity": int(row.get("last_2_velocity", 0)),
             "velocity_basis": str(row.get("velocity_basis", "window")),
             "total_units_sold": int(row["total_units_sold"]),
             "units_last_4w": int(row.get("units_last_4w", 0)),
