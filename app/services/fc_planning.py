@@ -434,10 +434,11 @@ def calculate_fc_plan(
         df["model"] = df["model"].fillna("-")
         final_df = df[[
             "model", "sku", "fulfillment_center", "total_units_90d", "weekly_velocity",
-            "fc_inventory", "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"
+            "fc_inventory", "fc_in_transit", "required_units", "fc_shortfall",
+            "coverage_weeks", "excess_inventory"
         ]].copy()
-        for col in ["total_units_90d", "weekly_velocity", "fc_inventory", "required_units",
-                    "fc_shortfall", "coverage_weeks", "excess_inventory"]:
+        for col in ["total_units_90d", "weekly_velocity", "fc_inventory", "fc_in_transit",
+                    "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"]:
             final_df[col] = pd.to_numeric(final_df[col], errors="coerce").fillna(0)
         validation_report = run_full_validation(shipments_90, ledger, final_df)
         return final_df
@@ -462,6 +463,7 @@ def calculate_fc_plan(
         "total_units_90d",
         "weekly_velocity",
         "fc_inventory",
+        "fc_in_transit",
         "required_units",
         "fc_shortfall",
         "coverage_weeks",
@@ -472,6 +474,7 @@ def calculate_fc_plan(
         "total_units_90d",
         "weekly_velocity",
         "fc_inventory",
+        "fc_in_transit",
         "required_units",
         "fc_shortfall",
         "coverage_weeks",

@@ -46,6 +46,7 @@ def calculate_final_allocation(
         "fulfillment_center",
         "weekly_velocity",
         "fc_inventory",
+        "fc_in_transit",
         "required_units",
         "fc_shortfall"
     ]
@@ -57,6 +58,7 @@ def calculate_final_allocation(
     numeric_cols = [
         "weekly_velocity",
         "fc_inventory",
+        "fc_in_transit",
         "required_units",
         "fc_shortfall"
     ]
@@ -768,6 +770,7 @@ def calculate_final_allocation(
         "weekly_velocity",
         "total_units_sold",
         "fc_inventory",
+        "fc_in_transit",
         "transfer_in",
         "target_cover_units",
         "post_transfer_stock",
