@@ -76,7 +76,22 @@ def load_data(account: str):
     else:
         inventory = get("inventory_snapshot_nexlev.xlsx")
 
-    return master, sales, inventory, amazon_inventory
+    # Ledger — used to compute Real AM Inventory
+    # (Ending Warehouse Balance + In Transit Between Warehouses per SKU).
+    # Captures Amazon-side warehouse-to-warehouse transfers that the
+    # snapshot / afn-warehouse-quantity view misses.
+    ledger_map = {
+        "NEXLEV":         "inventory_ledger_nexlev.csv",
+        "VIOMI":          "inventory_ledger_viomi.csv",
+        "AUDIO ARRAY":    "inventory_ledger_Audio Array.csv",
+        "WHITE MULBERRY": "inventory_ledger_WM.csv",
+    }
+    try:
+        ledger = get(ledger_map[account.upper()])
+    except Exception:
+        ledger = None
+
+    return master, sales, inventory, amazon_inventory, ledger
 
 
 # =================================================
@@ -196,7 +211,7 @@ def calculate_replenishment(
     # ---------------------------------------------
     # LOAD
     # ---------------------------------------------
-    master, sales, inventory, amazon_inventory = load_data(account)
+    master, sales, inventory, amazon_inventory, ledger = load_data(account)
 
 
     # FBA Inv = units physically at Amazon FCs (excludes unsellable + inbound)
@@ -229,8 +244,58 @@ def calculate_replenishment(
             amazon_inventory=("amazon_inventory", "sum"),
             fba_inv=("fba_inv", "sum"),
             inbound_inventory=("inbound_inventory", "sum"),
+            afn_reserved=("afn-reserved-quantity", "sum"),
         )
     )
+
+    # ---------------------------------------------
+    # REAL AM INVENTORY — from ledger, SELLABLE disposition only
+    # Amazon's FBA Ledger identity:
+    #   Ending Balance = Starting + Receipts + Customer Returns
+    #                  - Customer Shipments - Vendor Returns
+    #                  + Found - Lost - Damaged - Disposed
+    #                  + Warehouse Transfer In/Out + Other Events
+    # So Ending Warehouse Balance already reflects every flow.
+    # Real AM Inv = Ending Balance (at FC now)
+    #             + In Transit Between Warehouses (mid-transfer, not in Ending)
+    # Filter Disposition == "SELLABLE" — exclude damaged / carrier-damaged
+    # / customer-damaged rows.
+    # ---------------------------------------------
+    if ledger is not None and len(ledger) > 0:
+        led = ledger.copy()
+        led.columns = led.columns.str.strip()
+        led = led[led["Disposition"].astype(str).str.strip().str.upper() == "SELLABLE"].copy()
+        # Filter to the latest date only — SP-API pull returns multi-day
+        # history, we only want the freshest snapshot per SKU/FC.
+        if "Date" in led.columns:
+            led["_date_ord"] = pd.to_datetime(led["Date"], errors="coerce",
+                                              format="%m/%d/%Y")
+            # Fallback for dd-mm-yyyy from legacy manual drops
+            mask_missing = led["_date_ord"].isna()
+            if mask_missing.any():
+                led.loc[mask_missing, "_date_ord"] = pd.to_datetime(
+                    led.loc[mask_missing, "Date"], errors="coerce",
+                    format="%d-%m-%Y"
+                )
+            latest_date = led["_date_ord"].max()
+            if pd.notna(latest_date):
+                led = led[led["_date_ord"] == latest_date].copy()
+        led["_sku"] = led["MSKU"].astype(str).str.strip().str.upper()
+        for c in ("Ending Warehouse Balance", "In Transit Between Warehouses"):
+            if c in led.columns:
+                led[c] = pd.to_numeric(led[c], errors="coerce").fillna(0)
+            else:
+                led[c] = 0
+        real_am = (
+            led.groupby("_sku", as_index=False)
+               .agg(ledger_at_fc=("Ending Warehouse Balance", "sum"),
+                    ledger_in_transit=("In Transit Between Warehouses", "sum"))
+        )
+        real_am["real_am_inv"] = (real_am["ledger_at_fc"] + real_am["ledger_in_transit"]).astype(int)
+        real_am["ledger_at_fc"] = real_am["ledger_at_fc"].astype(int)
+        real_am["ledger_in_transit"] = real_am["ledger_in_transit"].astype(int)
+    else:
+        real_am = pd.DataFrame(columns=["_sku", "ledger_at_fc", "ledger_in_transit", "real_am_inv"])
 
     # ---------------------------------------------
     # NORMALIZE COLUMNS
@@ -446,6 +511,31 @@ def calculate_replenishment(
     df["amazon_inventory"] = df["amazon_inventory"].fillna(0)
     df["fba_inv"] = df["fba_inv"].fillna(0)
     df["inbound_inventory"] = df["inbound_inventory"].fillna(0)
+    df["afn_reserved"] = df["afn_reserved"].fillna(0)
+
+    # Real AM Inv from ledger — join on SKU (MSKU)
+    df["_sku_key"] = df["SKU"].astype(str).str.strip().str.upper()
+    df = df.merge(real_am, left_on="_sku_key", right_on="_sku", how="left")
+    df["ledger_at_fc"] = df["ledger_at_fc"].fillna(0).astype(int)
+    df["ledger_in_transit"] = df["ledger_in_transit"].fillna(0).astype(int)
+    df["real_am_inv"] = df["real_am_inv"].fillna(0).astype(int)
+    df = df.drop(columns=[c for c in ("_sku_key", "_sku") if c in df.columns])
+
+    # Real AM Inv (available) = Real AM Inv − afn-reserved (clamped ≥ 0).
+    # Reserved units are allocated to open customer orders (about to ship),
+    # so they don't count as available for future demand.
+    df["real_am_inv_available"] = (
+        df["real_am_inv"] - df["afn_reserved"]
+    ).clip(lower=0).astype(int)
+
+    # Prefer Real AM Inv (ledger, reserve-adjusted) as the offset when
+    # the ledger has data. Falls back to amazon_inventory (afn-total −
+    # unsellable) when the ledger is empty (e.g., puller was skipped or
+    # SP-API creds missing for this account).
+    if df["real_am_inv"].sum() > 0:
+        df["effective_amazon_inv"] = df["real_am_inv_available"]
+    else:
+        df["effective_amazon_inv"] = df["amazon_inventory"]
 
     # ---------------------------------------------
     # NULL SAFETY
@@ -544,10 +634,12 @@ def calculate_replenishment(
     df["required_units"] = (df["sales_velocity"] * replenish_weeks).round(0)
 
     # ---------------------------------------------
-    # FBA REPLENISHMENT (raw need = required - on-hand FBA)
+    # FBA REPLENISHMENT (raw need = required - effective Amazon inventory)
+    # effective_amazon_inv = Real AM Inv (available) for Nexlev/Viomi,
+    #                       amazon_inventory (Final Inv) for AA/WM
     # ---------------------------------------------
     raw_replenishment = (
-        df["required_units"] - df["amazon_inventory"]
+        df["required_units"] - df["effective_amazon_inv"]
     ).clip(lower=0)
 
     # ---------------------------------------------
@@ -659,6 +751,9 @@ def calculate_replenishment(
         "fba_inv",
         "inbound_inventory",
         "amazon_inventory",
+        "real_am_inv",
+        "ledger_at_fc",
+        "ledger_in_transit",
         "ampm_inventory",
         "required_units",
         "replenishment_qty",
