@@ -497,13 +497,76 @@ def calculate_replenishment(
     )
     df["last_4_velocity"] = (df["units_last_4w"] / actual_weeks_4).round(0)
 
-    df["sales_velocity"] = df[["window_velocity", "last_4_velocity"]].max(axis=1)
+    # ---------------------------------------------
+    # LAST-2-WEEK RECENCY BUMP (Fossil-style)
+    # sales_velocity = max(selected window, last 4-week avg, last 2-week avg)
+    # last-2 catches sharp recent trends that a wider window smooths out.
+    # ---------------------------------------------
+    sales_2 = get_last_n_weeks_sales(sales, 2)
+    if "brand" in sales_2.columns:
+        if account.upper() in ("NEXLEV", "VIOMI"):
+            sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "Nexlev"]
+        elif account.upper() == "AUDIO ARRAY":
+            sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "Audio Array"]
+        elif account.upper() == "WHITE MULBERRY":
+            sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "White Mulberry"]
+    if account.upper() == "AUDIO ARRAY":
+        sales_2 = sales_2[sales_2["channel"] == "Amazon"]
+    elif account.upper() in ("NEXLEV", "VIOMI", "WHITE MULBERRY"):
+        sales_2 = sales_2[sales_2["channel"].isin(["Amazon", "1p Sales"])]
+
+    sales_2 = sales_2.copy()
+    sales_2["_asin"] = sales_2.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    sales_2["_sku"]  = sales_2.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+
+    v2_asin = (
+        sales_2[sales_2["_asin"] != ""]
+        .groupby("_asin", as_index=False)
+        .agg(units_2w_asin=("units_sold", "sum"))
+    )
+    v2_sku = (
+        sales_2[(sales_2["_asin"] == "") & (sales_2["_sku"] != "")]
+        .groupby("_sku", as_index=False)
+        .agg(units_2w_sku=("units_sold", "sum"))
+    )
+    v2_model = (
+        sales_2[(sales_2["_asin"] == "") & (sales_2["_sku"] == "")]
+        .groupby("model", as_index=False)
+        .agg(units_2w_model=("units_sold", "sum"))
+        .rename(columns={"model": "_model_key_2"})
+    )
+    actual_weeks_2 = max(sales_2["week"].nunique(), 1) if len(sales_2) else 1
+
+    df["_asin"] = df["ASIN"].astype(str).str.strip().str.upper()
+    df["_sku"]  = df["SKU"].astype(str).str.strip().str.upper() if "SKU" in df.columns else ""
+
+    df = df.merge(v2_asin,  on="_asin", how="left")
+    df = df.merge(v2_sku,   on="_sku",  how="left")
+    df = df.merge(v2_model, left_on="Model", right_on="_model_key_2", how="left")
+
+    for c in ("units_2w_asin", "units_2w_sku", "units_2w_model"):
+        if c not in df.columns:
+            df[c] = 0
+
+    df["units_last_2w"] = (
+        df["units_2w_asin"]
+        .fillna(df["units_2w_sku"])
+        .fillna(df["units_2w_model"])
+        .fillna(0)
+    )
+    df["last_2_velocity"] = (df["units_last_2w"] / actual_weeks_2).round(0)
+
+    # Effective velocity = max(selected window, last-2-week avg).
+    # last_4_velocity is still computed above for display but is NOT part
+    # of the sales_velocity max — operator wants a strict 2-signal check.
+    df["sales_velocity"] = df[["window_velocity", "last_2_velocity"]].max(axis=1)
     df["velocity_basis"] = "window"
-    df.loc[df["last_4_velocity"] > df["window_velocity"], "velocity_basis"] = "4wk"
+    df.loc[df["last_2_velocity"] > df["window_velocity"], "velocity_basis"] = "2wk"
 
     df = df.drop(columns=[c for c in [
         "units_4w_asin", "units_4w_sku", "units_4w_model",
-        "_asin", "_sku", "_model_key",
+        "units_2w_asin", "units_2w_sku", "units_2w_model",
+        "_asin", "_sku", "_model_key", "_model_key_2",
     ] if c in df.columns])
 
     df = df.merge(amazon_inventory, left_on="ASIN", right_on="asin", how="left")
