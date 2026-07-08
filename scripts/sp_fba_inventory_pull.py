@@ -150,9 +150,23 @@ def summaries_to_rows(items: list[dict]) -> list[dict]:
         fulfillable = _int(det.get("fulfillableQuantity"))
         researching = _int(research.get("totalResearchingQuantity"))
         unfulfillable = _int(unfill.get("totalUnfulfillableQuantity"))
-        reserved_qty = _int(reserved.get("totalReservedQuantity"))
+        # afn-reserved-quantity in the manual All Inventory Report = only
+        # pendingCustomerOrderQuantity (units pre-sold to customer orders,
+        # about to ship). SP-API's totalReservedQuantity is a broader
+        # bucket that ALSO includes pendingTransshipmentQuantity (units
+        # already accounted for in the ledger as In-Transit Between
+        # Warehouses) plus fcProcessingQuantity. Using totalReserved would
+        # double-deduct transshipment from Real AM Inv.
+        reserved_customer_orders = _int(reserved.get("pendingCustomerOrderQuantity"))
+        reserved_transship       = _int(reserved.get("pendingTransshipmentQuantity"))
+        reserved_fc_processing   = _int(reserved.get("fcProcessingQuantity"))
+        reserved_total_broad     = _int(reserved.get("totalReservedQuantity"))
+        # Match manual report semantics: afn-reserved = customer orders only.
+        reserved_qty = reserved_customer_orders
         reserved_future = _int(future.get("reservedFutureSupply"))
         future_buyable  = _int(future.get("futureSupplyBuyable"))
+        # Warehouse quantity mirrors the manual report:
+        #   fulfillable + reserved (customer orders) + unfulfillable
         warehouse = fulfillable + reserved_qty + unfulfillable
         total = warehouse + working + shipped + receiving
 
