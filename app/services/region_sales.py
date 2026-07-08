@@ -60,9 +60,12 @@ def calculate_region_sales(account: str = "Nexlev") -> pd.DataFrame:
     # -------------------------------------------------
     # Data Cleaning
     # -------------------------------------------------
+    # utc=True handles mixed timezone offsets — SP-API pulls come in UTC,
+    # older manual downloads in IST. Convert to UTC then drop tz so date
+    # math stays naive.
     shipments["Shipment Date"] = pd.to_datetime(
-        shipments["Shipment Date"], errors="coerce"
-    )
+        shipments["Shipment Date"], errors="coerce", utc=True
+    ).dt.tz_localize(None)
 
     shipments["Shipped Quantity"] = pd.to_numeric(
         shipments["Shipped Quantity"], errors="coerce"
