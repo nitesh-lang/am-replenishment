@@ -99,7 +99,13 @@ export default function FCAllocationV2() {
           setAvailableWeeks(availList);
           const lo = availList[0];
           const hi = availList[availList.length - 1];
-          if (fromWeek == null || !availList.includes(Number(fromWeek))) setFromWeek(lo);
+          // Fossil defaults to the LAST 12 available weeks (operator asked
+          // for a rolling recent window, not the full history that was
+          // defaulting to 16+ weeks). Other accounts keep the full range.
+          const defaultLo = account === "Fossil"
+            ? (availList.find(w => w >= hi - 11) ?? lo)
+            : lo;
+          if (fromWeek == null || !availList.includes(Number(fromWeek))) setFromWeek(defaultLo);
           if (toWeek   == null || !availList.includes(Number(toWeek)))   setToWeek(hi);
         }
         setRows(list);
