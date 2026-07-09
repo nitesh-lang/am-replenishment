@@ -150,19 +150,21 @@ def summaries_to_rows(items: list[dict]) -> list[dict]:
         fulfillable = _int(det.get("fulfillableQuantity"))
         researching = _int(research.get("totalResearchingQuantity"))
         unfulfillable = _int(unfill.get("totalUnfulfillableQuantity"))
-        # afn-reserved-quantity in the manual All Inventory Report = only
-        # pendingCustomerOrderQuantity (units pre-sold to customer orders,
-        # about to ship). SP-API's totalReservedQuantity is a broader
-        # bucket that ALSO includes pendingTransshipmentQuantity (units
-        # already accounted for in the ledger as In-Transit Between
-        # Warehouses) plus fcProcessingQuantity. Using totalReserved would
-        # double-deduct transshipment from Real AM Inv.
+        # afn-reserved-quantity — target Amazon's Manage Inventory UI
+        # "Reserved" value, which equals:
+        #   pendingCustomerOrderQuantity + fcProcessingQuantity
+        # (units pre-sold to customer orders + units being physically
+        # handled at the FC — sorting, moving, staging for pick).
+        # We DELIBERATELY exclude pendingTransshipmentQuantity because
+        # those units are already visible as "In Transit Between
+        # Warehouses" in the ledger (Real AM Inv gross), and counting
+        # them here would double-deduct.
         reserved_customer_orders = _int(reserved.get("pendingCustomerOrderQuantity"))
         reserved_transship       = _int(reserved.get("pendingTransshipmentQuantity"))
         reserved_fc_processing   = _int(reserved.get("fcProcessingQuantity"))
         reserved_total_broad     = _int(reserved.get("totalReservedQuantity"))
-        # Match manual report semantics: afn-reserved = customer orders only.
-        reserved_qty = reserved_customer_orders
+        # Match Amazon UI's "Reserved" definition.
+        reserved_qty = reserved_customer_orders + reserved_fc_processing
         reserved_future = _int(future.get("reservedFutureSupply"))
         future_buyable  = _int(future.get("futureSupplyBuyable"))
         # Warehouse quantity mirrors the manual report:
