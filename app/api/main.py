@@ -91,6 +91,9 @@ def health():
 # =====================================================
 app.include_router(kpis_router)
 app.include_router(replenishment_router)
+# Alias the same router under /api so stale frontend bundles that call
+# /api/replenishment?... don't 404 spam. Both prefixes hit the same code.
+app.include_router(replenishment_router, prefix="/api")
 app.include_router(dashboard_router)
 app.include_router(fc_planning_router)
 app.include_router(fc_transfer_router)
