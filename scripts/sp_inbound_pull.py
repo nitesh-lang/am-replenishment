@@ -63,6 +63,17 @@ ACCOUNT_SLUGS = {
     "fossil":      "fossil",
 }
 
+# CLI account → .env variable suffix. AA and WM use their compact
+# vendor-central suffix in .env (AUDIOARRAY, WHITEMULBERRY) which
+# doesn't match the underscore-separated CLI slug.
+ACCOUNT_ENV_KEY = {
+    "nexlev":      "NEXLEV",
+    "viomi":       "VIOMI",
+    "audio_array": "AUDIOARRAY",
+    "wm":          "WHITEMULBERRY",
+    "fossil":      "FOSSIL",
+}
+
 
 def output_path(account: str) -> Path:
     slug = ACCOUNT_SLUGS.get(account, account.lower().replace(" ", "_"))
@@ -74,7 +85,7 @@ def get_access_token(account: str) -> str:
     a different Amazon account and therefore have their own SP-API app
     with its own Client ID/Secret. Falls back to the default
     SP_LWA_CLIENT_ID / _SECRET if no per-account override is set."""
-    acct_upper = account.upper()
+    acct_upper = ACCOUNT_ENV_KEY.get(account, account.upper())
 
     cid = os.environ.get(f"SP_LWA_CLIENT_ID_{acct_upper}")     or os.environ.get("SP_LWA_CLIENT_ID")
     sec = os.environ.get(f"SP_LWA_CLIENT_SECRET_{acct_upper}") or os.environ.get("SP_LWA_CLIENT_SECRET")
