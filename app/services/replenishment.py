@@ -595,8 +595,17 @@ def calculate_replenishment(
     # the ledger has data. Falls back to amazon_inventory (afn-total −
     # unsellable) when the ledger is empty (e.g., puller was skipped or
     # SP-API creds missing for this account).
+    #
+    # Fold Inbound into effective inventory — inbound units are planned
+    # shipments already created (today / yesterday) and will land inside
+    # the replenish window, so they should net down the ask instead of
+    # forcing a duplicate top-up. The fallback path uses amazon_inventory
+    # which already equals FBA + Inbound (afn-total − unsellable), so
+    # only the ledger branch needs the explicit + inbound_inventory.
     if df["real_am_inv"].sum() > 0:
-        df["effective_amazon_inv"] = df["real_am_inv_available"]
+        df["effective_amazon_inv"] = (
+            df["real_am_inv_available"] + df["inbound_inventory"]
+        )
     else:
         df["effective_amazon_inv"] = df["amazon_inventory"]
 
@@ -698,8 +707,8 @@ def calculate_replenishment(
 
     # ---------------------------------------------
     # FBA REPLENISHMENT (raw need = required - effective Amazon inventory)
-    # effective_amazon_inv = Real AM Inv (available) for Nexlev/Viomi,
-    #                       amazon_inventory (Final Inv) for AA/WM
+    # effective_amazon_inv = Real AM Inv (available) + Inbound  (ledger path)
+    #                     or amazon_inventory (Final Inv = FBA + Inbound)
     # ---------------------------------------------
     raw_replenishment = (
         df["required_units"] - df["effective_amazon_inv"]
