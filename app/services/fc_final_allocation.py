@@ -734,6 +734,57 @@ def calculate_final_allocation(
             df_plan["inbound_to_fc"] = pd.to_numeric(
                 df_plan["inbound_to_fc"], errors="coerce"
             ).fillna(0).astype(int)
+
+            # Shadow rows — inbound (SKU, FC) pairs that don't exist in the
+            # plan (SKU has zero 90-day velocity at that FC, so fc_planning
+            # emitted no row). Without this, the 90 IN_TRANSIT units are
+            # silently dropped and the operator can't see the incoming
+            # shipment on the FC page (e.g. MR-01 → ISK3, 90 units).
+            existing = set(zip(df_plan["sku"], df_plan["fulfillment_center"]))
+            missing = inb_agg[~inb_agg.apply(
+                lambda r: (r["sku"], r["fulfillment_center"]) in existing, axis=1
+            )]
+            if len(missing):
+                # Take the SKU's meta fields (model / asin / category /
+                # ampm / b2b / master_carton) from any existing plan row
+                # of the same SKU. If the SKU has no plan rows at all,
+                # fall back to the master (rare — SKU not in this
+                # account's replenishment plan).
+                sku_meta_cols = [c for c in [
+                    "model", "asin", "category", "listing_status",
+                    "ampm_inventory", "b2b_inventory", "hazmat_type",
+                    "master_carton",
+                ] if c in df_plan.columns]
+                sku_meta = (
+                    df_plan[["sku"] + sku_meta_cols]
+                    .drop_duplicates(subset=["sku"], keep="first")
+                )
+                shadow = missing.merge(sku_meta, on="sku", how="left")
+                # Fill defaults for planning fields — no velocity, no ask,
+                # just an inbound landing.
+                for c, default in [
+                    ("weekly_velocity", 0.0),
+                    ("total_units_sold", 0),
+                    ("fc_inventory", 0),
+                    ("fc_in_transit", 0),
+                    ("transfer_in", 0),
+                    ("target_cover_units", 0),
+                    ("post_transfer_stock", 0),
+                    ("coverage_gap_units", 0),
+                    ("send_qty", 0),
+                    ("expected_units", 0),
+                    ("fill_pct", 0),
+                    ("velocity_flag", ""),
+                    ("ixd_flag", ""),
+                    ("allocation_logic", "inbound-only"),
+                ]:
+                    shadow[c] = default
+                # Only keep columns that exist in df_plan so concat aligns
+                shadow = shadow[[c for c in df_plan.columns if c in shadow.columns]]
+                df_plan = pd.concat([df_plan, shadow], ignore_index=True)
+                df_plan["inbound_to_fc"] = pd.to_numeric(
+                    df_plan["inbound_to_fc"], errors="coerce"
+                ).fillna(0).astype(int)
         except Exception as e:
             print(f"WARN: inbound merge failed for {account}: {e}")
             df_plan["inbound_to_fc"] = 0
