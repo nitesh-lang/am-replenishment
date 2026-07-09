@@ -138,15 +138,18 @@ def summaries_to_rows(items: list[dict]) -> list[dict]:
     rows: list[dict] = []
     for it in items:
         det = it.get("inventoryDetails") or {}
-        inb = det.get("inboundShipmentQuantity") or {}
         research = det.get("researchingQuantity") or {}
         unfill  = det.get("unfulfillableQuantity") or {}
         reserved = det.get("reservedQuantity") or {}
         future = det.get("futureSupplyQuantity") or {}
 
-        working   = _int(inb.get("inboundWorkingQuantity"))
-        shipped   = _int(inb.get("inboundShippedQuantity"))
-        receiving = _int(inb.get("inboundReceivingQuantity"))
+        # SP-API v1 exposes inbound-* fields DIRECTLY on inventoryDetails
+        # (not nested under inboundShipmentQuantity as an earlier revision
+        # of this puller assumed — that path silently returned 0 for every
+        # SKU across every account).
+        working   = _int(det.get("inboundWorkingQuantity"))
+        shipped   = _int(det.get("inboundShippedQuantity"))
+        receiving = _int(det.get("inboundReceivingQuantity"))
         fulfillable = _int(det.get("fulfillableQuantity"))
         researching = _int(research.get("totalResearchingQuantity"))
         unfulfillable = _int(unfill.get("totalUnfulfillableQuantity"))
@@ -165,8 +168,8 @@ def summaries_to_rows(items: list[dict]) -> list[dict]:
         reserved_total_broad     = _int(reserved.get("totalReservedQuantity"))
         # Match Amazon UI's "Reserved" definition.
         reserved_qty = reserved_customer_orders + reserved_fc_processing
-        reserved_future = _int(future.get("reservedFutureSupply"))
-        future_buyable  = _int(future.get("futureSupplyBuyable"))
+        reserved_future = _int(future.get("reservedFutureSupplyQuantity"))
+        future_buyable  = _int(future.get("futureSupplyBuyableQuantity"))
         # Warehouse quantity mirrors the manual report:
         #   fulfillable + reserved (customer orders) + unfulfillable
         warehouse = fulfillable + reserved_qty + unfulfillable
