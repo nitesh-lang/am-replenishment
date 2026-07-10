@@ -73,6 +73,18 @@ export default function FCAllocationV2() {
   const [sopOpen, setSopOpen] = useState(false);
 
   /* ============================================================
+     Reset week range when account changes so per-account defaults
+     (e.g. Fossil = last 12 weeks) can re-apply. Without this, whatever
+     range the previous account set stays sticky and the Fossil default
+     never fires.
+  ============================================================ */
+  useEffect(() => {
+    setFromWeek(null);
+    setToWeek(null);
+    setAvailableWeeks([]);
+  }, [account]);
+
+  /* ============================================================
      LOAD
   ============================================================ */
   useEffect(() => {
