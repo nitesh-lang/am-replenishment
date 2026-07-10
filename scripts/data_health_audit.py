@@ -59,19 +59,11 @@ REPO = Path(__file__).resolve().parent.parent
 INPUT = REPO / "data" / "input"
 NORM = Path(r"D:/Nitesh/Normalization")
 
-# Canonical sku_master lives on the Weekly Report FastAPI repo, historically
-# mounted from Google Drive at G:\. Post Zoho migration the Google Drive
-# mount goes away, so we resolve in this order:
-#   1) SKU_MASTER_PATH env var (operator-set, definitive)
-#   2) G:\ Google Drive mount (legacy — works pre-migration)
-#   3) The local repo's own copy at data/input/sku_master.xlsx (fallback)
-_G_MASTER = Path(
-    r"G:/Other computers/My Laptop/D/Nitesh/Weekly Report - B2B + B2C/FastAPI/data/master/sku_master.xlsx"
-)
-_LOCAL_MASTER = INPUT / "sku_master.xlsx"
+# Canonical sku_master = repo-local `data/input/sku_master.xlsx` (kept
+# fresh via the weekly refresh commit). SKU_MASTER_PATH env var overrides
+# for one-off runs against a different file. No Google Drive dependency.
 MASTER_PATH = Path(
-    os.environ.get("SKU_MASTER_PATH")
-    or (_G_MASTER if _G_MASTER.exists() else _LOCAL_MASTER)
+    os.environ.get("SKU_MASTER_PATH") or (INPUT / "sku_master.xlsx")
 )
 
 # Add repo to sys.path so we can import services
