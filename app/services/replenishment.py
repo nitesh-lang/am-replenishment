@@ -52,20 +52,21 @@ def load_data(account: str):
 
     sales = get("weekly_sales_snapshot.csv")
 
-    if account.upper() == "NEXLEV":
-        amazon_inventory = get("inventory_amazon_nexlev.csv")
-
-    elif account.upper() == "VIOMI":
-        amazon_inventory = get("inventory_amazon_viomi.csv")
-
-    elif account.upper() == "AUDIO ARRAY":
-        amazon_inventory = get("inventory_amazon_audio_array.csv")
-
-    elif account.upper() == "WHITE MULBERRY":
-        amazon_inventory = get("inventory_amazon_WM.csv")
-
-    else:
+    # Which SP-API inventory files to union for each account. Most accounts
+    # have their SKUs listed only in their own Seller Central. WM SKUs are
+    # ALSO listed in the Viomi seller account (operator confirmed
+    # 2026-07-10: Viomi's SP-API pull returns 756 FBA units of WM ASINs
+    # that WM's own file shows as 0), so WM must union both files.
+    amazon_inv_map = {
+        "NEXLEV":         ["inventory_amazon_nexlev.csv"],
+        "VIOMI":          ["inventory_amazon_viomi.csv"],
+        "AUDIO ARRAY":    ["inventory_amazon_audio_array.csv"],
+        "WHITE MULBERRY": ["inventory_amazon_WM.csv", "inventory_amazon_viomi.csv"],
+    }
+    if account.upper() not in amazon_inv_map:
         raise ValueError(f"Unsupported account: {account}")
+    _parts = [get(f) for f in amazon_inv_map[account.upper()]]
+    amazon_inventory = pd.concat(_parts, ignore_index=True) if len(_parts) > 1 else _parts[0]
 
     if account.upper() == "AUDIO ARRAY":
         inventory = get("Inventory_snapshot_audio_array.xlsx")
@@ -80,14 +81,18 @@ def load_data(account: str):
     # (Ending Warehouse Balance + In Transit Between Warehouses per SKU).
     # Captures Amazon-side warehouse-to-warehouse transfers that the
     # snapshot / afn-warehouse-quantity view misses.
+    # WM ledger unions WM + Viomi for the same reason as amazon_inventory
+    # above — some WM SKUs' ledger rows sit in the Viomi Seller Central
+    # account rather than WM's own token.
     ledger_map = {
-        "NEXLEV":         "inventory_ledger_nexlev.csv",
-        "VIOMI":          "inventory_ledger_viomi.csv",
-        "AUDIO ARRAY":    "inventory_ledger_Audio Array.csv",
-        "WHITE MULBERRY": "inventory_ledger_WM.csv",
+        "NEXLEV":         ["inventory_ledger_nexlev.csv"],
+        "VIOMI":          ["inventory_ledger_viomi.csv"],
+        "AUDIO ARRAY":    ["inventory_ledger_Audio Array.csv"],
+        "WHITE MULBERRY": ["inventory_ledger_WM.csv", "inventory_ledger_viomi.csv"],
     }
     try:
-        ledger = get(ledger_map[account.upper()])
+        _lparts = [get(f) for f in ledger_map[account.upper()]]
+        ledger = pd.concat(_lparts, ignore_index=True) if len(_lparts) > 1 else _lparts[0]
     except Exception:
         ledger = None
 
