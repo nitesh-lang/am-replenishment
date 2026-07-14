@@ -1042,6 +1042,52 @@ def run_fc_allocation_smoke(master: dict) -> tuple[list[dict], dict[str, list]]:
             if placeholder:
                 problem_list.append(f"{placeholder} rows with placeholder model")
 
+        # Stranded-SOH reconciliation: raw ledger SELLABLE latest-date EWB
+        # should be ~equal to fc_inventory sum in the allocation output.
+        # A big gap = the LEFT-JOIN in fc_planning is dropping ledger
+        # balances at zero-velocity FCs (the bug fixed 2026-07-14 via
+        # "inventory-only" shadow rows). Guardrail so this doesn't
+        # silently re-open on any new account or code path.
+        try:
+            from app.services.fc_planning import ACCOUNT_FILES
+            from app.services.file_cache import get as _fc_get
+            led_cfg = ACCOUNT_FILES.get(acct.lower(), {}).get("ledger")
+            if led_cfg and "fc_inventory" in df.columns:
+                _files = led_cfg if isinstance(led_cfg, (list, tuple)) else [led_cfg]
+                led_parts = []
+                for f in _files:
+                    try: led_parts.append(_fc_get(f).copy())
+                    except Exception: pass
+                if led_parts:
+                    led_raw = pd.concat(led_parts, ignore_index=True)
+                    led_raw.columns = led_raw.columns.str.strip()
+                    if "Disposition" in led_raw.columns:
+                        led_raw = led_raw[led_raw["Disposition"].astype(str).str.strip().str.upper() == "SELLABLE"].copy()
+                    if "Date" in led_raw.columns:
+                        led_raw["_dt"] = pd.to_datetime(led_raw["Date"], errors="coerce", format="%m/%d/%Y")
+                        _miss = led_raw["_dt"].isna()
+                        if _miss.any():
+                            led_raw.loc[_miss, "_dt"] = pd.to_datetime(led_raw.loc[_miss, "Date"], errors="coerce", format="%d-%m-%Y")
+                        _lat = led_raw["_dt"].max()
+                        if pd.notna(_lat):
+                            led_raw = led_raw[led_raw["_dt"] == _lat].copy()
+                    ewb_raw = int(pd.to_numeric(led_raw.get("Ending Warehouse Balance"), errors="coerce").fillna(0).sum())
+                    fc_inv_shown = int(pd.to_numeric(df["fc_inventory"], errors="coerce").fillna(0).sum())
+                    gap = ewb_raw - fc_inv_shown
+                    # Tolerance: 5% of raw, minimum 100 units (accounts for
+                    # small enrichment differences on PO-tracker skeleton rows)
+                    tol = max(100, int(0.05 * ewb_raw))
+                    row["Ledger_EWB_raw"] = ewb_raw
+                    row["FC_inv_shown"] = fc_inv_shown
+                    row["Stranded_SOH_gap"] = gap
+                    if abs(gap) > tol:
+                        problem_list.append(f"stranded SOH gap {gap} > tolerance {tol} (ledger {ewb_raw} vs shown {fc_inv_shown})")
+                        issues.setdefault(row["Service"], []).append(
+                            {"kind": "stranded_soh", "gap": gap, "ledger_raw": ewb_raw, "fc_inv_shown": fc_inv_shown}
+                        )
+        except Exception as _e:
+            row["Stranded_SOH_check_err"] = f"{type(_e).__name__}: {_e}"
+
         if problem_list:
             row["Status"] = "WARN"
             row["Issues"] = "; ".join(problem_list)
