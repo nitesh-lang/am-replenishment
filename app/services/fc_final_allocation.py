@@ -1,7 +1,7 @@
 
 import pandas as pd
 from pathlib import Path
-from app.services.fc_planning import calculate_fc_plan
+from app.services.fc_planning import calculate_fc_plan, ACCOUNT_FILES
 from app.services.fc_transfer import calculate_fc_transfers
 from app.services.file_cache import get, get_excel_sheet
 
@@ -398,6 +398,85 @@ def calculate_final_allocation(
                 if new_rows:
                     df_plan = pd.concat([df_plan, pd.DataFrame(new_rows)], ignore_index=True)
 
+            # ==================================================
+            # LEDGER-ONLY SHADOW ROWS (Fossil)
+            # (model, FC) pairs where the ledger has SELLABLE
+            # inventory but there's no plan row AND no PO-tracker
+            # entry. Without this the units at zero-velocity FCs
+            # get silently dropped (e.g. FBA75346 @ MAA4 = 1 unit
+            # only visible in the ledger).
+            # ==================================================
+            plan_keys_after_po = set(zip(
+                df_plan["model"].astype(str).str.strip().str.upper(),
+                df_plan["fulfillment_center"].astype(str).str.strip().str.upper()
+            ))
+            if not ledger_lookup.empty:
+                led_orphans = ledger_lookup[
+                    (ledger_lookup["fc_inventory"] > 0)
+                    & (~ledger_lookup.apply(
+                        lambda r: (r["model_upper"], r["Location"]) in plan_keys_after_po,
+                        axis=1,
+                    ))
+                    & (ledger_lookup["model_upper"] != "")
+                ]
+                if len(led_orphans):
+                    fossil_master_lookup2 = (
+                        fossil_master.set_index("model")
+                        if "model" in fossil_master.columns
+                        else fossil_master.rename(columns={"Item No": "model"}).set_index("model")
+                    )
+                    inv_rows = []
+                    for _, row in led_orphans.iterrows():
+                        model = row["model_upper"]
+                        fc    = row["Location"]
+                        if model in fossil_master_lookup2.index:
+                            mr_raw = fossil_master_lookup2.loc[model]
+                            mr = mr_raw.iloc[0].to_dict() if isinstance(mr_raw, pd.DataFrame) else mr_raw.to_dict()
+                        else:
+                            mr = {}
+                        def _safe(val, default=""):
+                            import math
+                            if val is None: return default
+                            try:
+                                if isinstance(val, float) and math.isnan(val): return default
+                            except: pass
+                            return val if val != "" else default
+                        inv = int(row["fc_inventory"])
+                        inv_rows.append({
+                            "model":              model,
+                            "sku":                _safe(mr.get("sku", ""), ""),
+                            "asin":               _safe(mr.get("asin", ""), ""),
+                            "category":           _safe(mr.get("category", "-"), "-"),
+                            "assortment":         _safe(mr.get("assortment", "-"), "-"),
+                            "fossil_assortment":  _safe(mr.get("fossil_assortment", "-"), "-"),
+                            "listing_status":     "-",
+                            "ampm_inventory":     0,
+                            "b2b_inventory":      0,
+                            "inbound_to_fc":      0,
+                            "fulfillment_center": fc,
+                            "weekly_velocity":    0,
+                            "total_units_sold":   0,
+                            "fc_inventory":       inv,
+                            "transfer_in":        0,
+                            "target_cover_units": 0,
+                            "post_transfer_stock":inv,
+                            "coverage_gap_units": 0,
+                            "send_qty":           0,
+                            "expected_units":     0,
+                            "fill_pct":           0,
+                            "velocity_flag":      "NO_SALES",
+                            "ixd_flag":           "-",
+                            "hazmat_type":        "-",
+                            "master_carton":      "24",
+                            "remarks":            "",
+                            "allocation_logic":   "inventory-only",
+                            "in_transit_qty":     0,
+                            "open_po_qty":        0,
+                        })
+                    if inv_rows:
+                        df_plan = pd.concat([df_plan, pd.DataFrame(inv_rows)], ignore_index=True)
+                        print(f"   [Fossil ledger-shadow] added {len(inv_rows)} inventory-only rows (sum EWB={sum(r['fc_inventory'] for r in inv_rows)})")
+
         except Exception as e:
             print("⚠️ Fossil In-Transit/Open PO load error:", e)
             df_plan["in_transit_qty"] = 0
@@ -697,6 +776,95 @@ def calculate_final_allocation(
     # an account (so non-Nexlev accounts don't break until each has its
     # own SP-API refresh token wired).
     # ==========================================================
+    # ==========================================================
+    # LEDGER-ONLY SHADOW ROWS
+    # (SKU, FC) pairs with real SELLABLE inventory + In-Transit BTW WH
+    # in the ledger that have zero 90-day velocity → fc_planning
+    # emits no plan row → the left-join for fc_inventory silently
+    # drops the balance. Symptom: SKU shows fc_inventory=0 across
+    # every listed FC even though the ledger says units exist at
+    # some non-listed FC. Fix: append shadow rows so the stranded
+    # stock is visible to the operator.
+    #
+    # This mirrors the inbound-only shadow-row pattern below, but
+    # for ledger SOH rather than inbound.
+    # ==========================================================
+    try:
+        _acct_key = account.strip().lower()
+        _led_cfg  = ACCOUNT_FILES.get(_acct_key, {}).get("ledger")
+        if _led_cfg:
+            _led_files = _led_cfg if isinstance(_led_cfg, (list, tuple)) else [_led_cfg]
+            led_all = pd.concat([get(f).copy() for f in _led_files], ignore_index=True)
+            led_all.columns = led_all.columns.str.strip()
+            # SELLABLE + latest-date filter (matches fc_planning)
+            if "Disposition" in led_all.columns:
+                led_all = led_all[led_all["Disposition"].astype(str).str.strip().str.upper() == "SELLABLE"].copy()
+            if "Date" in led_all.columns:
+                led_all["_dt"] = pd.to_datetime(led_all["Date"], errors="coerce", format="%m/%d/%Y")
+                _miss = led_all["_dt"].isna()
+                if _miss.any():
+                    led_all.loc[_miss, "_dt"] = pd.to_datetime(led_all.loc[_miss, "Date"], errors="coerce", format="%d-%m-%Y")
+                _latest = led_all["_dt"].max()
+                if pd.notna(_latest):
+                    led_all = led_all[led_all["_dt"] == _latest].copy()
+            for c in ("Ending Warehouse Balance", "In Transit Between Warehouses"):
+                led_all[c] = pd.to_numeric(led_all.get(c), errors="coerce").fillna(0) if c in led_all.columns else 0
+            led_all["MSKU"] = led_all["MSKU"].astype(str).str.strip().str.upper()
+            led_all["Location"] = led_all["Location"].astype(str).str.strip().str.upper()
+            # Fossil normalizes FBS/FBO/FBK → FBA to match the master (same as fc_planning)
+            if _acct_key == "fossil":
+                led_all["MSKU"] = led_all["MSKU"].str.replace(r"^FB[^A]", "FBA", regex=True)
+            _led_agg = (
+                led_all.groupby(["MSKU", "Location"], as_index=False)
+                       .agg(_fc_inv=("Ending Warehouse Balance", "sum"),
+                            _fc_it =("In Transit Between Warehouses", "sum"))
+                       .rename(columns={"MSKU": "sku", "Location": "fulfillment_center"})
+            )
+            _led_agg = _led_agg[(_led_agg["_fc_inv"] > 0) | (_led_agg["_fc_it"] > 0)]
+
+            df_plan["sku"] = df_plan["sku"].astype(str).str.strip().str.upper()
+            df_plan["fulfillment_center"] = df_plan["fulfillment_center"].astype(str).str.strip().str.upper()
+            _existing = set(zip(df_plan["sku"], df_plan["fulfillment_center"]))
+            _missing = _led_agg[~_led_agg.apply(
+                lambda r: (r["sku"], r["fulfillment_center"]) in _existing, axis=1
+            )]
+            if len(_missing):
+                _meta_cols = [c for c in [
+                    "model", "asin", "category", "listing_status",
+                    "ampm_inventory", "b2b_inventory", "hazmat_type", "master_carton",
+                ] if c in df_plan.columns]
+                _sku_meta = (
+                    df_plan[["sku"] + _meta_cols]
+                    .drop_duplicates(subset=["sku"], keep="first")
+                )
+                _shadow = _missing.merge(_sku_meta, on="sku", how="left")
+                _shadow = _shadow.rename(columns={"_fc_inv": "fc_inventory", "_fc_it": "fc_in_transit"})
+                _shadow["fc_inventory"]  = _shadow["fc_inventory"].astype(int)
+                _shadow["fc_in_transit"] = _shadow["fc_in_transit"].astype(int)
+                for c, default in [
+                    ("weekly_velocity", 0.0),
+                    ("total_units_sold", 0),
+                    ("transfer_in", 0),
+                    ("target_cover_units", 0),
+                    ("post_transfer_stock", 0),
+                    ("coverage_gap_units", 0),
+                    ("send_qty", 0),
+                    ("expected_units", 0),
+                    ("fill_pct", 0),
+                    ("velocity_flag", ""),
+                    ("ixd_flag", ""),
+                    ("in_transit_qty", 0),
+                    ("open_po_qty", 0),
+                    ("inbound_to_fc", 0),
+                    ("allocation_logic", "inventory-only"),
+                ]:
+                    if c not in _shadow.columns:
+                        _shadow[c] = default
+                _shadow = _shadow[[c for c in df_plan.columns if c in _shadow.columns]]
+                df_plan = pd.concat([df_plan, _shadow], ignore_index=True)
+    except Exception as _e:
+        print(f"WARN: ledger-only shadow-row pass failed for {account}: {_e}")
+
     _acct_slug = {
         "nexlev":         "nexlev",
         "viomi":          "viomi",
