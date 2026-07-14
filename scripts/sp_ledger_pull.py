@@ -63,6 +63,13 @@ ACCOUNTS = {
     "VIOMI":         "inventory_ledger_viomi.csv",
     "AUDIOARRAY":    "inventory_ledger_Audio Array.csv",
     "WHITEMULBERRY": "inventory_ledger_WM.csv",
+    # Cambium Retail = Fossil brand's Seller Central account. The
+    # CAMBIUMRETAIL refresh token was minted against the Weekly-FastAPI
+    # LWA app, so it requires SP_LWA_CLIENT_ID_CAMBIUMRETAIL +
+    # SP_LWA_CLIENT_SECRET_CAMBIUMRETAIL per-account overrides in .env
+    # (get_access_token already prefers per-account envs). Writes to
+    # the Fossil Replenishment subfolder where fc_planning already looks.
+    "CAMBIUMRETAIL": "Fossil Replenishment/inventory_ledger_fossil.csv",
 }
 
 
