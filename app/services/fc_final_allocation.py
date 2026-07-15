@@ -559,7 +559,8 @@ def calculate_final_allocation(
                 "Model": "model",
                 "Category": "category",
                 "ASIN": "asin",
-                "Master Carton": "master_carton"
+                "Master Carton": "master_carton",
+                "Status": "listing_status",
             })
             if "ixd_flag" not in repl_master.columns:
                 repl_master["ixd_flag"] = "IXD"
