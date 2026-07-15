@@ -90,6 +90,7 @@ def get_replenishment(
             "required_units": int(row["required_units"]),
             "replenishment_qty": int(row["replenishment_qty"]),
             "warehouse_shortfall": int(row["warehouse_shortfall"]),
+            "buffer_note": str(row.get("buffer_note", "") or ""),
             "is_risky": bool(row["is_risky"]),
             "is_overstock": bool(row["is_overstock"]),
             "ixd_type": ixd_type,

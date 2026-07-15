@@ -515,6 +515,17 @@ def calculate_final_allocation(
             .where(df_plan["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
         )
 
+        # AMPM buffer gate — if mother warehouse stock is <= 10, don't ship.
+        # Keep the whole SKU as buffer across every FC row. Applied AFTER
+        # all skeleton / shadow-row logic so nothing sneaks past.
+        AMPM_BUFFER_THRESHOLD = 10
+        _ampm_num = pd.to_numeric(df_plan["ampm_inventory"], errors="coerce").fillna(0)
+        _low_ampm = _ampm_num <= AMPM_BUFFER_THRESHOLD
+        if "buffer_note" not in df_plan.columns:
+            df_plan["buffer_note"] = ""
+        df_plan.loc[_low_ampm, "send_qty"] = 0
+        df_plan.loc[_low_ampm, "buffer_note"] = "kept for buffer"
+
         fossil_final = df_plan[[
             "model", "sku", "asin", "category", "assortment", "fossil_assortment", "listing_status", "ampm_inventory",
             "fulfillment_center",
@@ -523,7 +534,7 @@ def calculate_final_allocation(
             "transfer_in", "target_cover_units", "post_transfer_stock", "coverage_gap_units",
             "send_qty", "expected_units", "fill_pct", "velocity_flag",
             "ixd_flag", "hazmat_type", "master_carton", "remarks", "allocation_logic",
-            "in_transit_qty", "open_po_qty",
+            "in_transit_qty", "open_po_qty", "buffer_note",
         ]].copy()
 
         # DEBUG — check send_qty before numeric cleanup
@@ -1058,6 +1069,17 @@ def calculate_final_allocation(
         .where(df_plan["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
     )
 
+    # AMPM buffer gate — if mother warehouse stock is <= 10, don't ship.
+    # Keep the whole SKU as buffer across every FC row. Applied AFTER
+    # shadow-row + transfer + velocity logic so nothing sneaks past.
+    AMPM_BUFFER_THRESHOLD = 10
+    _ampm_num = pd.to_numeric(df_plan.get("ampm_inventory", 0), errors="coerce").fillna(0)
+    _low_ampm = _ampm_num <= AMPM_BUFFER_THRESHOLD
+    if "buffer_note" not in df_plan.columns:
+        df_plan["buffer_note"] = ""
+    df_plan.loc[_low_ampm, "send_qty"] = 0
+    df_plan.loc[_low_ampm, "buffer_note"] = "kept for buffer"
+
     final_df = df_plan[[
         "model",
         "sku",
@@ -1086,7 +1108,8 @@ def calculate_final_allocation(
         "ixd_flag",
         "hazmat_type",
         "master_carton",
-        "allocation_logic"
+        "allocation_logic",
+        "buffer_note",
     ]].copy()
 
     numeric_cleanup_cols = [

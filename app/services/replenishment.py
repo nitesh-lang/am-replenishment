@@ -736,6 +736,19 @@ def calculate_replenishment(
     ).min(axis=1)
 
     # ---------------------------------------------
+    # AMPM BUFFER GATE — if mother warehouse stock is at/under the
+    # threshold (10 units), don't ship any of it. Keep as buffer.
+    # Full raw need cascades to warehouse_shortfall (China order goes
+    # up to cover what we would have shipped from AMPM).
+    # ---------------------------------------------
+    AMPM_BUFFER_THRESHOLD = 10
+    _low_ampm = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0) <= AMPM_BUFFER_THRESHOLD
+    df["buffer_note"] = ""
+    df.loc[_low_ampm, "replenishment_qty"] = 0
+    df.loc[_low_ampm, "warehouse_shortfall"] = raw_replenishment[_low_ampm]
+    df.loc[_low_ampm, "buffer_note"] = "kept for buffer"
+
+    # ---------------------------------------------
     # FLAGS
     # ---------------------------------------------
     df["is_risky"] = df["amazon_inventory"] < df["sales_velocity"]

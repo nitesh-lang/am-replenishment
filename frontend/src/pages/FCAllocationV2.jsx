@@ -334,6 +334,7 @@ export default function FCAllocationV2() {
 
     base.push(
       { id: "send_qty", accessorKey: "send_qty", header: isFossil ? "PO Req" : "To Send", size: 90, meta: { group: "plan", numeric: true, sortDescFirst: true, editable: isFossil } },
+      { id: "buffer_note", accessorKey: "buffer_note", header: "Buffer", size: 120, meta: { group: "plan" } },
     );
 
     if (isFossil) {

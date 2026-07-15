@@ -228,6 +228,7 @@ export default function ReplenishmentV2() {
     { id: "required_units",   accessorKey: "required_units",   header: "Req",       size: 70,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "warehouse_shortfall", accessorKey: "warehouse_shortfall", header: "Shortfall", size: 90, meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "replenishment_qty",accessorKey: "replenishment_qty",header: "Replen Qty",size: 100, meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "buffer_note",      accessorKey: "buffer_note",      header: "Buffer",    size: 120, meta: { group: "rep" } },
     { id: "recommended_qty",  accessorKey: "recommended_qty",  header: "Rec Qty",   size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "cartons_needed",   accessorKey: "cartons_needed",   header: "Cartons",   size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "working_value",    accessorKey: "working_value",    header: "Working",   size: 90,  meta: { group: "rep" } },
