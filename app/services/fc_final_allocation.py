@@ -515,12 +515,12 @@ def calculate_final_allocation(
             .where(df_plan["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
         )
 
-        # AMPM buffer gate — if mother warehouse stock is <= 10, don't ship.
-        # Keep the whole SKU as buffer across every FC row. Applied AFTER
-        # all skeleton / shadow-row logic so nothing sneaks past.
+        # AMPM buffer gate — 1..10 units triggers "kept for buffer".
+        # AMPM = 0 is excluded (nothing to keep; send_qty already 0
+        # from the standard shortfall math).
         AMPM_BUFFER_THRESHOLD = 10
         _ampm_num = pd.to_numeric(df_plan["ampm_inventory"], errors="coerce").fillna(0)
-        _low_ampm = _ampm_num <= AMPM_BUFFER_THRESHOLD
+        _low_ampm = (_ampm_num > 0) & (_ampm_num <= AMPM_BUFFER_THRESHOLD)
         if "buffer_note" not in df_plan.columns:
             df_plan["buffer_note"] = ""
         df_plan.loc[_low_ampm, "send_qty"] = 0
@@ -1069,12 +1069,12 @@ def calculate_final_allocation(
         .where(df_plan["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
     )
 
-    # AMPM buffer gate — if mother warehouse stock is <= 10, don't ship.
-    # Keep the whole SKU as buffer across every FC row. Applied AFTER
-    # shadow-row + transfer + velocity logic so nothing sneaks past.
+    # AMPM buffer gate — 1..10 units triggers "kept for buffer".
+    # AMPM = 0 is excluded (nothing to keep; send_qty already 0
+    # from the standard shortfall math).
     AMPM_BUFFER_THRESHOLD = 10
     _ampm_num = pd.to_numeric(df_plan.get("ampm_inventory", 0), errors="coerce").fillna(0)
-    _low_ampm = _ampm_num <= AMPM_BUFFER_THRESHOLD
+    _low_ampm = (_ampm_num > 0) & (_ampm_num <= AMPM_BUFFER_THRESHOLD)
     if "buffer_note" not in df_plan.columns:
         df_plan["buffer_note"] = ""
     df_plan.loc[_low_ampm, "send_qty"] = 0
