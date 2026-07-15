@@ -266,25 +266,59 @@ def calculate_fc_plan(
 
     # =================================================
     # FC VELOCITY CALCULATION
+    #
+    # weekly_velocity = max(window_velocity, last_2_velocity)
+    #   window_velocity = total units in selected window / weeks in window
+    #   last_2_velocity = units in the trailing 14 days (from max shipment
+    #                     date in file) / 2 — mirrors the Replenishment tab
+    #                     "last-2-week recency bump" so recent per-FC bursts
+    #                     don't get smoothed away by a longer window.
+    # velocity_basis = "2wk" iff last_2_velocity > window_velocity, else "window".
     # =================================================
 
+    # --- window velocity (existing calc, renamed for explicitness)
     fc_velocity = (
         shipments_90
         .groupby(["sku", "FC"], as_index=False)
         .agg(total_units_90d=("Shipped Quantity", "sum"))
     )
-    
 
     fc_velocity["FC"] = fc_velocity["FC"].astype(str).str.strip().str.upper()
 
-    # Convert total period to weekly velocity
-    fc_velocity["weekly_velocity"] = (
+    fc_velocity["window_velocity"] = (
         fc_velocity["total_units_90d"] / total_weeks
-    )
+    ).round(2)
 
+    # --- last-2-week per-FC velocity
+    # Trailing 14 calendar days from the max shipment date in the loaded
+    # file (channel-filter aware — we compute from shipments_90 which has
+    # already had the channel filter applied above).
+    two_wk_cutoff = last_date - pd.Timedelta(days=14)
+    ship_2w = shipments_90[shipments_90["Shipment Date"] > two_wk_cutoff]
+    fc_velocity_2w = (
+        ship_2w.groupby(["sku", "FC"], as_index=False)
+               .agg(units_last_14d=("Shipped Quantity", "sum"))
+    )
+    fc_velocity_2w["FC"] = fc_velocity_2w["FC"].astype(str).str.strip().str.upper()
+    fc_velocity_2w["last_2_velocity"] = (
+        fc_velocity_2w["units_last_14d"] / 2.0
+    ).round(2)
+
+    fc_velocity = fc_velocity.merge(
+        fc_velocity_2w[["sku", "FC", "last_2_velocity"]],
+        on=["sku", "FC"], how="left",
+    )
+    fc_velocity["last_2_velocity"] = fc_velocity["last_2_velocity"].fillna(0.0)
+
+    # --- effective velocity + basis
     fc_velocity["weekly_velocity"] = fc_velocity[
-        "weekly_velocity"
-    ].round(2)
+        ["window_velocity", "last_2_velocity"]
+    ].max(axis=1).round(2)
+    fc_velocity["velocity_basis"] = "window"
+    fc_velocity.loc[
+        fc_velocity["last_2_velocity"] > fc_velocity["window_velocity"],
+        "velocity_basis",
+    ] = "2wk"
 
     # =================================================
     # VALIDATE LEDGER STRUCTURE
@@ -436,11 +470,13 @@ def calculate_fc_plan(
             df["model"] = "-"
         df["model"] = df["model"].fillna("-")
         final_df = df[[
-            "model", "sku", "fulfillment_center", "total_units_90d", "weekly_velocity",
+            "model", "sku", "fulfillment_center", "total_units_90d",
+            "window_velocity", "last_2_velocity", "velocity_basis", "weekly_velocity",
             "fc_inventory", "fc_in_transit", "required_units", "fc_shortfall",
             "coverage_weeks", "excess_inventory"
         ]].copy()
-        for col in ["total_units_90d", "weekly_velocity", "fc_inventory", "fc_in_transit",
+        for col in ["total_units_90d", "window_velocity", "last_2_velocity",
+                    "weekly_velocity", "fc_inventory", "fc_in_transit",
                     "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"]:
             final_df[col] = pd.to_numeric(final_df[col], errors="coerce").fillna(0)
         validation_report = run_full_validation(shipments_90, ledger, final_df)
@@ -464,6 +500,9 @@ def calculate_fc_plan(
         "sku",
         "fulfillment_center",
         "total_units_90d",
+        "window_velocity",
+        "last_2_velocity",
+        "velocity_basis",
         "weekly_velocity",
         "fc_inventory",
         "fc_in_transit",
@@ -475,6 +514,8 @@ def calculate_fc_plan(
 
     numeric_cols = [
         "total_units_90d",
+        "window_velocity",
+        "last_2_velocity",
         "weekly_velocity",
         "fc_inventory",
         "fc_in_transit",

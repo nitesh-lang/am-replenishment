@@ -306,6 +306,9 @@ export default function FCAllocationV2() {
 
     base.push(
       { id: "weekly_velocity",   accessorKey: "weekly_velocity",   header: "Avg/Wk", size: 80, meta: { group: "vel", numeric: true, sortDescFirst: true } },
+      { id: "window_velocity",   accessorKey: "window_velocity",   header: "Sel Wk", size: 75, meta: { group: "vel", numeric: true, sortDescFirst: true } },
+      { id: "last_2_velocity",   accessorKey: "last_2_velocity",   header: "2wk",    size: 65, meta: { group: "vel", numeric: true, sortDescFirst: true } },
+      { id: "velocity_basis",    accessorKey: "velocity_basis",    header: "Basis",  size: 75, meta: { group: "vel" } },
       { id: "total_units_sold",  accessorKey: "total_units_sold",  header: "Total",  size: 70, meta: { group: "vel", numeric: true, sortDescFirst: true } },
     );
 

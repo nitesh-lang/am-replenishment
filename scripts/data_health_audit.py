@@ -949,12 +949,13 @@ def run_fc_allocation_smoke(master: dict) -> tuple[list[dict], dict[str, list]]:
 
     # Live FC allocation output schema (after the transfer engine has run)
     REQUIRED_COLS = [
-        "sku", "fulfillment_center", "weekly_velocity",
+        "sku", "fulfillment_center",
+        "window_velocity", "last_2_velocity", "velocity_basis", "weekly_velocity",
         "fc_inventory", "target_cover_units", "coverage_gap_units", "send_qty",
     ]
     NUMERIC_COLS = [
-        "weekly_velocity", "fc_inventory", "target_cover_units",
-        "coverage_gap_units", "send_qty",
+        "window_velocity", "last_2_velocity", "weekly_velocity",
+        "fc_inventory", "target_cover_units", "coverage_gap_units", "send_qty",
     ]
 
     out: list[dict] = []
@@ -1023,6 +1024,25 @@ def run_fc_allocation_smoke(master: dict) -> tuple[list[dict], dict[str, list]]:
             row["Negative_velocity_rows"] = neg
             if neg:
                 problem_list.append(f"{neg} rows with negative weekly_velocity")
+
+        # Velocity max-invariant: weekly_velocity == max(window_velocity, last_2_velocity)
+        # (with float tolerance) and velocity_basis in {"window", "2wk"}
+        if all(c in df.columns for c in ["window_velocity", "last_2_velocity", "weekly_velocity"]):
+            wv  = pd.to_numeric(df["window_velocity"], errors="coerce").fillna(0)
+            lv  = pd.to_numeric(df["last_2_velocity"], errors="coerce").fillna(0)
+            wkl = pd.to_numeric(df["weekly_velocity"], errors="coerce").fillna(0)
+            expected_max = pd.concat([wv, lv], axis=1).max(axis=1)
+            bad_max = int((expected_max.round(2) != wkl.round(2)).sum())
+            row["Velocity_max_violations"] = bad_max
+            if bad_max:
+                problem_list.append(f"{bad_max} rows where weekly_velocity != max(window, last_2)")
+
+        if "velocity_basis" in df.columns:
+            allowed = {"window", "2wk"}
+            bad_basis = int((~df["velocity_basis"].astype(str).str.strip().isin(allowed)).sum())
+            row["Velocity_basis_violations"] = bad_basis
+            if bad_basis:
+                problem_list.append(f"{bad_basis} rows with velocity_basis outside {{window, 2wk}}")
 
         # SKU resolves to sku_master (case-insensitive)
         if "sku" in df.columns:

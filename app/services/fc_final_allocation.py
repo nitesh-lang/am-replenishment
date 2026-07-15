@@ -44,6 +44,9 @@ def calculate_final_allocation(
     required_cols = [
         "sku",
         "fulfillment_center",
+        "window_velocity",
+        "last_2_velocity",
+        "velocity_basis",
         "weekly_velocity",
         "fc_inventory",
         "fc_in_transit",
@@ -53,9 +56,12 @@ def calculate_final_allocation(
 
     for col in required_cols:
         if col not in df_plan.columns:
-            df_plan[col] = 0
+            # velocity_basis is a string; everything else numeric
+            df_plan[col] = "window" if col == "velocity_basis" else 0
 
     numeric_cols = [
+        "window_velocity",
+        "last_2_velocity",
         "weekly_velocity",
         "fc_inventory",
         "fc_in_transit",
@@ -68,6 +74,12 @@ def calculate_final_allocation(
             df_plan[col],
             errors="coerce"
         ).fillna(0)
+
+    # velocity_basis normalization — must be one of {"window", "2wk"}
+    df_plan["velocity_basis"] = (
+        df_plan["velocity_basis"].astype(str).str.strip()
+        .where(df_plan["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
+    )
 
     # Normalize SKU
     df_plan["sku"] = (
@@ -376,6 +388,9 @@ def calculate_final_allocation(
                         "b2b_inventory":      0,
                         "inbound_to_fc":      0,
                         "fulfillment_center": fc,
+                        "window_velocity":    0,
+                        "last_2_velocity":    0,
+                        "velocity_basis":     "window",
                         "weekly_velocity":    0,
                         "total_units_sold":   0,
                         "fc_inventory":       ledger_inv,
@@ -454,6 +469,9 @@ def calculate_final_allocation(
                             "b2b_inventory":      0,
                             "inbound_to_fc":      0,
                             "fulfillment_center": fc,
+                            "window_velocity":    0,
+                            "last_2_velocity":    0,
+                            "velocity_basis":     "window",
                             "weekly_velocity":    0,
                             "total_units_sold":   0,
                             "fc_inventory":       inv,
@@ -482,9 +500,26 @@ def calculate_final_allocation(
             df_plan["in_transit_qty"] = 0
             df_plan["open_po_qty"]    = 0
 
+        # Ensure the new velocity fields exist on any concat'd rows
+        for _c, _default in [
+            ("window_velocity", 0.0),
+            ("last_2_velocity", 0.0),
+            ("velocity_basis", "window"),
+        ]:
+            if _c not in df_plan.columns:
+                df_plan[_c] = _default
+        df_plan["window_velocity"] = pd.to_numeric(df_plan["window_velocity"], errors="coerce").fillna(0.0)
+        df_plan["last_2_velocity"] = pd.to_numeric(df_plan["last_2_velocity"], errors="coerce").fillna(0.0)
+        df_plan["velocity_basis"] = (
+            df_plan["velocity_basis"].astype(str).str.strip()
+            .where(df_plan["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
+        )
+
         fossil_final = df_plan[[
             "model", "sku", "asin", "category", "assortment", "fossil_assortment", "listing_status", "ampm_inventory",
-            "fulfillment_center", "weekly_velocity", "total_units_sold", "fc_inventory",
+            "fulfillment_center",
+            "window_velocity", "last_2_velocity", "velocity_basis", "weekly_velocity",
+            "total_units_sold", "fc_inventory",
             "transfer_in", "target_cover_units", "post_transfer_stock", "coverage_gap_units",
             "send_qty", "expected_units", "fill_pct", "velocity_flag",
             "ixd_flag", "hazmat_type", "master_carton", "remarks", "allocation_logic",
@@ -497,8 +532,22 @@ def calculate_final_allocation(
         if len(d):
             print(f"🔍 PRE-CLEANUP FBA66963/DEL5: send_qty={d.iloc[0]['send_qty']}, in_transit={d.iloc[0]['in_transit_qty']}")
 
+        # Velocity cols rounded consistently so the max-invariant holds
+        # (weekly_velocity == max(window_velocity, last_2_velocity)) after
+        # int rounding — otherwise 4.6 → 5 vs 4.4 → 4 could break equality.
+        # Re-derive weekly_velocity as max(rounded window, rounded last_2)
+        # to keep the invariant exact post-cleanup.
+        fossil_final["window_velocity"] = pd.to_numeric(fossil_final["window_velocity"], errors="coerce").fillna(0).round(0).astype(int)
+        fossil_final["last_2_velocity"] = pd.to_numeric(fossil_final["last_2_velocity"], errors="coerce").fillna(0).round(0).astype(int)
+        fossil_final["weekly_velocity"] = fossil_final[["window_velocity", "last_2_velocity"]].max(axis=1).astype(int)
+        fossil_final["velocity_basis"] = "window"
+        fossil_final.loc[
+            fossil_final["last_2_velocity"] > fossil_final["window_velocity"],
+            "velocity_basis",
+        ] = "2wk"
+
         numeric_cleanup_cols = [
-            "weekly_velocity", "fc_inventory", "transfer_in", "target_cover_units",
+            "fc_inventory", "transfer_in", "target_cover_units",
             "post_transfer_stock", "coverage_gap_units", "send_qty", "expected_units",
             "in_transit_qty", "open_po_qty",
         ]
@@ -506,6 +555,12 @@ def calculate_final_allocation(
             fossil_final[col] = pd.to_numeric(fossil_final[col], errors="coerce").fillna(0)
 
         fossil_final[numeric_cleanup_cols] = fossil_final[numeric_cleanup_cols].round(0).astype(int)
+
+        # Re-enforce velocity_basis domain post-concat
+        fossil_final["velocity_basis"] = (
+            fossil_final["velocity_basis"].astype(str).str.strip()
+            .where(fossil_final["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
+        )
 
         for col in ["ixd_flag", "hazmat_type", "category", "asin", "master_carton", "listing_status"]:
             fossil_final[col] = (
@@ -861,6 +916,14 @@ def calculate_final_allocation(
                 ]:
                     if c not in _shadow.columns:
                         _shadow[c] = default
+                # New velocity fields — shadow rows have no sales history
+                for c, default in [
+                    ("window_velocity", 0.0),
+                    ("last_2_velocity", 0.0),
+                    ("velocity_basis", "window"),
+                ]:
+                    if c not in _shadow.columns:
+                        _shadow[c] = default
                 _shadow = _shadow[[c for c in df_plan.columns if c in _shadow.columns]]
                 df_plan = pd.concat([df_plan, _shadow], ignore_index=True)
     except Exception as _e:
@@ -932,6 +995,9 @@ def calculate_final_allocation(
                 # Fill defaults for planning fields — no velocity, no ask,
                 # just an inbound landing.
                 for c, default in [
+                    ("window_velocity", 0.0),
+                    ("last_2_velocity", 0.0),
+                    ("velocity_basis", "window"),
                     ("weekly_velocity", 0.0),
                     ("total_units_sold", 0),
                     ("fc_inventory", 0),
@@ -977,6 +1043,21 @@ def calculate_final_allocation(
     # FINAL DATASET
     # ==========================================================
 
+    # Ensure the new velocity fields exist on any concat'd shadow rows
+    for _c, _default in [
+        ("window_velocity", 0.0),
+        ("last_2_velocity", 0.0),
+        ("velocity_basis", "window"),
+    ]:
+        if _c not in df_plan.columns:
+            df_plan[_c] = _default
+    df_plan["window_velocity"] = pd.to_numeric(df_plan["window_velocity"], errors="coerce").fillna(0.0)
+    df_plan["last_2_velocity"] = pd.to_numeric(df_plan["last_2_velocity"], errors="coerce").fillna(0.0)
+    df_plan["velocity_basis"] = (
+        df_plan["velocity_basis"].astype(str).str.strip()
+        .where(df_plan["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
+    )
+
     final_df = df_plan[[
         "model",
         "sku",
@@ -987,6 +1068,9 @@ def calculate_final_allocation(
         "b2b_inventory",
         "inbound_to_fc",
         "fulfillment_center",
+        "window_velocity",
+        "last_2_velocity",
+        "velocity_basis",
         "weekly_velocity",
         "total_units_sold",
         "fc_inventory",
@@ -1006,6 +1090,8 @@ def calculate_final_allocation(
     ]].copy()
 
     numeric_cleanup_cols = [
+        "window_velocity",
+        "last_2_velocity",
         "weekly_velocity",
         "fc_inventory",
         "transfer_in",
@@ -1078,5 +1164,15 @@ def calculate_final_allocation(
     .round(0)
     .astype(int)
 )
+
+    # Re-derive weekly_velocity + basis from the rounded int velocities so
+    # the audit invariant `weekly_velocity == max(window, last_2)` holds
+    # exactly (vs a ½-unit drift from independent rounding).
+    final_df["weekly_velocity"] = final_df[["window_velocity", "last_2_velocity"]].max(axis=1).astype(int)
+    final_df["velocity_basis"] = "window"
+    final_df.loc[
+        final_df["last_2_velocity"] > final_df["window_velocity"],
+        "velocity_basis",
+    ] = "2wk"
 
     return final_df
