@@ -515,16 +515,12 @@ def calculate_final_allocation(
             .where(df_plan["velocity_basis"].astype(str).str.strip().isin(["window", "2wk"]), "window")
         )
 
-        # AMPM buffer gate — 1..10 units triggers "kept for buffer".
-        # AMPM = 0 is excluded (nothing to keep; send_qty already 0
-        # from the standard shortfall math).
-        AMPM_BUFFER_THRESHOLD = 10
-        _ampm_num = pd.to_numeric(df_plan["ampm_inventory"], errors="coerce").fillna(0)
-        _low_ampm = (_ampm_num > 0) & (_ampm_num <= AMPM_BUFFER_THRESHOLD)
+        # NO AMPM buffer gate for Fossil — Fossil doesn't use the AMPM
+        # mother warehouse. Its ampm_inventory column here is actually
+        # "Fossil SOH" (Andheri/Goregaon stock) mapped in for display
+        # only. The 1..10 buffer semantic doesn't apply.
         if "buffer_note" not in df_plan.columns:
             df_plan["buffer_note"] = ""
-        df_plan.loc[_low_ampm, "send_qty"] = 0
-        df_plan.loc[_low_ampm, "buffer_note"] = "kept for buffer"
 
         fossil_final = df_plan[[
             "model", "sku", "asin", "category", "assortment", "fossil_assortment", "listing_status", "ampm_inventory",
