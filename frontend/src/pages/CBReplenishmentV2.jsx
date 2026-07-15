@@ -240,6 +240,7 @@ export default function CBReplenishmentV2() {
     { id: "estimated_qty",    accessorKey: "estimated_qty",    header: "Estimated",      size: 90,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "deficiency",       accessorKey: "deficiency",       header: "Deficiency",     size: 95,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "po_requirement",   accessorKey: "po_requirement",   header: "PO Req",         size: 90,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
+    { id: "buffer_note",      accessorKey: "buffer_note",      header: "Buffer",         size: 160, meta: { group: "plan" } },
     { id: "asin_sort_details",accessorKey: "asin_sort_details",header: "ASIN Sort",      size: 95,  meta: { group: "plan" } },
     { id: "working_value",    accessorKey: "working_value",    header: "Working",        size: 100, meta: { group: "edit" } },
     { id: "remarks",          accessorKey: "remarks",          header: "Remarks",        size: 200, meta: { group: "edit" } },

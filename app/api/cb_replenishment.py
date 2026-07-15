@@ -126,6 +126,7 @@ def get_cb_replenishment(
             "open_po",
             "in_transit",
             "po_requirement",
+            "buffer_note",
             "working_value",
             "remarks",
             "hazmat_type"

@@ -500,6 +500,22 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         # user-saved override in cb_inputs still wins below.
         df["po_requirement"] = df[["po_requirement", "ampm_inventory"]].min(axis=1)
 
+        # AMPM buffer gate — 1..10 units → keep as safety buffer, don't ship.
+        # AMPM = 0 excluded (nothing to keep; po_requirement already 0 via cap).
+        # EXCEPTION: if China IT > 0 for that ASIN, allow the ship — the buffer
+        # will be replenished shortly by the incoming China units. Tag the row
+        # with the reason so the operator understands why.
+        AMPM_BUFFER_THRESHOLD = 10
+        _ampm = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
+        _china_it = pd.to_numeric(df["china_in_transit"], errors="coerce").fillna(0)
+        _low_ampm = (_ampm > 0) & (_ampm <= AMPM_BUFFER_THRESHOLD)
+        df["buffer_note"] = ""
+        _buffer_gate = _low_ampm & (_china_it <= 0)
+        df.loc[_buffer_gate, "po_requirement"] = 0
+        df.loc[_buffer_gate, "buffer_note"] = "kept for buffer"
+        _china_covers = _low_ampm & (_china_it > 0)
+        df.loc[_china_covers, "buffer_note"] = "Can be filled by China IT"
+
         # =========================
         # DB MERGE (remarks only) — best-effort; if DB is unreachable
         # (e.g. local dev without DATABASE_URL), return the computed report
