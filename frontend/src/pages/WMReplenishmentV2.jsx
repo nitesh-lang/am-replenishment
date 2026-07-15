@@ -128,9 +128,13 @@ export default function WMReplenishmentV2() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter(r => {
+    const filtered = rows.filter(r => {
       if (category !== "All" && r.category !== category) return false;
-      if (q && !((r.model || "").toLowerCase().includes(q))) return false;
+      if (q && !(
+        (r.model || "").toLowerCase().includes(q) ||
+        (r.sku   || "").toLowerCase().includes(q) ||
+        (r.asin  || "").toLowerCase().includes(q)
+      )) return false;
       if (view === "deficiency") return (r.deficiency || 0) > 0;
       if (view === "po_req")     return (r.po_requirement || 0) > 0;
       if (view === "no_open_po") return !r.open_po || r.open_po === 0;
@@ -140,6 +144,16 @@ export default function WMReplenishmentV2() {
       }
       return true;
     });
+    if (!q) return filtered;
+    const score = r => {
+      const m = (r.model || "").toLowerCase();
+      const s = (r.sku   || "").toLowerCase();
+      const a = (r.asin  || "").toLowerCase();
+      if (m === q || s === q || a === q) return 0;
+      if (m.startsWith(q) || s.startsWith(q) || a.startsWith(q)) return 1;
+      return 2;
+    };
+    return [...filtered].sort((x, y) => score(x) - score(y));
   }, [rows, search, view, category]);
 
   const views = useMemo(() => [

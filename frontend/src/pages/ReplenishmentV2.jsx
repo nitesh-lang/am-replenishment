@@ -171,7 +171,7 @@ export default function ReplenishmentV2() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter(r => {
+    const filtered = rows.filter(r => {
       if (q && !(
         (r.model || "").toLowerCase().includes(q) ||
         (r.sku   || "").toLowerCase().includes(q) ||
@@ -189,6 +189,16 @@ export default function ReplenishmentV2() {
       }
       return true;
     });
+    if (!q) return filtered;
+    const score = r => {
+      const m = (r.model || "").toLowerCase();
+      const s = (r.sku   || "").toLowerCase();
+      const a = (r.asin  || "").toLowerCase();
+      if (m === q || s === q || a === q) return 0;
+      if (m.startsWith(q) || s.startsWith(q) || a.startsWith(q)) return 1;
+      return 2;
+    };
+    return [...filtered].sort((x, y) => score(x) - score(y));
   }, [rows, search, view, selectedCategories, selectedStatuses]);
 
   const views = useMemo(() => [

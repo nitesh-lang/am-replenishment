@@ -187,7 +187,7 @@ export default function CBReplenishmentV2() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter(r => {
+    const filtered = rows.filter(r => {
       if (brand !== "All" && r.brand !== brand) return false;
       if (q && !(
         (r.model || "").toLowerCase().includes(q) ||
@@ -203,6 +203,20 @@ export default function CBReplenishmentV2() {
       }
       return true;
     });
+    // Relevance sort when searching: exact model/sku/asin match first,
+    // then startsWith, then remaining includes-only matches. Keeps
+    // AM-Mix10 at the top when the operator types "am-mix10", even if
+    // less-relevant substring hits exist.
+    if (!q) return filtered;
+    const score = r => {
+      const m = (r.model || "").toLowerCase();
+      const s = (r.sku   || "").toLowerCase();
+      const a = (r.asin  || "").toLowerCase();
+      if (m === q || s === q || a === q) return 0;
+      if (m.startsWith(q) || s.startsWith(q) || a.startsWith(q)) return 1;
+      return 2;
+    };
+    return [...filtered].sort((x, y) => score(x) - score(y));
   }, [rows, search, view, brand, workingValues, remarksValues]);
 
   const views = useMemo(() => [

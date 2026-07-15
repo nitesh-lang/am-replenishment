@@ -241,7 +241,7 @@ export default function FCAllocationV2() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return rows.filter(r => {
+    const filtered = rows.filter(r => {
       if (q && !(
         (r.model || "").toLowerCase().includes(q) ||
         (r.sku   || "").toLowerCase().includes(q) ||
@@ -257,6 +257,17 @@ export default function FCAllocationV2() {
       if (view === "no_send") return (r.send_qty || 0) === 0;
       return true;
     });
+    if (!q) return filtered;
+    const score = r => {
+      const m = (r.model || "").toLowerCase();
+      const s = (r.sku   || "").toLowerCase();
+      const a = (r.asin  || "").toLowerCase();
+      const f = (r.fulfillment_center || "").toLowerCase();
+      if (m === q || s === q || a === q || f === q) return 0;
+      if (m.startsWith(q) || s.startsWith(q) || a.startsWith(q) || f.startsWith(q)) return 1;
+      return 2;
+    };
+    return [...filtered].sort((x, y) => score(x) - score(y));
   }, [rows, search, view, selectedCategories, selectedStatuses]);
 
   const views = useMemo(() => [
