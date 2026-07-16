@@ -98,7 +98,12 @@ def _latest_fba_sales_week(account_hint: str = "") -> _date | None:
 #   (label, relative_path, "mtime" | "snapshot_col" | "max_sales_week" | "fba_sales_folder")
 # Use "max_sales_week" for the per-week weekly_sales_snapshot.csv.
 # Use "fba_sales_folder" for the FBA Sales/Week N folder family (no path).
-ModuleSpec = list[tuple[str, str, str]]
+# Optional 4th tuple element: `critical=True` marks an input where a
+# missing file surfaces a RED (blocking-looking) banner on the UI
+# instead of the standard dismissible amber staleness warning. Use
+# for operator-uploaded files where a wrong decision would ship on
+# missing/stale data (e.g. In-Transit PO deductions).
+ModuleSpec = list[tuple]
 
 # Only weekly-refreshed *data* inputs belong here. Master sheets (e.g.
 # CB Replenishment Master, sku_master, brand replenishment masters) are
@@ -122,12 +127,12 @@ MODULES: dict[str, ModuleSpec] = {
         ("Tonor Inventory Snapshot",    "Inventory_snapshot_tonor.xlsx",         "mtime"),
         ("CB SOH (SP-API, AA)",         "vendor_soh_audio_array.csv",            "snapshot_col"),
         ("CB SOH (SP-API, Tonor)",      "vendor_soh_tonor.csv",                  "snapshot_col"),
-        ("In-Transit PO (manual)",      "In_Transit_PO data.xlsx",               "mtime"),
+        ("In-Transit PO (manual)",      "In_Transit_PO data.xlsx",               "mtime", True),
     ],
     "wm-replenishment": [
         ("Weekly Sales Snapshot",       "weekly_sales_snapshot.csv",             "max_sales_week"),
         ("WM Inventory Snapshot",       "Inventory_snapshot_WM.xlsx",            "mtime"),
-        ("WM In-Transit PO (manual)",   "In_Transit_PO data - WM.xlsx",          "mtime"),
+        ("WM In-Transit PO (manual)",   "In_Transit_PO data - WM.xlsx",          "mtime", True),
     ],
     "china-reorder": [
         ("Weekly Sales Snapshot",       "weekly_sales_snapshot.csv",             "max_sales_week"),
@@ -182,9 +187,13 @@ def check_module(module: str) -> dict:
 
     files = []
     any_stale = False
+    critical_failed = False   # True if a critical=True input is missing/stale
     fresh = 0
     stale = 0
-    for label, path_rel, kind in spec:
+    for entry in spec:
+        # Accept 3-tuple (backward-compat) or 4-tuple with critical flag
+        label, path_rel, kind = entry[0], entry[1], entry[2]
+        critical = entry[3] if len(entry) > 3 else False
         as_of = _as_of(path_rel, kind)
         if as_of is None:
             files.append({
@@ -196,7 +205,10 @@ def check_module(module: str) -> dict:
                 "missing":         True,
                 "stale_by_weeks":  None,
                 "source":          kind,
+                "critical":        critical,
             })
+            if critical:
+                critical_failed = True
             any_stale = True
             stale += 1
             continue
@@ -214,12 +226,15 @@ def check_module(module: str) -> dict:
             "missing":        False,
             "stale_by_weeks": stale_weeks,
             "source":         kind,
+            "critical":       critical,
         })
         if is_fresh:
             fresh += 1
         else:
             any_stale = True
             stale += 1
+            if critical:
+                critical_failed = True
 
     return {
         "module":            module,
@@ -231,6 +246,7 @@ def check_module(module: str) -> dict:
         },
         "files":             files,
         "any_stale":         any_stale,
+        "critical_failed":   critical_failed,
         "fresh_count":       fresh,
         "stale_count":       stale,
     }
