@@ -763,8 +763,18 @@ def calculate_replenishment(
     # Compute IXD type first, then apply rounding logic
     # ---------------------------------------------
     def get_ixd_type(row):
+        # Nexlev/Viomi master: "Hazmat/non-Hazmat" column with values like
+        # "Non-IXD Non Hazmat" vs blank/other.
+        # AA/WM master: only "Hazmat Type" column with values "IXD" / "NON IXD".
+        # Check both, treat any variant that says "NON IXD" or "Non-IXD" as
+        # non-IXD; everything else defaults to IXD.
         haz = str(row.get("Hazmat/non-Hazmat", "")).strip()
-        return "Non-IXD" if haz == "Non-IXD Non Hazmat" else "IXD"
+        if haz == "Non-IXD Non Hazmat":
+            return "Non-IXD"
+        typ = str(row.get("Hazmat Type", "")).strip().upper()
+        if typ in ("NON IXD", "NON-IXD", "NONIXD"):
+            return "Non-IXD"
+        return "IXD"
 
     df["_ixd_type"] = df.apply(get_ixd_type, axis=1)
 

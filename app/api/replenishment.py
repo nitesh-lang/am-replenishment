@@ -57,9 +57,15 @@ def get_replenishment(
 
     for _, row in df.iterrows():
 
-        # IXD Logic
+        # IXD Logic — Nexlev/Viomi have "Hazmat/non-Hazmat" column;
+        # AA/WM have only "Hazmat Type" with values "IXD"/"NON IXD".
+        # Any "NON IXD"-shaped value on either column = Non-IXD.
         haz = str(row.get("Hazmat/non-Hazmat", "")).strip()
-        ixd_type = "Non-IXD" if haz == "Non-IXD Non Hazmat" else "IXD"
+        typ = str(row.get("Hazmat Type", "")).strip().upper()
+        if haz == "Non-IXD Non Hazmat" or typ in ("NON IXD", "NON-IXD", "NONIXD"):
+            ixd_type = "Non-IXD"
+        else:
+            ixd_type = "IXD"
 
         sku = str(row["SKU"]).strip().upper() if row["SKU"] == row["SKU"] else ""
 
