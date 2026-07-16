@@ -52,7 +52,37 @@ def create_tables():
         print("✅ Usage log table ready")
     except Exception as e:
         print(f"⚠️ Usage log init warning: {e}")
+    _unshallow_repo()
     _preload_data_files()
+
+
+def _unshallow_repo():
+    """Render clones with --depth 1 for speed. That breaks git-log-based
+    data freshness (`git log -- <file>` returns today's tip commit for
+    every file because the deeper history isn't fetched). Unshallow at
+    startup so data_freshness._git_last_commit_date returns real dates.
+
+    No-op if the repo is already full history."""
+    import subprocess
+    try:
+        # Best-effort: needs origin fetchable. Silently swallow errors so
+        # a network hiccup here doesn't block API startup.
+        result = subprocess.run(
+            ["git", "fetch", "--unshallow"],
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode == 0:
+            print("✅ Repo unshallowed for accurate git-log freshness dates")
+        else:
+            # `--unshallow on a complete repository does not make sense`
+            # is the normal "already full history" outcome — not an error.
+            msg = (result.stderr or result.stdout or "").strip()
+            if "does not make sense" in msg or "complete repository" in msg:
+                print("✅ Repo already unshallow — freshness dates OK")
+            else:
+                print(f"⚠️ Repo unshallow skipped: {msg[:120]}")
+    except Exception as e:
+        print(f"⚠️ Repo unshallow warning: {e}")
 
 def _preload_data_files():
     """Pre-load all heavy Excel/CSV files into memory at startup."""
