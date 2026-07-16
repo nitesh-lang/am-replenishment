@@ -11,7 +11,9 @@ dismissible per (week, module).
 """
 from __future__ import annotations
 
+import subprocess
 from datetime import date as _date, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable
 
@@ -27,9 +29,39 @@ def _sun_sat_week_number(d: _date) -> int:
     return (d + timedelta(days=1)).isocalendar().week
 
 
+@lru_cache(maxsize=256)
+def _git_last_commit_date(path: Path) -> _date | None:
+    """Date of the last git commit that touched this file.
+
+    Critical for Render / hosted deploys: filesystem mtime is reset to
+    the deploy time on every checkout, so `path.stat().st_mtime` makes
+    every file look fresh whether or not the operator actually updated
+    it. Git log preserves the real update history.
+
+    Returns None if the file isn't git-tracked or git isn't available.
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "log", "-1", "--format=%cs", "--", str(path)],
+            cwd=path.parent if path.is_absolute() else None,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        ).decode().strip()
+        if out:
+            return _date.fromisoformat(out)
+    except Exception:
+        pass
+    return None
+
+
 def _mtime_date(path: Path) -> _date | None:
+    """As-of date for a data file. Prefers git-log date (real last update)
+    over filesystem mtime (reset on every hosted deploy)."""
     if not path.exists():
         return None
+    git_date = _git_last_commit_date(path)
+    if git_date is not None:
+        return git_date
     return datetime.fromtimestamp(path.stat().st_mtime).date()
 
 
