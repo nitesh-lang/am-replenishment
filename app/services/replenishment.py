@@ -898,7 +898,8 @@ def calculate_replenishment(
             index=_sku_norm.values,
         )
         signals = compute_oos_signals(brand_name, sales, weeks=13,
-                                      current_ampm_series=_cur_ampm)
+                                      current_ampm_series=_cur_ampm,
+                                      master_df=master)
         if not signals.empty:
             df["_sku_norm"] = _sku_norm.values
             df = df.merge(

@@ -151,12 +151,14 @@ def _weekly_sales_by_sku(
     weekly_sales: pd.DataFrame,
     brand: str,
     week_numbers: list[int],
+    master_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Aggregate weekly_sales_snapshot to (SKU × week_num) for one brand.
 
-    weekly_sales_snapshot rows use ASIN/SKU/Model attribution. Since
-    Amazon channel rows may not have SKU populated, we cascade:
-    SKU-first if present, else ASIN, else Model.
+    weekly_sales_snapshot rows for the Amazon channel typically don't
+    carry the `sku` column — they're attributed by ASIN. So we cascade:
+    ASIN → SKU (via master), then SKU direct (1p channel), then Model
+    (via master). Master is the SKU⇄ASIN⇄Model dictionary.
     Returns wide DataFrame: index=SKU, cols=week_num, cells=units_sold.
     """
     if weekly_sales is None or weekly_sales.empty:
@@ -165,21 +167,51 @@ def _weekly_sales_by_sku(
     df = weekly_sales.copy()
     if brand_tag and "brand" in df.columns:
         df = df[df["brand"].astype(str).str.strip() == brand_tag]
-    # Parse "Week 27" → 27
     if "week_num" not in df.columns:
         df["week_num"] = (
             df["week"].astype(str).str.extract(r"(\d+)").astype(float).fillna(0).astype(int)
         )
     df = df[df["week_num"].isin(week_numbers)]
-    df["_sku"] = df["sku"].astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
-    # Aggregate per SKU per week
+    df["_asin"] = df.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    df["_sku"]  = df.get("sku",  "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
+    df["_model"]= df.get("model","").astype(str).str.strip().str.upper()
     df["units_sold"] = pd.to_numeric(df["units_sold"], errors="coerce").fillna(0)
+
+    # Canonicalize every row's SKU via master lookup so FC-prefix
+    # variants (FBA/FBM/FBP/FBK) all resolve to master's canonical SKU.
+    # Reference: memory `reference_master_alignment_hierarchy.md`.
+    if master_df is not None and not master_df.empty:
+        m = master_df.copy()
+        m.columns = m.columns.astype(str).str.strip()
+        m["_sku"]   = m.get("SKU", "").astype(str).str.strip().str.upper()
+        m["_asin"]  = m.get("ASIN", "").astype(str).str.strip().str.upper()
+        m["_model"] = m.get("Model","").astype(str).str.strip().str.upper()
+        asin_to_sku  = dict(zip(m["_asin"],  m["_sku"]))
+        model_to_sku = dict(zip(m["_model"], m["_sku"]))
+        asin_to_sku.pop("", None)
+        model_to_sku.pop("", None)
+
+        def _canonical(row):
+            # Priority: ASIN → SKU (master), else direct SKU, else Model → SKU
+            if row["_asin"] and row["_asin"] in asin_to_sku:
+                return asin_to_sku[row["_asin"]]
+            if row["_sku"]:
+                return row["_sku"]
+            if row["_model"] and row["_model"] in model_to_sku:
+                return model_to_sku[row["_model"]]
+            return ""
+        df["SKU"] = df.apply(_canonical, axis=1)
+    else:
+        df["SKU"] = df["_sku"]
+
+    all_rows = df[df["SKU"] != ""][["SKU", "week_num", "units_sold"]]
+    if all_rows.empty:
+        return pd.DataFrame()
     piv = (
-        df[df["_sku"] != ""]
-        .groupby(["_sku", "week_num"], as_index=False)["units_sold"]
-        .sum()
-        .pivot(index="_sku", columns="week_num", values="units_sold")
-        .fillna(0)
+        all_rows.groupby(["SKU", "week_num"], as_index=False)["units_sold"]
+                .sum()
+                .pivot(index="SKU", columns="week_num", values="units_sold")
+                .fillna(0)
     )
     piv.index.name = "SKU"
     return piv
@@ -187,21 +219,21 @@ def _weekly_sales_by_sku(
 
 @lru_cache(maxsize=32)
 def _cached_signals(brand_key: str, weeks: int, current_ws_iso: str,
-                    sales_hash: int) -> pd.DataFrame:
-    """Memoize the whole compute. sales_hash lets us invalidate when
-    the weekly sales file changes without adding a huge object to
-    the cache key."""
-    # Placeholder — the real caller uses compute_oos_signals below
-    # and stashes the sales DataFrame via a module-level slot.
-    global _SALES_CACHE
-    return _compute(_SALES_CACHE, brand_key, weeks, _date.fromisoformat(current_ws_iso))
+                    sales_hash: int, master_hash: int) -> pd.DataFrame:
+    """Memoize the whole compute. Module-level slots hold the sales +
+    master DataFrames (not part of cache key because they're heavy)."""
+    global _SALES_CACHE, _MASTER_CACHE
+    return _compute(_SALES_CACHE, _MASTER_CACHE, brand_key, weeks,
+                    _date.fromisoformat(current_ws_iso))
 
 
 _SALES_CACHE: pd.DataFrame | None = None
+_MASTER_CACHE: pd.DataFrame | None = None
 
 
 def _compute(
     weekly_sales: pd.DataFrame | None,
+    master_df: pd.DataFrame | None,
     brand: str,
     weeks: int,
     current_ws: _date,
@@ -217,7 +249,7 @@ def _compute(
     week_dates = [_date.fromisoformat(c) for c in hist.columns]
     week_nums  = [_sun_sat_week_num(d) for d in week_dates]
 
-    sales_wide = _weekly_sales_by_sku(weekly_sales, brand, week_nums)
+    sales_wide = _weekly_sales_by_sku(weekly_sales, brand, week_nums, master_df)
     # Align sales to the same SKUs and week columns as hist
     sales_wide = sales_wide.reindex(index=hist.index, columns=week_nums, fill_value=0)
     # Rename sales columns to the same iso date labels
@@ -281,13 +313,17 @@ def compute_oos_signals(
     weekly_sales: pd.DataFrame | None,
     weeks: int = DEFAULT_WEEKS,
     current_ampm_series: pd.Series | None = None,  # kept for API compat; unused
+    master_df: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Public entry point. brand is one of Nexlev/Viomi/Audio Array/
-    White Mulberry/Tonor. Returns per-SKU DataFrame with columns
-    oos_weeks_3m, thin_weeks_3m, lost_units_3m, momentum_flag."""
-    global _SALES_CACHE
+    White Mulberry/Tonor. `master_df` should be the account's
+    replenishment master (needs SKU, ASIN, Model columns) so we can
+    attribute Amazon-channel sales (which come by ASIN, not SKU)."""
+    global _SALES_CACHE, _MASTER_CACHE
     _SALES_CACHE = weekly_sales
+    _MASTER_CACHE = master_df
     ws = current_working_week_start()
-    # sales_hash approximated by len — enough to detect ETL refreshes
-    sales_hash = int(len(weekly_sales)) if weekly_sales is not None else 0
-    return _cached_signals(brand.lower(), weeks, ws.isoformat(), sales_hash)
+    sales_hash  = int(len(weekly_sales))  if weekly_sales is not None else 0
+    master_hash = int(len(master_df))    if master_df    is not None else 0
+    return _cached_signals(brand.lower(), weeks, ws.isoformat(),
+                           sales_hash, master_hash)
