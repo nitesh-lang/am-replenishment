@@ -57,30 +57,45 @@ def create_tables():
 
 
 def _unshallow_repo():
-    """Render clones with --depth 1 for speed. That breaks git-log-based
-    data freshness (`git log -- <file>` returns today's tip commit for
-    every file because the deeper history isn't fetched). Unshallow at
-    startup so data_freshness._git_last_commit_date returns real dates.
+    """Render clones with --depth 1 for speed AND strips the origin remote
+    from the runtime .git — so `git log -- <file>` returns today's tip
+    commit for every file (only 1 commit visible). Set the remote back
+    up and unshallow at startup so git-log-based freshness + OOS-history
+    features get real dates.
 
-    No-op if the repo is already full history."""
+    Public repo, no auth needed. Best-effort — swallowed errors."""
     import subprocess
+
+    def _run(cmd):
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+
     try:
-        # Best-effort: needs origin fetchable. Silently swallow errors so
-        # a network hiccup here doesn't block API startup.
-        result = subprocess.run(
-            ["git", "fetch", "--unshallow"],
-            capture_output=True, text=True, timeout=60,
-        )
-        if result.returncode == 0:
-            print("✅ Repo unshallowed for accurate git-log freshness dates")
+        # Check if we're actually shallow first — skip the whole dance on
+        # local dev / already-full clones.
+        is_shallow = _run(["git", "rev-parse", "--is-shallow-repository"])
+        if (is_shallow.stdout or "").strip() != "true":
+            print("✅ Repo already full history — no unshallow needed")
+            return
+
+        # Ensure origin remote exists (Render strips it). Public URL, safe
+        # to hardcode. `git remote add` errors if it already exists; try
+        # set-url as a fallback.
+        remotes = _run(["git", "remote"]).stdout.strip().splitlines()
+        url = "https://github.com/nitesh-lang/am-replenishment.git"
+        if "origin" not in remotes:
+            _run(["git", "remote", "add", "origin", url])
+            print(f"→ Added origin remote for unshallow")
         else:
-            # `--unshallow on a complete repository does not make sense`
-            # is the normal "already full history" outcome — not an error.
-            msg = (result.stderr or result.stdout or "").strip()
-            if "does not make sense" in msg or "complete repository" in msg:
-                print("✅ Repo already unshallow — freshness dates OK")
-            else:
-                print(f"⚠️ Repo unshallow skipped: {msg[:120]}")
+            _run(["git", "remote", "set-url", "origin", url])
+
+        # Now fetch full history
+        result = _run(["git", "fetch", "--unshallow"])
+        if result.returncode == 0:
+            after = _run(["git", "rev-list", "--count", "HEAD"]).stdout.strip()
+            print(f"✅ Repo unshallowed — {after} commits now visible")
+        else:
+            msg = (result.stderr or result.stdout or "").strip()[:200]
+            print(f"⚠️ Unshallow fetch failed: {msg}")
     except Exception as e:
         print(f"⚠️ Repo unshallow warning: {e}")
 
