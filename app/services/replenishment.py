@@ -906,16 +906,16 @@ def calculate_replenishment(
                 left_on="_sku_norm", right_on="sku",
                 how="left", suffixes=("", "_y"),
             )
-            # drop the merge helper + duplicate sku col from merge
             df = df.drop(columns=[c for c in ("_sku_norm", "sku_y") if c in df.columns])
-        # Fill defaults for SKUs with no history
-        df["ampm_oos_weeks_3m"]       = pd.to_numeric(df.get("ampm_oos_weeks_3m", 0), errors="coerce").fillna(0).astype(int)
-        df["estimated_lost_units_3m"] = pd.to_numeric(df.get("estimated_lost_units_3m", 0), errors="coerce").fillna(0).astype(int)
-        df["momentum_flag"]           = df.get("momentum_flag", pd.Series("", index=df.index)).fillna("").astype(str)
+        df["oos_weeks_3m"]   = pd.to_numeric(df.get("oos_weeks_3m", 0),   errors="coerce").fillna(0).astype(int)
+        df["thin_weeks_3m"]  = pd.to_numeric(df.get("thin_weeks_3m", 0),  errors="coerce").fillna(0).astype(int)
+        df["lost_units_3m"]  = pd.to_numeric(df.get("lost_units_3m", 0),  errors="coerce").fillna(0).astype(int)
+        df["momentum_flag"]  = df.get("momentum_flag", pd.Series("", index=df.index)).fillna("").astype(str)
     except Exception as e:
-        print(f"⚠️ AMPM OOS enrichment skipped: {e}")
-        df["ampm_oos_weeks_3m"]       = 0
-        df["estimated_lost_units_3m"] = 0
-        df["momentum_flag"]           = ""
+        print(f"⚠️ AMPM momentum enrichment skipped: {e}")
+        df["oos_weeks_3m"]  = 0
+        df["thin_weeks_3m"] = 0
+        df["lost_units_3m"] = 0
+        df["momentum_flag"] = ""
 
     return df
