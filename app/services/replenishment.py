@@ -877,4 +877,45 @@ def calculate_replenishment(
     df = df[existing_cols + remaining_cols]
     df = df.rename(columns={"Model": "model"})
 
+    # ---------------------------------------------
+    # AMPM OOS momentum signals (last 13 weeks / 3 months)
+    # Enriches every row with three fields based on git-log-reconstructed
+    # AMPM history. Non-blocking — if history read fails, defaults to 0/blank.
+    # ---------------------------------------------
+    try:
+        from app.services.ampm_history import compute_oos_signals
+        brand_map = {
+            "NEXLEV":         "Nexlev",
+            "VIOMI":          "Viomi",
+            "AUDIO ARRAY":    "Audio Array",
+            "WHITE MULBERRY": "White Mulberry",
+        }
+        brand_name = brand_map.get(account.upper(), account)
+        _sku_norm = df["SKU"].astype(str).str.strip().str.upper() if "SKU" in df.columns \
+                    else df.get("sku", pd.Series("", index=df.index)).astype(str).str.strip().str.upper()
+        _cur_ampm = pd.Series(
+            pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0).values,
+            index=_sku_norm.values,
+        )
+        signals = compute_oos_signals(brand_name, sales, weeks=13,
+                                      current_ampm_series=_cur_ampm)
+        if not signals.empty:
+            df["_sku_norm"] = _sku_norm.values
+            df = df.merge(
+                signals.reset_index(),
+                left_on="_sku_norm", right_on="sku",
+                how="left", suffixes=("", "_y"),
+            )
+            # drop the merge helper + duplicate sku col from merge
+            df = df.drop(columns=[c for c in ("_sku_norm", "sku_y") if c in df.columns])
+        # Fill defaults for SKUs with no history
+        df["ampm_oos_weeks_3m"]       = pd.to_numeric(df.get("ampm_oos_weeks_3m", 0), errors="coerce").fillna(0).astype(int)
+        df["estimated_lost_units_3m"] = pd.to_numeric(df.get("estimated_lost_units_3m", 0), errors="coerce").fillna(0).astype(int)
+        df["momentum_flag"]           = df.get("momentum_flag", pd.Series("", index=df.index)).fillna("").astype(str)
+    except Exception as e:
+        print(f"⚠️ AMPM OOS enrichment skipped: {e}")
+        df["ampm_oos_weeks_3m"]       = 0
+        df["estimated_lost_units_3m"] = 0
+        df["momentum_flag"]           = ""
+
     return df

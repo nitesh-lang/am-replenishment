@@ -239,6 +239,9 @@ export default function ReplenishmentV2() {
     { id: "warehouse_shortfall", accessorKey: "warehouse_shortfall", header: "Shortfall", size: 90, meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "replenishment_qty",accessorKey: "replenishment_qty",header: "Replen Qty",size: 100, meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "buffer_note",      accessorKey: "buffer_note",      header: "Buffer",    size: 120, meta: { group: "rep" } },
+    { id: "ampm_oos_weeks_3m",       accessorKey: "ampm_oos_weeks_3m",       header: "OOS 3m",  size: 80,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "estimated_lost_units_3m", accessorKey: "estimated_lost_units_3m", header: "Lost Est",size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "momentum_flag",           accessorKey: "momentum_flag",           header: "Momentum",size: 95,  meta: { group: "rep" } },
     { id: "recommended_qty",  accessorKey: "recommended_qty",  header: "Rec Qty",   size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "cartons_needed",   accessorKey: "cartons_needed",   header: "Cartons",   size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "working_value",    accessorKey: "working_value",    header: "Working",   size: 90,  meta: { group: "rep" } },
@@ -760,6 +763,32 @@ export default function ReplenishmentV2() {
                             );
                           } else if (colId === "replenishment_qty") {
                             content = <span className="font-bold tabular-nums text-slate-900">{r.replenishment_qty}</span>;
+                          } else if (colId === "ampm_oos_weeks_3m") {
+                            const n = r.ampm_oos_weeks_3m || 0;
+                            content = n === 0 ? <span className="text-slate-300">—</span> : (
+                              <span className={cn("tabular-nums font-semibold",
+                                n >= 4 ? "text-red-700" : n >= 2 ? "text-amber-700" : "text-slate-600")}>
+                                {n}
+                              </span>
+                            );
+                          } else if (colId === "estimated_lost_units_3m") {
+                            const v = r.estimated_lost_units_3m || 0;
+                            content = v === 0 ? <span className="text-slate-300">—</span> : (
+                              <span className="tabular-nums text-slate-700">{v.toLocaleString("en-IN")}</span>
+                            );
+                          } else if (colId === "momentum_flag") {
+                            const flag = r.momentum_flag || "";
+                            if (flag === "RED") content = (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase bg-red-100 text-red-800 ring-1 ring-red-300">
+                                Losing sales
+                              </span>
+                            );
+                            else if (flag === "AMBER") content = (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 ring-1 ring-amber-300">
+                                At risk
+                              </span>
+                            );
+                            else content = <span className="text-slate-300">—</span>;
                           } else if (colId === "recommended_qty") {
                             const recQty     = r.recommended_qty ?? r.replenishment_qty ?? 0;
                             const rawQty     = r.replenishment_qty ?? 0;
