@@ -92,6 +92,39 @@ def _preload_data_files():
         print("✅ Data files preloaded into cache")
     except Exception as e:
         print(f"⚠️ Preload warning: {e}")
+
+
+@app.get("/_debug/git-state")
+def debug_git_state():
+    """Diagnose git-log-based freshness on the deployed runtime. Returns
+    the current shallow status, PATH lookup for git, the count of commits
+    visible, and a probe log line for the WM In-Transit PO file."""
+    import subprocess, shutil
+    from pathlib import Path as _P
+    repo_root = _P(__file__).resolve().parent.parent.parent
+
+    def run(cmd):
+        try:
+            r = subprocess.run(cmd, cwd=str(repo_root), capture_output=True,
+                               text=True, timeout=10)
+            return {"rc": r.returncode,
+                    "stdout": (r.stdout or "").strip()[:400],
+                    "stderr": (r.stderr or "").strip()[:400]}
+        except Exception as e:
+            return {"error": f"{type(e).__name__}: {e}"}
+
+    return {
+        "cwd_from_python":  str(repo_root),
+        "dot_git_exists":   (repo_root / ".git").exists(),
+        "git_in_path":      shutil.which("git"),
+        "is_shallow":       run(["git", "rev-parse", "--is-shallow-repository"]),
+        "commit_count":     run(["git", "rev-list", "--count", "HEAD"]),
+        "head":             run(["git", "log", "-1", "--format=%H %cs %s"]),
+        "wm_pofile_log":    run(["git", "log", "-1", "--format=%H %cs",
+                                  "--", "data/input/In_Transit_PO data - WM.xlsx"]),
+        "nex_snap_log":     run(["git", "log", "-1", "--format=%H %cs",
+                                  "--", "data/input/inventory_snapshot_nexlev.xlsx"]),
+    }
 # =====================================================
 # CORS (REQUIRED FOR VITE FRONTEND)
 # =====================================================
