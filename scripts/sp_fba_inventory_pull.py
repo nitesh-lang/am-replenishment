@@ -52,6 +52,10 @@ ACCOUNTS = {
     "VIOMI":         "inventory_amazon_viomi.csv",
     "AUDIOARRAY":    "inventory_amazon_audio_array.csv",
     "WHITEMULBERRY": "inventory_amazon_WM.csv",
+    # Cambium Retail = Fossil brand's Seller Central account. Same LWA
+    # unshallowing pattern as sp_ledger_pull.py — shared .env creds
+    # (AdPilot LWA post-consolidation) authorize this too.
+    "CAMBIUMRETAIL": "Fossil Replenishment/inventory_amazon_fossil.csv",
 }
 
 # Output CSV columns (match manual All Inventory Report format)

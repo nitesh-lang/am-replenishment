@@ -71,7 +71,10 @@ ACCOUNT_ENV_KEY = {
     "viomi":       "VIOMI",
     "audio_array": "AUDIOARRAY",
     "wm":          "WHITEMULBERRY",
-    "fossil":      "FOSSIL",
+    # Fossil brand ships through Cambium Retail Seller Central. There's
+    # no SP_REFRESH_TOKEN_FOSSIL in .env — the token lives under
+    # SP_REFRESH_TOKEN_CAMBIUMRETAIL. Same LWA (AdPilot) as the others.
+    "fossil":      "CAMBIUMRETAIL",
 }
 
 
