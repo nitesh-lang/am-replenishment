@@ -56,11 +56,22 @@ BRAND_TO_SNAPSHOT = {
 BRAND_TO_SALES_TAG = {
     # weekly_sales_snapshot['brand'] value → account we use here
     "nexlev":          "Nexlev",
-    "viomi":           "Nexlev",           # Viomi rolls under Nexlev sales
+    "viomi":           "Nexlev",           # snapshot merges Viomi under Nexlev; Viomi bypasses this via raw FBA Sales files
     "audio array":     "Audio Array",
     "white mulberry":  "White Mulberry",
     "tonor":           "Tonor",
 }
+
+# Accounts that must read raw per-week FBA Sales CSVs instead of the
+# merged weekly_sales_snapshot.csv (which brand-tags Viomi rows as
+# "Nexlev" because both Seller Central accounts share the catalog).
+# Filename stems match fc_planning.ACCOUNT_FILES aliases.
+RAW_SHIPMENTS_ACCOUNTS = {
+    "viomi": ["vibc", "viomi"],
+}
+
+_FBA_SALES_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "input" / "FBA Sales"
+_SKU_PREFIX_RE  = re.compile(r"^(FBAM|FBA|FBM|FBK|FBP|FBS|FBO)", re.IGNORECASE)
 
 # Layer-2 thresholds — dialable
 COVER_WEEKS_THIN = 2       # AMPM ≤ 2 × avg velocity → "thin"
@@ -217,6 +228,83 @@ def _weekly_sales_by_sku(
     return piv
 
 
+def _weekly_sales_from_raw_shipments(
+    brand: str,
+    week_numbers: list[int],
+    master_df: pd.DataFrame | None,
+) -> pd.DataFrame:
+    """Read per-week FBA Sales/Week NN/<alias>.csv for accounts whose
+    Seller Central account is distinct but shares a catalog with another
+    (Nexlev/Viomi). Aggregates Merchant SKU × week_num.
+
+    SKU canonicalization: strip FC prefix (FBA/FBM/FBK/FBP/FBS/FBO/FBAM)
+    on both raw SKU and master SKU, match on the numeric tail, return
+    master's canonical SKU. Falls through to raw SKU if unmatched.
+    """
+    aliases = {a.strip().lower() for a in RAW_SHIPMENTS_ACCOUNTS.get(brand.lower(), [])}
+    if not aliases or not _FBA_SALES_ROOT.exists():
+        return pd.DataFrame()
+    week_pat = re.compile(r"^Week\s+(\d+)$", re.IGNORECASE)
+    frames: list[pd.DataFrame] = []
+    for wf in _FBA_SALES_ROOT.iterdir():
+        if not wf.is_dir():
+            continue
+        m = week_pat.match(wf.name)
+        if not m:
+            continue
+        wnum = int(m.group(1))
+        if wnum not in week_numbers:
+            continue
+        for csv in wf.glob("*.csv"):
+            if csv.stem.strip().lower() in aliases:
+                try:
+                    d = pd.read_csv(csv, low_memory=False)
+                    d["week_num"] = wnum
+                    frames.append(d)
+                except Exception as e:
+                    print(f"⚠️ ampm_history raw read failed {csv}: {e}")
+    if not frames:
+        return pd.DataFrame()
+    df = pd.concat(frames, ignore_index=True)
+    df.columns = df.columns.astype(str).str.strip()
+    if "Merchant SKU" not in df.columns or "Shipped Quantity" not in df.columns:
+        return pd.DataFrame()
+    df["_sku"]       = df["Merchant SKU"].astype(str).str.strip().str.upper()
+    df["units_sold"] = pd.to_numeric(df["Shipped Quantity"], errors="coerce").fillna(0)
+
+    def _strip(s: str) -> str:
+        return _SKU_PREFIX_RE.sub("", s or "").upper()
+
+    if master_df is not None and not master_df.empty:
+        m = master_df.copy()
+        m.columns = m.columns.astype(str).str.strip()
+        m["_sku"]       = m.get("SKU", "").astype(str).str.strip().str.upper()
+        m["_stripped"]  = m["_sku"].map(_strip)
+        stripped_to_canon = dict(zip(m["_stripped"], m["_sku"]))
+        stripped_to_canon.pop("", None)
+
+        def _canon(raw: str) -> str:
+            s = _strip(raw)
+            if s and s in stripped_to_canon:
+                return stripped_to_canon[s]
+            return raw
+        df["SKU"] = df["_sku"].map(_canon)
+    else:
+        df["SKU"] = df["_sku"]
+
+    df = df[df["SKU"] != ""]
+    if df.empty:
+        return pd.DataFrame()
+    piv = (
+        df.groupby(["SKU", "week_num"], as_index=False)["units_sold"]
+          .sum()
+          .pivot(index="SKU", columns="week_num", values="units_sold")
+          .fillna(0)
+    )
+    piv.index.name = "SKU"
+    return piv
+
+
 @lru_cache(maxsize=32)
 def _cached_signals(brand_key: str, weeks: int, current_ws_iso: str,
                     sales_hash: int, master_hash: int) -> pd.DataFrame:
@@ -249,7 +337,13 @@ def _compute(
     week_dates = [_date.fromisoformat(c) for c in hist.columns]
     week_nums  = [_sun_sat_week_num(d) for d in week_dates]
 
-    sales_wide = _weekly_sales_by_sku(weekly_sales, brand, week_nums, master_df)
+    if brand.lower() in RAW_SHIPMENTS_ACCOUNTS:
+        # Viomi et al: pull from raw per-account FBA Sales CSVs so
+        # momentum reflects THIS Seller Central account's shipments,
+        # not the Nexlev-merged weekly_sales_snapshot.csv.
+        sales_wide = _weekly_sales_from_raw_shipments(brand, week_nums, master_df)
+    else:
+        sales_wide = _weekly_sales_by_sku(weekly_sales, brand, week_nums, master_df)
     # Align sales to the same SKUs and week columns as hist
     sales_wide = sales_wide.reindex(index=hist.index, columns=week_nums, fill_value=0)
     # Rename sales columns to the same iso date labels
