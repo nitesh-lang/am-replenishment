@@ -204,6 +204,41 @@ def compute_recommended_qty(replenishment_qty: int, master_carton: int, ixd_type
 # =================================================
 # MAIN BUSINESS LOGIC
 # =================================================
+def _apply_wm_channel_filter(sales_df: pd.DataFrame, master_df: pd.DataFrame) -> pd.DataFrame:
+    """WM channel rule (2026-07-20): Monitor Arm SKUs use Amazon sales only;
+    all other WM SKUs use Amazon + 1p Sales. Operator's Monitor Arm 1P
+    orders are unreliable signal for replenishment planning.
+
+    Identifies Monitor Arm rows via ASIN/SKU/Model set built from the WM
+    master's Category column.
+    """
+    ma_asins: set[str] = set()
+    ma_skus:  set[str] = set()
+    ma_models: set[str] = set()
+    if master_df is not None and "Category" in master_df.columns:
+        mask = master_df["Category"].astype(str).str.strip().str.lower() == "monitor arm"
+        if "ASIN" in master_df.columns:
+            ma_asins = {a for a in master_df.loc[mask, "ASIN"].astype(str).str.strip().str.upper()
+                        if a and a not in ("NAN", "NONE")}
+        if "SKU" in master_df.columns:
+            ma_skus = {s for s in master_df.loc[mask, "SKU"].astype(str).str.strip().str.upper()
+                       if s and s not in ("NAN", "NONE")}
+        if "Model" in master_df.columns:
+            ma_models = {m for m in master_df.loc[mask, "Model"].astype(str).str.strip()
+                         if m and m.lower() not in ("nan", "none")}
+
+    a = sales_df.get("asin", pd.Series([""] * len(sales_df))).astype(str).str.strip().str.upper()
+    s = sales_df.get("sku",  pd.Series([""] * len(sales_df))).astype(str).str.strip().str.upper()
+    mo = sales_df.get("model", pd.Series([""] * len(sales_df))).astype(str).str.strip()
+
+    is_monitor_arm = a.isin(ma_asins) | s.isin(ma_skus) | mo.isin(ma_models)
+    ch = sales_df["channel"]
+
+    # Monitor Arm → Amazon only; other WM → Amazon + 1p Sales
+    keep = (ch == "Amazon") | ((ch == "1p Sales") & ~is_monitor_arm)
+    return sales_df[keep]
+
+
 def calculate_replenishment(
     sales_window: int,
     replenish_weeks: int,
@@ -373,11 +408,14 @@ def calculate_replenishment(
 
     # Channel filter:
     # - Audio Array → Amazon only (no 1p Sales)
-    # - Nexlev / Viomi / White Mulberry → Amazon + 1p Sales (other channels excluded)
+    # - Nexlev / Viomi → Amazon + 1p Sales
+    # - White Mulberry → Amazon + 1p Sales EXCEPT Monitor Arm SKUs (Amazon only)
     if account.upper() == "AUDIO ARRAY":
         sales_n = sales_n[sales_n["channel"] == "Amazon"]
-    elif account.upper() in ("NEXLEV", "VIOMI", "WHITE MULBERRY"):
+    elif account.upper() in ("NEXLEV", "VIOMI"):
         sales_n = sales_n[sales_n["channel"].isin(["Amazon", "1p Sales"])]
+    elif account.upper() == "WHITE MULBERRY":
+        sales_n = _apply_wm_channel_filter(sales_n, master)
 
     # ---------------------------------------------
     # AGGREGATE SALES — ASIN primary, SKU fallback, Model fallback
@@ -457,8 +495,10 @@ def calculate_replenishment(
             sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "White Mulberry"]
     if account.upper() == "AUDIO ARRAY":
         sales_4 = sales_4[sales_4["channel"] == "Amazon"]
-    elif account.upper() in ("NEXLEV", "VIOMI", "WHITE MULBERRY"):
+    elif account.upper() in ("NEXLEV", "VIOMI"):
         sales_4 = sales_4[sales_4["channel"].isin(["Amazon", "1p Sales"])]
+    elif account.upper() == "WHITE MULBERRY":
+        sales_4 = _apply_wm_channel_filter(sales_4, master)
 
     sales_4 = sales_4.copy()
     sales_4["_asin"] = sales_4.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
@@ -517,8 +557,10 @@ def calculate_replenishment(
             sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "White Mulberry"]
     if account.upper() == "AUDIO ARRAY":
         sales_2 = sales_2[sales_2["channel"] == "Amazon"]
-    elif account.upper() in ("NEXLEV", "VIOMI", "WHITE MULBERRY"):
+    elif account.upper() in ("NEXLEV", "VIOMI"):
         sales_2 = sales_2[sales_2["channel"].isin(["Amazon", "1p Sales"])]
+    elif account.upper() == "WHITE MULBERRY":
+        sales_2 = _apply_wm_channel_filter(sales_2, master)
 
     sales_2 = sales_2.copy()
     sales_2["_asin"] = sales_2.get("asin", "").astype(str).str.strip().str.upper().replace({"NAN": "", "NONE": ""})
