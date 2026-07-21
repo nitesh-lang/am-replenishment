@@ -59,10 +59,13 @@ def get_replenishment(
 
         # IXD Logic — Nexlev/Viomi have "Hazmat/non-Hazmat" column;
         # AA/WM have only "Hazmat Type" with values "IXD"/"NON IXD".
-        # Any "NON IXD"-shaped value on either column = Non-IXD.
+        # Any value containing a "NON IXD" token = Non-IXD. Substring
+        # check (not exact) so "NON IXD Hazmat" (still hazardous but
+        # Non-IXD routable, e.g. MR-03) flags correctly.
         haz = str(row.get("Hazmat/non-Hazmat", "")).strip()
         typ = str(row.get("Hazmat Type", "")).strip().upper()
-        if haz == "Non-IXD Non Hazmat" or typ in ("NON IXD", "NON-IXD", "NONIXD"):
+        if (haz == "Non-IXD Non Hazmat"
+                or "NON IXD" in typ or "NON-IXD" in typ or "NONIXD" in typ):
             ixd_type = "Non-IXD"
         else:
             ixd_type = "IXD"
