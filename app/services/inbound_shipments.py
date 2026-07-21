@@ -1,7 +1,7 @@
 """
-Inbound Shipments service — Nexlev only (for now).
+Inbound Shipments service — all 5 accounts.
 
-Reads data/input/inbound_shipments_nexlev.csv (produced by
+Reads data/input/inbound_shipments_<account>.csv (produced by
 scripts/sp_inbound_pull.py) and enriches each row with ASIN + Model
 from sku_master.xlsx via SellerSKU lookup.
 """
@@ -23,8 +23,13 @@ def load_inbound_shipments(account: str = "NEXLEV") -> pd.DataFrame:
     """
     acct = account.strip().upper()
     fname_map = {
-        "NEXLEV": "inbound_shipments_nexlev.csv",
-        "VIOMI":  "inbound_shipments_viomi.csv",
+        "NEXLEV":         "inbound_shipments_nexlev.csv",
+        "VIOMI":          "inbound_shipments_viomi.csv",
+        "AUDIOARRAY":     "inbound_shipments_audio_array.csv",
+        "AUDIO ARRAY":    "inbound_shipments_audio_array.csv",
+        "WHITEMULBERRY":  "inbound_shipments_wm.csv",
+        "WHITE MULBERRY": "inbound_shipments_wm.csv",
+        "FOSSIL":         "inbound_shipments_fossil.csv",
     }
     fname = fname_map.get(acct)
     if not fname:

@@ -37,7 +37,21 @@ function StatusPill({ status }) {
   );
 }
 
-const ACCOUNT_OPTIONS = ["NEXLEV", "VIOMI"];
+const ACCOUNT_OPTIONS = ["NEXLEV", "VIOMI", "AUDIOARRAY", "WHITEMULBERRY", "FOSSIL"];
+const ACCOUNT_LABELS = {
+  NEXLEV: "Nexlev",
+  VIOMI: "Viomi",
+  AUDIOARRAY: "Audio Array",
+  WHITEMULBERRY: "White Mulberry",
+  FOSSIL: "Fossil",
+};
+const ACCOUNT_FILE_SLUG = {
+  NEXLEV: "nexlev",
+  VIOMI: "viomi",
+  AUDIOARRAY: "audio_array",
+  WHITEMULBERRY: "wm",
+  FOSSIL: "fossil",
+};
 
 export default function FBAInboundV2() {
   const [account, setAccount] = useState("NEXLEV");
@@ -254,7 +268,7 @@ export default function FBAInboundV2() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `fba_inbound_${account.toLowerCase()}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.download = `fba_inbound_${ACCOUNT_FILE_SLUG[account] || account.toLowerCase()}_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -269,10 +283,10 @@ export default function FBAInboundV2() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">
-            {account === "NEXLEV" ? "Nexlev" : "Viomi"} FBA Inbound Shipments
+            {ACCOUNT_LABELS[account] || account} FBA Inbound Shipments
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Live SP-API pull. ASIN + Model enriched via sku_master. Source: <code className="text-[11px]">inbound_shipments_{account.toLowerCase()}.csv</code>
+            Live SP-API pull. ASIN + Model enriched via sku_master. Source: <code className="text-[11px]">inbound_shipments_{ACCOUNT_FILE_SLUG[account] || account.toLowerCase()}.csv</code>
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -289,7 +303,7 @@ export default function FBAInboundV2() {
                     : "text-slate-700 hover:bg-slate-100"
                 )}
               >
-                {opt === "NEXLEV" ? "Nexlev" : "Viomi"}
+                {ACCOUNT_LABELS[opt] || opt}
               </button>
             ))}
           </div>
