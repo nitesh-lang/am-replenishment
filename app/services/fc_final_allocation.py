@@ -606,7 +606,6 @@ def calculate_final_allocation(
         if account.lower() in ["nexlev", "viomi"]:
             repl_master = repl_master.rename(columns={
                 "SKU": "sku",
-                "Hazmat/non-Hazmat": "ixd_flag",
                 "Hazmat Type": "hazmat_type",
                 "Model": "model",
                 "Category": "category",
@@ -614,6 +613,14 @@ def calculate_final_allocation(
                 "Master Carton": "master_carton",
                 "Status": "listing_status"
             })
+            # ixd_flag drives the 35% IXD governance cap (apply_ist).
+            # Read from Hazmat Type — the column that carries "IXD" /
+            # "NON IXD" tokens — same source AA/WM use. Previously read
+            # from Hazmat/non-Hazmat (value "Hazmat"/"Non-Hazmat"), which
+            # meant Non-IXD hazmat SKUs like MR-03 (Hazmat Type = "NON
+            # IXD Hazmat" but Hazmat/non-Hazmat = "Hazmat") were being
+            # capped as IXD.
+            repl_master["ixd_flag"] = repl_master["hazmat_type"]
         else:
             repl_master = repl_master.rename(columns={
                 "SKU": "sku",
