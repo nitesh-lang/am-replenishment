@@ -363,10 +363,18 @@ def get_fc_final(
 
     # Replace NaN/inf with safe defaults before JSON serialization
     df = df.fillna("").replace([float("inf"), float("-inf")], 0)
+    # Integer columns — quantities that should render whole numbers on the UI
     for col in ["in_transit_qty", "open_po_qty", "send_qty", "fc_inventory",
-                "weekly_velocity", "total_units_sold"]:
+                "total_units_sold"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
+    # Velocity columns — preserve decimals so Avg/Wk × weeks matches the
+    # actual target math (e.g. 6.5 * 6 = 39, NOT the "6 x 6 = 36" the
+    # rounded-to-int display used to suggest). Rounded to 1 decimal for
+    # compact display.
+    for col in ["weekly_velocity", "window_velocity", "last_2_velocity"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).round(1)
 
     records = df.to_dict(orient="records")
     for r in records:

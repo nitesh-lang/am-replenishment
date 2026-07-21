@@ -539,14 +539,14 @@ def calculate_final_allocation(
         if len(d):
             print(f"🔍 PRE-CLEANUP FBA66963/DEL5: send_qty={d.iloc[0]['send_qty']}, in_transit={d.iloc[0]['in_transit_qty']}")
 
-        # Velocity cols rounded consistently so the max-invariant holds
-        # (weekly_velocity == max(window_velocity, last_2_velocity)) after
-        # int rounding — otherwise 4.6 → 5 vs 4.4 → 4 could break equality.
-        # Re-derive weekly_velocity as max(rounded window, rounded last_2)
-        # to keep the invariant exact post-cleanup.
-        fossil_final["window_velocity"] = pd.to_numeric(fossil_final["window_velocity"], errors="coerce").fillna(0).round(0).astype(int)
-        fossil_final["last_2_velocity"] = pd.to_numeric(fossil_final["last_2_velocity"], errors="coerce").fillna(0).round(0).astype(int)
-        fossil_final["weekly_velocity"] = fossil_final[["window_velocity", "last_2_velocity"]].max(axis=1).astype(int)
+        # Velocity cols kept at 1 decimal so operator's mental math matches
+        # the actual target: Avg/Wk × weeks = target_cover_units (e.g.
+        # 5.5 × 6 = 33, NOT the "6 x 6 = 36" the rounded-to-int display
+        # used to suggest). Max-invariant (weekly = max(window, last_2))
+        # still holds because we compare floats directly.
+        fossil_final["window_velocity"] = pd.to_numeric(fossil_final["window_velocity"], errors="coerce").fillna(0).round(1)
+        fossil_final["last_2_velocity"] = pd.to_numeric(fossil_final["last_2_velocity"], errors="coerce").fillna(0).round(1)
+        fossil_final["weekly_velocity"] = fossil_final[["window_velocity", "last_2_velocity"]].max(axis=1).round(1)
         fossil_final["velocity_basis"] = "window"
         fossil_final.loc[
             fossil_final["last_2_velocity"] > fossil_final["window_velocity"],
@@ -1178,16 +1178,18 @@ def calculate_final_allocation(
     .fillna("-")
 )
     
-    final_df[numeric_cleanup_cols] = (
-    final_df[numeric_cleanup_cols]
-    .round(0)
-    .astype(int)
-)
+    # Velocity cols preserve 1 decimal for display parity with the math:
+    # Avg/Wk × weeks = target_cover_units. Rounding to int made 5.5 → 6
+    # and confused "6 x 6 = 36" vs actual target 33 (5.5 × 6).
+    _velocity_cols = ["window_velocity", "last_2_velocity", "weekly_velocity"]
+    _int_cols = [c for c in numeric_cleanup_cols if c not in _velocity_cols]
+    final_df[_int_cols] = final_df[_int_cols].round(0).astype(int)
+    final_df[_velocity_cols] = final_df[_velocity_cols].round(1)
 
-    # Re-derive weekly_velocity + basis from the rounded int velocities so
-    # the audit invariant `weekly_velocity == max(window, last_2)` holds
-    # exactly (vs a ½-unit drift from independent rounding).
-    final_df["weekly_velocity"] = final_df[["window_velocity", "last_2_velocity"]].max(axis=1).astype(int)
+    # Re-derive weekly_velocity + basis at 1-decimal precision so the
+    # audit invariant `weekly_velocity == max(window, last_2)` holds
+    # exactly under float rounding.
+    final_df["weekly_velocity"] = final_df[["window_velocity", "last_2_velocity"]].max(axis=1).round(1)
     final_df["velocity_basis"] = "window"
     final_df.loc[
         final_df["last_2_velocity"] > final_df["window_velocity"],
