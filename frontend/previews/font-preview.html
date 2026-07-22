@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AM_Replenishment · Font theme preview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Load ALL candidate families in parallel so switching is instant -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Geist+Mono:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #18181b;
+      --ink-2: #52525b;
+      --hairline: #e4e4e7;
+      --paper: #ffffff;
+      --canvas: #fafaf9;
+      --indigo: #4f46e5;
+      --indigo-soft: #eef2ff;
+      --amber-soft: #fef3c7;
+      --amber-deep: #92400e;
+      --red-deep: #b91c1c;
+      --red-soft: #fee2e2;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--canvas);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px 0; }
+    p.sub { color: var(--ink-2); margin: 0 0 24px 0; font-size: 13px; }
+
+    .switcher {
+      display: inline-flex;
+      background: var(--paper);
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+      padding: 4px;
+      margin-bottom: 20px;
+      gap: 4px;
+    }
+    .switcher button {
+      background: transparent;
+      border: 0;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+    .switcher button.on {
+      background: var(--ink);
+      color: #fff;
+    }
+
+    /* ============ FONT STACKS ============ */
+    body.font-poppins {
+      font-family: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    body.font-poppins .mono, body.font-poppins .tabular {
+      font-family: "JetBrains Mono", ui-monospace, "Consolas", monospace;
+    }
+    body.font-inter {
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    body.font-inter .mono, body.font-inter .tabular {
+      font-family: "JetBrains Mono", ui-monospace, "Consolas", monospace;
+    }
+    body.font-geist {
+      font-family: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-feature-settings: "ss01","cv11";
+    }
+    body.font-geist .mono, body.font-geist .tabular {
+      font-family: "Geist Mono", ui-monospace, "Consolas", monospace;
+    }
+    body.font-ibm {
+      font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    body.font-ibm .mono, body.font-ibm .tabular {
+      font-family: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+    }
+
+    /* ============ SHARED UI SAMPLE ============ */
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .card h2 { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 12px 0; font-weight: 700; }
+
+    /* KPI band */
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .kpi { background: var(--paper); border: 1px solid var(--hairline); border-radius: 12px; padding: 12px 14px; }
+    .kpi .label { font-size: 11px; color: var(--ink-2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .kpi .value { font-size: 24px; font-weight: 700; margin-top: 4px; letter-spacing: -0.02em; }
+    .kpi .hint  { font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+
+    /* Toolbar */
+    .toolbar { display: grid; grid-template-columns: 4fr 2fr 1fr 4fr; gap: 12px; align-items: end; }
+    .field label { font-size: 11px; color: var(--ink-2); font-weight: 600; letter-spacing: 0.02em; display: block; margin-bottom: 4px; }
+    .field input, .field select {
+      width: 100%; padding: 6px 10px; font: inherit; font-size: 13px;
+      border: 1px solid var(--hairline); border-radius: 6px; background: #fff; color: var(--ink);
+      box-sizing: border-box;
+    }
+
+    /* Table */
+    table.repl { border-collapse: collapse; width: 100%; font-size: 13px; }
+    table.repl th {
+      text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--hairline);
+      font-weight: 600; color: var(--ink); background: #fafaf9; font-size: 12px;
+    }
+    table.repl td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+    table.repl td.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+    .pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .pill-red { background: var(--red-soft); color: var(--red-deep); }
+    .pill-amber { background: var(--amber-soft); color: var(--amber-deep); }
+    .pill-indigo { background: var(--indigo-soft); color: var(--indigo); }
+    .model { font-weight: 600; color: var(--ink); }
+    .sku { font-size: 12px; color: var(--ink-2); }
+
+    footer.meta { color: var(--ink-2); font-size: 12px; margin-top: 24px; }
+    code { background: #f4f4f5; padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+  </style>
+</head>
+<body class="font-poppins">
+
+  <h1>Font theme preview · AM_Replenishment</h1>
+  <p class="sub">Same UI. Toggle the font stack — layout / colors / labels unchanged. Reference: OrderPilot uses <b>Poppins + JetBrains Mono</b>.</p>
+
+  <div class="switcher">
+    <button data-font="poppins" class="on">Poppins <span style="color:#a1a1aa;font-weight:500;">(OrderPilot)</span></button>
+    <button data-font="inter">Inter</button>
+    <button data-font="geist">Geist <span style="color:#a1a1aa;font-weight:500;">(current)</span></button>
+    <button data-font="ibm">IBM Plex Sans</button>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Total SKUs</div>
+      <div class="value tabular">119</div>
+      <div class="hint">4 accounts loaded</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Critical</div>
+      <div class="value tabular" style="color:var(--red-deep)">17</div>
+      <div class="hint">real_am_inv &lt; 2wk cover</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Send Qty</div>
+      <div class="value tabular" style="color:var(--indigo)">2,724</div>
+      <div class="hint">across all accounts</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Avg return %</div>
+      <div class="value tabular">4.8%</div>
+      <div class="hint">last 90 days</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="card">
+    <h2>Toolbar</h2>
+    <div class="toolbar">
+      <div class="field">
+        <label>Search</label>
+        <input placeholder="SKU / Model / ASIN…" />
+      </div>
+      <div class="field">
+        <label>Past Sales (selected weeks)</label>
+        <select><option>From 1 → To 12</option></select>
+      </div>
+      <div class="field">
+        <label>Inventory Cover</label>
+        <select><option>8</option></select>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <div style="font-size:12px;color:var(--ink-2);padding-top:6px;">Loading… 119 of 162 rows</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <h2>Replenishment sample rows</h2>
+    <table class="repl">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>SKU</th>
+          <th>ASIN</th>
+          <th style="text-align:right">Avg/Wk</th>
+          <th style="text-align:right">Total sold qty</th>
+          <th style="text-align:right">Real AM Inv</th>
+          <th style="text-align:right">Mother WH</th>
+          <th style="text-align:right">Replen Qty</th>
+          <th>Momentum</th>
+          <th>IXD</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="model">MR-03</span><br/><span class="sku mono">FBA79984</span></td>
+          <td class="mono">FBA79984</td>
+          <td class="mono">B0GN85NZQN</td>
+          <td class="numeric">18.0</td>
+          <td class="numeric">37</td>
+          <td class="numeric">42</td>
+          <td class="numeric">156</td>
+          <td class="numeric" style="font-weight:600">102</td>
+          <td><span class="pill pill-red">Bleeding</span></td>
+          <td><span class="pill pill-indigo">Non-IXD</span></td>
+        </tr>
+        <tr>
+          <td><span class="model">DH-01</span><br/><span class="sku mono">FBA79991</span></td>
+          <td class="mono">FBA79991</td>
+          <td class="mono">B0GN85NZQN</td>
+          <td class="numeric">5.5</td>
+          <td class="numeric">66</td>
+          <td class="numeric">0</td>
+          <td class="numeric">0</td>
+          <td class="numeric" style="font-weight:600">44</td>
+          <td><span class="pill pill-amber">At risk</span></td>
+          <td><span class="pill pill-indigo">IXD</span></td>
+        </tr>
+        <tr>
+          <td><span class="model">M8</span><br/><span class="sku mono">FBA79972</span></td>
+          <td class="mono">FBA79972</td>
+          <td class="mono">B0GCP1J2HC</td>
+          <td class="numeric">14.0</td>
+          <td class="numeric">165</td>
+          <td class="numeric">88</td>
+          <td class="numeric">240</td>
+          <td class="numeric" style="font-weight:600">24</td>
+          <td>—</td>
+          <td><span class="pill pill-indigo">Non-IXD</span></td>
+        </tr>
+        <tr>
+          <td><span class="model">SW-01</span><br/><span class="sku mono">FBA79350</span></td>
+          <td class="mono">FBA79350</td>
+          <td class="mono">B0D9KDQCCM</td>
+          <td class="numeric">23.7</td>
+          <td class="numeric">284</td>
+          <td class="numeric">312</td>
+          <td class="numeric">960</td>
+          <td class="numeric" style="font-weight:600">0</td>
+          <td>—</td>
+          <td><span class="pill pill-indigo">Non-IXD</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Numerics showcase -->
+  <div class="card">
+    <h2>Numeric legibility</h2>
+    <p style="font-size:13px;color:var(--ink-2);margin:0 0 8px 0;">Tabular figures matter — columns like Real AM Inv and Send Qty must line up. Sample:</p>
+    <div class="tabular" style="font-size:18px;font-weight:600;line-height:1.4;letter-spacing:-0.01em;">
+      1,234 · 5,678 · 90,123 · 456.78 · 0.35 · 100%<br/>
+      1,234 · 5,678 · 90,123 · 456.78 · 0.35 · 100%<br/>
+      1,234 · 5,678 · 90,123 · 456.78 · 0.35 · 100%
+    </div>
+    <p style="font-size:12px;color:var(--ink-2);margin:12px 0 0 0;">Monospace variant (SKUs / ASINs):</p>
+    <div class="mono" style="font-size:13px;line-height:1.6;color:var(--ink);">
+      FBA79984 · B0GN85NZQN · FBA79991 · B0D9KDQCCM · FBM79271<br/>
+      FBK79271 · B0DQ8W1RBV · FBA80105 · FBK77102 · FBA79350
+    </div>
+  </div>
+
+  <footer class="meta">
+    Preview only. To apply: edit <code>frontend/src/index.css</code> font-family + add the Google Fonts link in <code>frontend/index.html</code>. Zero column / logic / label changes required.
+  </footer>
+
+  <script>
+    document.querySelectorAll(".switcher button").forEach(b => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll(".switcher button").forEach(x => x.classList.remove("on"));
+        b.classList.add("on");
+        document.body.className = "font-" + b.dataset.font;
+      });
+    });
+  </script>
+</body>
+</html>
