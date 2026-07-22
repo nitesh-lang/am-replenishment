@@ -217,38 +217,33 @@ export default function ReplenishmentV2() {
      COLUMNS
   ============================================================ */
   const columns = useMemo(() => [
-    { id: "model",            accessorKey: "model",            header: "Model",     size: 150, meta: { sticky: 1, group: "id" } },
-    { id: "sku",              accessorKey: "sku",              header: "SKU",       size: 110, meta: { sticky: 2, group: "id" } },
-    { id: "asin",             accessorKey: "asin",             header: "ASIN",      size: 110, meta: { group: "list" } },
-    { id: "category",         accessorKey: "category",         header: "Category",  size: 110, meta: { group: "list" } },
-    { id: "listing_status",   accessorKey: "listing_status",   header: "Status",    size: 80,  meta: { group: "list" } },
-    { id: "trend",            accessorFn: r => classifyTrend(r.weekly_sales || []), header: "Trend", size: 130, meta: { group: "vel" } },
-    { id: "sales_velocity",   accessorKey: "sales_velocity",   header: "Avg/Wk",    size: 90,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
-    { id: "window_velocity",  accessorKey: "window_velocity",  header: "Sel Wk",    size: 75,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
-    { id: "last_2_velocity",  accessorKey: "last_2_velocity",  header: "2wk",       size: 65,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
-    { id: "velocity_basis",   accessorKey: "velocity_basis",   header: "Basis",     size: 75,  meta: { group: "vel" } },
-    { id: "total_units_sold", accessorKey: "total_units_sold", header: "Total",     size: 80,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
-    { id: "fba_inv",          accessorKey: "fba_inv",          header: "FBA Inv",     size: 80,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "inbound_inventory",accessorKey: "inbound_inventory",header: "Inbound",     size: 80,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "amazon_inventory", accessorKey: "amazon_inventory", header: "Final Inv",   size: 85,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "real_am_inv_available", accessorKey: "real_am_inv_available", header: "Real AM Inv", size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "afn_reserved",     accessorKey: "afn_reserved",     header: "Reserved",    size: 85,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "ampm_inventory",   accessorKey: "ampm_inventory",   header: "Mother WH", size: 100, meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "b2b_inventory",    accessorKey: "b2b_inventory",    header: "B2B",       size: 70,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "required_units",   accessorKey: "required_units",   header: "Req",       size: 70,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "warehouse_shortfall", accessorKey: "warehouse_shortfall", header: "Shortfall", size: 90, meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "replenishment_qty",accessorKey: "replenishment_qty",header: "Replen Qty",size: 100, meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "buffer_note",      accessorKey: "buffer_note",      header: "Buffer",    size: 120, meta: { group: "rep" } },
-    { id: "oos_weeks_3m",   accessorKey: "oos_weeks_3m",   header: "OOS 3m",  size: 75, meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "thin_weeks_3m",  accessorKey: "thin_weeks_3m",  header: "Thin 3m", size: 75, meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "lost_units_3m",  accessorKey: "lost_units_3m",  header: "Lost Est",size: 90, meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "momentum_flag",  accessorKey: "momentum_flag",  header: "Momentum",size: 110,meta: { group: "rep" } },
-    { id: "recommended_qty",  accessorKey: "recommended_qty",  header: "Rec Qty",   size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "cartons_needed",   accessorKey: "cartons_needed",   header: "Cartons",   size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "working_value",    accessorKey: "working_value",    header: "Working",   size: 90,  meta: { group: "rep" } },
-    { id: "ixd_type",         accessorKey: "ixd_type",         header: "IXD",       size: 70,  meta: { group: "log" } },
-    { id: "hazmat_type",      accessorKey: "hazmat_type",      header: "Hazmat",    size: 100, meta: { group: "log" } },
-    { id: "master_carton",    accessorKey: "master_carton",    header: "MC",        size: 60,  meta: { group: "log" } },
+    { id: "model",            accessorKey: "model",            header: "Model",     size: 130, meta: { sticky: 1, group: "id" } },
+    { id: "sku",              accessorKey: "sku",              header: "SKU",       size: 95,  meta: { sticky: 2, group: "id" } },
+    { id: "asin",             accessorKey: "asin",             header: "ASIN",      size: 100, meta: { group: "list" } },
+    { id: "trend",            accessorFn: r => classifyTrend(r.weekly_sales || []), header: "Trend", size: 110, meta: { group: "vel" } },
+    { id: "sales_velocity",   accessorKey: "sales_velocity",   header: "Avg/Wk",    size: 75,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
+    { id: "window_velocity",  accessorKey: "window_velocity",  header: "Sel Wk",    size: 70,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
+    { id: "last_2_velocity",  accessorKey: "last_2_velocity",  header: "2wk",       size: 60,  meta: { group: "vel", numeric: true, sortDescFirst: true } },
+    { id: "velocity_basis",   accessorKey: "velocity_basis",   header: "Basis",     size: 70,  meta: { group: "vel" } },
+    { id: "total_units_sold", accessorFn: r => (r.velocity_basis === "2wk" ? (r.units_last_2w || 0) : (r.total_units_sold || 0)), header: "Total sold qty", size: 110, meta: { group: "vel", numeric: true, sortDescFirst: true } },
+    { id: "inbound_inventory",accessorKey: "inbound_inventory",header: "Inbound",   size: 75,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    { id: "real_am_inv_available", accessorKey: "real_am_inv_available", header: "Real AM Inv", size: 95, meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    { id: "ampm_inventory",   accessorKey: "ampm_inventory",   header: "Mother WH", size: 90,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    { id: "b2b_inventory",    accessorKey: "b2b_inventory",    header: "B2B",       size: 60,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    { id: "required_units",   accessorKey: "required_units",   header: "Req",       size: 65,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "warehouse_shortfall", accessorKey: "warehouse_shortfall", header: "Shortfall", size: 85, meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "replenishment_qty",accessorKey: "replenishment_qty",header: "Replen Qty",size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "buffer_note",      accessorKey: "buffer_note",      header: "Buffer",    size: 100, meta: { group: "rep" } },
+    { id: "oos_weeks_3m",     accessorKey: "oos_weeks_3m",     header: "OOS 3m",    size: 70, meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "thin_weeks_3m",    accessorKey: "thin_weeks_3m",    header: "Thin 3m",   size: 70, meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "lost_units_3m",    accessorKey: "lost_units_3m",    header: "Lost Est",  size: 80, meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "momentum_flag",    accessorKey: "momentum_flag",    header: "Momentum",  size: 95, meta: { group: "rep" } },
+    { id: "recommended_qty",  accessorKey: "recommended_qty",  header: "Rec Qty",   size: 80,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "cartons_needed",   accessorKey: "cartons_needed",   header: "Cartons",   size: 80,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
+    { id: "working_value",    accessorKey: "working_value",    header: "Working",   size: 85,  meta: { group: "rep" } },
+    { id: "ixd_type",         accessorKey: "ixd_type",         header: "IXD",       size: 65,  meta: { group: "log" } },
+    { id: "hazmat_type",      accessorKey: "hazmat_type",      header: "Hazmat",    size: 90,  meta: { group: "log" } },
+    { id: "master_carton",    accessorKey: "master_carton",    header: "MC",        size: 55,  meta: { group: "log" } },
   ], []);
 
   const table = useReactTable({
@@ -513,7 +508,7 @@ export default function ReplenishmentV2() {
         {/* Filters */}
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3 mb-3">
           <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-3">
+            <div className="col-span-5">
               <Label>Search</Label>
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-300" />
@@ -527,7 +522,7 @@ export default function ReplenishmentV2() {
             </div>
 
             <div className="col-span-2">
-              <Label>Sales Window</Label>
+              <Label>Past Sales (selected weeks)</Label>
               <div className="grid grid-cols-2 gap-1.5">
                 <select value={fromWeek} onChange={e => setFromWeek(Number(e.target.value))}
                   className="px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
@@ -541,22 +536,10 @@ export default function ReplenishmentV2() {
             </div>
 
             <div className="col-span-1">
-              <Label>Replen Wks</Label>
+              <Label>Inventory Cover</Label>
               <select value={replenishWeeks} onChange={e => setReplenishWeeks(Number(e.target.value))}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
                 {[2, 4, 6, 8, 10, 12].map(n => <option key={n}>{n}</option>)}
-              </select>
-            </div>
-
-            <div className="col-span-2">
-              <Label>Past Week</Label>
-              <select
-                value={weekStart || ""}
-                onChange={e => setWeekStart(e.target.value || null)}
-                className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white"
-              >
-                <option value="">Current week</option>
-                {savedWeeks.map(w => <option key={w.week_start} value={w.week_start}>{w.label}</option>)}
               </select>
             </div>
 
@@ -737,8 +720,6 @@ export default function ReplenishmentV2() {
                             content = <span className="font-mono text-xs text-slate-700">{r.sku}</span>;
                           } else if (colId === "asin") {
                             content = <span className="font-mono text-xs text-slate-500">{r.asin || "—"}</span>;
-                          } else if (colId === "listing_status") {
-                            content = <StatusPill status={r.listing_status} />;
                           } else if (colId === "trend") {
                             content = <Sparkline data={r.weekly_sales || []} />;
                           } else if (colId === "sales_velocity") {
@@ -754,12 +735,6 @@ export default function ReplenishmentV2() {
                             content = (
                               <span className={cn("tabular-nums", (r.warehouse_shortfall || 0) > 0 && "text-amber-700 font-semibold")}>
                                 {r.warehouse_shortfall > 0 ? r.warehouse_shortfall : "—"}
-                              </span>
-                            );
-                          } else if (colId === "amazon_inventory") {
-                            content = (
-                              <span className={cn("tabular-nums font-medium", isCritical && "text-red-700")}>
-                                {r.amazon_inventory}
                               </span>
                             );
                           } else if (colId === "replenishment_qty") {
@@ -838,8 +813,6 @@ export default function ReplenishmentV2() {
                                 {cartons} {cartons !== 1 ? "ctns" : "ctn"}
                               </span>
                             );
-                          } else if (colId === "category") {
-                            content = <span className="text-slate-600 text-xs">{r.category || "—"}</span>;
                           } else if (colId === "hazmat_type") {
                             const h = (r.hazmat_type || "").toLowerCase();
                             const isHaz = h && !h.includes("non");

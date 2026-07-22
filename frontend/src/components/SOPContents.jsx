@@ -36,39 +36,42 @@ export function ReplenishmentSOPContent() {
 
       <Section title="Top controls">
         <ul className="list-disc pl-5 space-y-0.5 text-xs">
-          <li><b>Sales Window (From → To)</b> — recent weeks used to compute weekly sales. Default 12 weeks · maximum 12.</li>
-          <li><b>Replen Wks</b> — weeks of stock you want at Amazon (default 8).</li>
-          <li><b>Past Week</b> — switch to a saved week (view-only).</li>
+          <li><b>Past Sales (selected weeks)</b> — recent weeks used to compute weekly sales. Default 12 weeks · maximum 12.</li>
+          <li><b>Inventory Cover</b> — weeks of stock you want at Amazon (default 8).</li>
+          <li>Filter chips (Category / Status) sit above the table — the on-table columns are hidden by default for a compact view.</li>
         </ul>
       </Section>
 
       <Section title="Columns">
         <table className="w-full text-xs border-collapse">
           <tbody>
-            <Row name="Trend"        desc="12-wk sparkline + RISING / STABLE / SURGING / COOLING label" />
-            <Row name="Avg/Wk"       desc="MAX of (Window avg) and (Last-4-week avg). 4wk pill shown when 4-wk drives it." />
-            <Row name="4wk"          desc="Last-4-week avg only (for comparison)" />
-            <Row name="Total"        desc="Units sold across the window" />
-            <Row name="AZ Inv"       desc="Stock sitting at Amazon FBA (sellable)" />
-            <Row name="Inbound"      desc="Already shipped to Amazon, not yet received" />
-            <Row name="Mother WH"    desc="AMPM warehouse stock — what you can ship" />
-            <Row name="B2B"          desc="Amazon Business B2B inventory (display only)" />
-            <Row name="Req"          desc="Target stock = Avg/Wk × Replen Wks" />
-            <Row name="Shortfall"    desc="Gap when Mother WH can't fully cover Req" />
-            <Row name="Replen Qty"   desc="Units to ship. Never exceeds Mother WH stock." />
-            <Row name="Rec Qty"      desc="Replen rounded to full Master Cartons (⚠ if carton-break)" />
-            <Row name="Cartons"      desc="Whole cartons in Rec Qty (IXD = full only, non-IXD = break allowed)" />
-            <Row name="Working"      desc="Editable cell, amber background. Auto-saves as you type." />
+            <Row name="Trend"          desc="12-wk sparkline + RISING / STABLE / SURGING / COOLING label" />
+            <Row name="Avg/Wk"         desc="MAX of (window avg, last-4-wk avg, last-2-wk avg). 4wk pill shown when 4-wk drives it." />
+            <Row name="4wk"            desc="Last-4-week avg (for comparison)" />
+            <Row name="Total sold qty" desc="Basis-aware — when Basis=window, shows total across the selected window; when Basis=2wk, shows the last-2-week total instead. So the number always matches whatever window drove Avg/Wk." />
+            <Row name="Inbound"        desc="Already shipped to Amazon, not yet received (working + shipped + receiving)" />
+            <Row name="Real AM Inv"    desc="Ledger balance available at Amazon FCs = ledger EWB + In-Transit BTW WH − reserved. This is what the math uses (not FBA / Final Inv, which are visibility-only)." />
+            <Row name="Mother WH"      desc="AMPM warehouse stock — what you can ship" />
+            <Row name="B2B"            desc="Amazon Business B2B inventory (display only)" />
+            <Row name="Req"            desc="Target stock = Avg/Wk × Inventory Cover" />
+            <Row name="Shortfall"      desc="Gap when Mother WH can't fully cover Req" />
+            <Row name="Replen Qty"     desc="Units to ship = max(0, Req − Real AM Inv available − Inbound). Never exceeds Mother WH stock." />
+            <Row name="Rec Qty"        desc="Replen rounded to full Master Cartons (⚠ if carton-break)" />
+            <Row name="Cartons"        desc="Whole cartons in Rec Qty (IXD = full only, non-IXD = break allowed)" />
+            <Row name="Working"        desc="Editable cell, amber background. Auto-saves as you type." />
           </tbody>
         </table>
+        <p className="text-[11px] text-slate-500 mt-2">
+          Columns hidden from the table (available in export CSV): <b>FBA Inv</b> · <b>Final Inv</b> · <b>Reserved</b> · <b>Category</b> · <b>Status</b>. These still flow into the calc — they just don't clutter the table.
+        </p>
       </Section>
 
       <Section title="Account rules">
         <ul className="list-disc pl-5 space-y-0.5 text-xs">
-          <li><b>Nexlev / Viomi / White Mulberry</b> → counts <b>Amazon + 1p Sales</b> only</li>
-          <li><b>Audio Array</b> → counts <b>Amazon only</b> (1p Sales excluded)</li>
-          <li>Nexlev and Viomi <b>share the same sales</b> (both tagged "Nexlev" brand)</li>
-          <li>Models in sales but missing from the master file are silently dropped</li>
+          <li><b>Nexlev / Viomi</b> → counts <b>Amazon + 1p Sales</b>. Nexlev and Viomi <b>share the same sales</b> (both tagged "Nexlev" brand in the snapshot — intentional; both accounts plan against the combined demand pool).</li>
+          <li><b>Audio Array</b> → counts <b>Amazon only</b> (1p Sales excluded).</li>
+          <li><b>White Mulberry</b> → counts <b>Amazon + 1p Sales</b> EXCEPT <b>Monitor Arm</b> SKUs, which use <b>Amazon only</b> (operator directive — 1P Monitor Arm orders don't correlate to FBA demand).</li>
+          <li>Models in sales but missing from the master file are silently dropped.</li>
         </ul>
       </Section>
 
@@ -115,8 +118,8 @@ export function FCAllocationSOPContent() {
       <Section title="Top controls">
         <ul className="list-disc pl-5 space-y-0.5 text-xs">
           <li><b>Account</b> — pick brand (Fossil uses its own assortment + cluster flow)</li>
-          <li><b>Sales Window (Range)</b> — ISO week range over the per-week FBA Sales folders</li>
-          <li><b>Replen Wks</b> — weeks of cover the planner wants at each FC</li>
+          <li><b>Past Sales (Selected week)</b> — ISO week range over the per-week FBA Sales folders</li>
+          <li><b>Inventory Cover</b> — weeks of cover the planner wants at each FC</li>
           <li><b>Channel</b> — All / Amazon.in / D2C (MCF / Non-Amazon)</li>
         </ul>
       </Section>
@@ -124,19 +127,31 @@ export function FCAllocationSOPContent() {
       <Section title="Columns (non-Fossil)">
         <table className="w-full text-xs border-collapse">
           <tbody>
-            <Row name="FC"            desc="Amazon Fulfillment Center code (BLR5, BOM4, …)" />
-            <Row name="FC SOH"        desc="Current stock at that FC" />
-            <Row name="Mother WH"     desc="AMPM warehouse balance for the SKU" />
-            <Row name="B2B Inv"       desc="B2B-AMPM stock (display only)" />
-            <Row name="Inbound"       desc="Units shipped to this FC and still in flight (statuses: WORKING / READY_TO_SHIP / SHIPPED / IN_TRANSIT / DELIVERED / CHECKED_IN). RECEIVING is excluded because those units are physically at the FC and will appear in FC SOH soon. Sky-blue pill when > 0. Auto-deducted from To Send QTY so we don't double-ship." />
-            <Row name="Avg/Wk"        desc="Weekly velocity computed per-FC over the selected window" />
-            <Row name="Target"        desc="FC SOH target = Avg/Wk × Replen Wks (governance applied)" />
-            <Row name="Required"      desc="Pre-transfer expected need" />
-            <Row name="To Send QTY"   desc="Final ship quantity from Mother WH to this FC. = max(0, shortfall after governance − inbound_to_fc). Inbound auto-deducted to prevent double-shipping." />
-            <Row name="Fill %"        desc="Fill rate of Required against capacity" />
-            <Row name="Vel Flag"      desc="STABLE / SHORT_30%+ / NO_SALES, etc." />
+            <Row name="FC"             desc="Amazon Fulfillment Center code (BLR5, BOM4, …)" />
+            <Row name="FC SOH"         desc="Current sellable stock at that FC (ledger EWB, latest date)" />
+            <Row name="Mother WH"      desc="AMPM warehouse balance for the SKU" />
+            <Row name="B2B"            desc="B2B-AMPM stock (display only)" />
+            <Row name="Inbound"        desc="Units shipped to this FC and still in flight (statuses: WORKING / READY_TO_SHIP / SHIPPED / IN_TRANSIT / DELIVERED / CHECKED_IN). RECEIVING is excluded because those units are physically at the FC and will appear in FC SOH soon. Sky-blue pill when > 0. Auto-deducted from Send Qty so we don't double-ship." />
+            <Row name="Avg/Wk"         desc="Weekly velocity per-FC = max(Sel Wk avg, last-2-wk avg). Kept at 1 decimal so Avg/Wk × Inventory Cover matches the Target column exactly." />
+            <Row name="Sel Wk"         desc="Selected-window avg per-FC (for comparison)" />
+            <Row name="2wk"            desc="Trailing 14-day per-FC avg (for comparison)" />
+            <Row name="Basis"          desc="Which of the two velocities Avg/Wk picked (window / 2wk)" />
+            <Row name="Total sold qty" desc="Units shipped from that FC across the selected window" />
+            <Row name="Target"         desc="FC SOH target = Avg/Wk × Inventory Cover" />
+            <Row name="Send Qty"       desc="Final ship quantity from Mother WH to this FC. = max(0, Target − FC SOH − Inbound). For IXD SKUs, 35% governance cap applies (Non-IXD uncapped)." />
+            <Row name="Fill %"         desc="Send Qty as % of the pre-governance requirement" />
+            <Row name="Vel Flag"       desc="OK / SHORT_30%+ / NO_SALES" />
           </tbody>
         </table>
+        <p className="text-[11px] text-slate-500 mt-2">
+          Columns hidden from the table (still in export): <b>FC BTW WH</b> · <b>Category</b> · <b>Status</b>. FC BTW WH is folded into FC SOH's underlying source (Real AM Inv includes it).
+        </p>
+      </Section>
+
+      <Section title="IXD governance (35% cap)">
+        <p className="text-xs">
+          For IXD SKUs, Send Qty is multiplied by <b>0.35</b> after computing the raw shortfall — reflects the operator's real dispatch capacity constraint. Non-IXD SKUs skip the cap entirely. The IXD flag comes from the master's <b>Hazmat Type</b> column (substring "NON IXD" ⇒ Non-IXD — this catches "NON IXD Hazmat" for reclassified hazmat SKUs like MR-03).
+        </p>
       </Section>
 
       <Section title="Fossil-specific">

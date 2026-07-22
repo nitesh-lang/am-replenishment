@@ -310,8 +310,6 @@ export default function FCAllocationV2() {
     } else {
       base.push(
         { id: "asin",     accessorKey: "asin",     header: "ASIN",     size: 105, meta: { group: "list" } },
-        { id: "category", accessorKey: "category", header: "Category", size: 100, meta: { group: "list" } },
-        { id: "listing_status", accessorKey: "listing_status", header: "Status", size: 80, meta: { group: "list" } },
       );
     }
 
@@ -320,12 +318,11 @@ export default function FCAllocationV2() {
       { id: "window_velocity",   accessorKey: "window_velocity",   header: "Sel Wk", size: 75, meta: { group: "vel", numeric: true, sortDescFirst: true } },
       { id: "last_2_velocity",   accessorKey: "last_2_velocity",   header: "2wk",    size: 65, meta: { group: "vel", numeric: true, sortDescFirst: true } },
       { id: "velocity_basis",    accessorKey: "velocity_basis",    header: "Basis",  size: 75, meta: { group: "vel" } },
-      { id: "total_units_sold",  accessorKey: "total_units_sold",  header: "Total",  size: 70, meta: { group: "vel", numeric: true, sortDescFirst: true } },
+      { id: "total_units_sold",  accessorKey: "total_units_sold",  header: "Total sold qty",  size: 105, meta: { group: "vel", numeric: true, sortDescFirst: true } },
     );
 
     base.push(
       { id: "fc_inventory",   accessorKey: "fc_inventory",   header: "FC SOH",    size: 80, meta: { group: "inv", numeric: true, sortDescFirst: true } },
-      { id: "fc_in_transit",  accessorKey: "fc_in_transit",  header: "FC BTW WH", size: 95, meta: { group: "inv", numeric: true, sortDescFirst: true } },
       { id: "ampm_inventory", accessorKey: "ampm_inventory", header: isFossil ? "Fossil SOH" : "Mother WH", size: 100, meta: { group: "inv", numeric: true, sortDescFirst: true } },
       { id: "b2b_inventory",  accessorKey: "b2b_inventory",  header: "B2B",       size: 65, meta: { group: "inv", numeric: true, sortDescFirst: true } },
       { id: "inbound_to_fc",  accessorKey: "inbound_to_fc",  header: "Inbound",   size: 85, meta: { group: "inv", numeric: true, sortDescFirst: true } },
@@ -630,7 +627,7 @@ export default function FCAllocationV2() {
             </div>
 
             <div className="col-span-2">
-              <Label>Sales Window (Range)</Label>
+              <Label>Past Sales (Selected week)</Label>
               <div className="grid grid-cols-2 gap-1.5">
                 <select
                   value={fromWeek ?? ""}
@@ -652,7 +649,7 @@ export default function FCAllocationV2() {
             </div>
 
             <div className="col-span-1">
-              <Label>Replen Wks</Label>
+              <Label>Inventory Cover</Label>
               <select value={replenishWeeks} onChange={e => setReplenishWeeks(Number(e.target.value))}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
                 {[2, 4, 6, 8, 10, 12].map(n => <option key={n}>{n}</option>)}
@@ -853,8 +850,6 @@ export default function FCAllocationV2() {
                             content = <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">{cl}</span>;
                           } else if (colId === "asin") {
                             content = <span className="font-mono text-xs text-slate-500">{r.asin || "—"}</span>;
-                          } else if (colId === "listing_status") {
-                            content = <StatusPill status={r.listing_status} />;
                           } else if (colId === "inbound_to_fc") {
                             const v = r.inbound_to_fc || 0;
                             content = v > 0
