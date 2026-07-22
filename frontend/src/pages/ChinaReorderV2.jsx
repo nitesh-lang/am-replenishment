@@ -402,7 +402,7 @@ export default function ChinaReorderV2() {
             </div>
 
             <div className="col-span-1">
-              <Label>Months</Label>
+              <Label>Inventory Cover</Label>
               <select value={selectedMonths} onChange={e => setSelectedMonths(Number(e.target.value))}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
                 {[1, 2, 3, 6, 12].map(n => <option key={n}>{n}</option>)}
@@ -410,7 +410,7 @@ export default function ChinaReorderV2() {
             </div>
 
             <div className="col-span-2">
-              <Label>Sales Window</Label>
+              <Label>Past Sales (Selected week)</Label>
               <div className="grid grid-cols-2 gap-1.5">
                 <select value={fromWeek ?? ""} onChange={e => setFromWeek(Number(e.target.value))}
                   className="px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white"

@@ -510,7 +510,7 @@ export default function CBReplenishmentV2() {
             </div>
 
             <div className="col-span-3">
-              <Label>Sales Window (Range)</Label>
+              <Label>Past Sales (Selected weeks)</Label>
               <div className="grid grid-cols-2 gap-1.5">
                 <select
                   value={fromWeek ?? ""}
@@ -532,26 +532,14 @@ export default function CBReplenishmentV2() {
             </div>
 
             <div className="col-span-1">
-              <Label>Cover Wks</Label>
+              <Label>Inventory Cover</Label>
               <select value={coverWeeks} onChange={e => setCoverWeeks(Number(e.target.value))}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
                 {[2, 4, 6, 8, 10, 12].map(n => <option key={n}>{n}</option>)}
               </select>
             </div>
 
-            <div className="col-span-2">
-              <Label>Past Week</Label>
-              <select
-                value={weekStart || ""}
-                onChange={e => setWeekStart(e.target.value || null)}
-                className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white"
-              >
-                <option value="">Current week</option>
-                {savedWeeks.map(w => <option key={w.week_start} value={w.week_start}>{w.label}</option>)}
-              </select>
-            </div>
-
-            <div className="col-span-2 flex items-center gap-2 justify-end">
+            <div className="col-span-4 flex items-center gap-2 justify-end">
               <div className="inline-flex rounded-md border border-slate-200 bg-white">
                 {["comfy", "cozy", "compact"].map(d => (
                   <button key={d} onClick={() => setDensity(d)}
