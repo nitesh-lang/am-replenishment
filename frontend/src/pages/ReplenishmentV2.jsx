@@ -373,7 +373,24 @@ export default function ReplenishmentV2() {
       const col = columns.find(c => c.id === id);
       return typeof col.header === "string" ? col.header : id;
     });
-    const lines = [headers.join(",")];
+    // Append the calc-trace column so operator can verify how Replen Qty was derived.
+    headers.push("Formula (Replen Qty)");
+
+    // Preamble — symbolic formulas at the top of the file (before the header row)
+    // so anyone opening the CSV sees the calc convention immediately.
+    const preamble = [
+      `# Replenishment export — ${account} · ${replenishWeeks}wk cover · window wk ${fromWeek}-${toWeek}`,
+      `# Formulas:`,
+      `#   Avg/Wk        = max(window avg , last-2-week avg)`,
+      `#   Req           = Avg/Wk × Inventory Cover`,
+      `#   Effective Inv = Real AM Inv (available) + Inbound`,
+      `#   Shortfall     = max(0 , Req − Effective Inv)`,
+      `#   Replen Qty    = min(Shortfall , Mother WH)   (0 if AMPM in buffer range 1..10)`,
+      `#   Total sold qty column: window total when Basis=window, else last-2-week total`,
+      `#`,
+    ];
+    const lines = [...preamble, headers.join(",")];
+
     table.getSortedRowModel().rows.forEach(({ original: r }) => {
       const cells = order.map(id => {
         let v = id === "working_value"
@@ -385,6 +402,20 @@ export default function ReplenishmentV2() {
         const s = String(v).replace(/"/g, '""');
         return /[",\n]/.test(s) ? `"${s}"` : s;
       });
+      // Build per-row calc trace with the actual numbers substituted.
+      const avg = Number(r.sales_velocity || 0);
+      const inv = Number(r.real_am_inv_available || 0);
+      const inb = Number(r.inbound_inventory   || 0);
+      const req = Number(r.required_units      || 0);
+      const eff = inv + inb;
+      const shortfall = Math.max(0, req - eff);
+      const ampm = Number(r.ampm_inventory || 0);
+      const replen = Number(r.replenishment_qty || 0);
+      const bufferNote = String(r.buffer_note || "");
+      let trace = `Req=${avg}×${replenishWeeks}=${req} · EffInv=${inv}+${inb}=${eff} · Shortfall=max(0,${req}-${eff})=${shortfall} · MotherWH=${ampm} → Replen=${replen}`;
+      if (bufferNote) trace += ` [${bufferNote}]`;
+      const traceEsc = trace.replace(/"/g, '""');
+      cells.push(/[",\n]/.test(traceEsc) ? `"${traceEsc}"` : traceEsc);
       lines.push(cells.join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -857,9 +888,12 @@ export default function ReplenishmentV2() {
                           } else if (colId === "ixd_type") {
                             content = <span className="text-slate-500 text-xs">{r.ixd_type || "—"}</span>;
                           } else {
+                            // Use cell.getValue() so columns with accessorFn (e.g. basis-aware
+                            // "Total sold qty") show the derived value, not the raw row field.
+                            const v = cell.getValue();
                             content = (
                               <span className="tabular-nums">
-                                {r[colId] ?? "—"}
+                                {v ?? r[colId] ?? "—"}
                               </span>
                             );
                           }

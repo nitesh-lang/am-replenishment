@@ -136,7 +136,7 @@ export function FCAllocationSOPContent() {
             <Row name="Sel Wk"         desc="Selected-window avg per-FC (for comparison)" />
             <Row name="2wk"            desc="Trailing 14-day per-FC avg (for comparison)" />
             <Row name="Basis"          desc="Which of the two velocities Avg/Wk picked (window / 2wk)" />
-            <Row name="Total sold qty" desc="Units shipped from that FC across the selected window" />
+            <Row name="Total sold qty" desc="Basis-aware — when Basis=window, shows total shipped from that FC across the selected window; when Basis=2wk, shows the last-14-day total instead. So the number always matches whatever window drove Avg/Wk." />
             <Row name="Target"         desc="FC SOH target = Avg/Wk × Inventory Cover" />
             <Row name="Send Qty"       desc="Final ship quantity from Mother WH to this FC. = max(0, Target − FC SOH − Inbound). For IXD SKUs, 35% governance cap applies (Non-IXD uncapped)." />
             <Row name="Fill %"         desc="Send Qty as % of the pre-governance requirement" />

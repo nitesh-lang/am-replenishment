@@ -305,10 +305,11 @@ def calculate_fc_plan(
     ).round(2)
 
     fc_velocity = fc_velocity.merge(
-        fc_velocity_2w[["sku", "FC", "last_2_velocity"]],
+        fc_velocity_2w[["sku", "FC", "last_2_velocity", "units_last_14d"]],
         on=["sku", "FC"], how="left",
     )
     fc_velocity["last_2_velocity"] = fc_velocity["last_2_velocity"].fillna(0.0)
+    fc_velocity["units_last_14d"]  = fc_velocity["units_last_14d"].fillna(0).astype(int)
 
     # --- effective velocity + basis
     fc_velocity["weekly_velocity"] = fc_velocity[
@@ -470,12 +471,12 @@ def calculate_fc_plan(
             df["model"] = "-"
         df["model"] = df["model"].fillna("-")
         final_df = df[[
-            "model", "sku", "fulfillment_center", "total_units_90d",
+            "model", "sku", "fulfillment_center", "total_units_90d", "units_last_14d",
             "window_velocity", "last_2_velocity", "velocity_basis", "weekly_velocity",
             "fc_inventory", "fc_in_transit", "required_units", "fc_shortfall",
             "coverage_weeks", "excess_inventory"
         ]].copy()
-        for col in ["total_units_90d", "window_velocity", "last_2_velocity",
+        for col in ["total_units_90d", "units_last_14d", "window_velocity", "last_2_velocity",
                     "weekly_velocity", "fc_inventory", "fc_in_transit",
                     "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory"]:
             final_df[col] = pd.to_numeric(final_df[col], errors="coerce").fillna(0)
@@ -500,6 +501,7 @@ def calculate_fc_plan(
         "sku",
         "fulfillment_center",
         "total_units_90d",
+        "units_last_14d",
         "window_velocity",
         "last_2_velocity",
         "velocity_basis",
@@ -514,6 +516,7 @@ def calculate_fc_plan(
 
     numeric_cols = [
         "total_units_90d",
+        "units_last_14d",
         "window_velocity",
         "last_2_velocity",
         "weekly_velocity",

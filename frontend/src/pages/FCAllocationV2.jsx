@@ -318,7 +318,7 @@ export default function FCAllocationV2() {
       { id: "window_velocity",   accessorKey: "window_velocity",   header: "Sel Wk", size: 75, meta: { group: "vel", numeric: true, sortDescFirst: true } },
       { id: "last_2_velocity",   accessorKey: "last_2_velocity",   header: "2wk",    size: 65, meta: { group: "vel", numeric: true, sortDescFirst: true } },
       { id: "velocity_basis",    accessorKey: "velocity_basis",    header: "Basis",  size: 75, meta: { group: "vel" } },
-      { id: "total_units_sold",  accessorKey: "total_units_sold",  header: "Total sold qty",  size: 105, meta: { group: "vel", numeric: true, sortDescFirst: true } },
+      { id: "total_units_sold",  accessorFn: r => (r.velocity_basis === "2wk" ? (r.units_last_14d || 0) : (r.total_units_sold || 0)),  header: "Total sold qty",  size: 110, meta: { group: "vel", numeric: true, sortDescFirst: true } },
     );
 
     base.push(
@@ -500,7 +500,22 @@ export default function FCAllocationV2() {
       const col = columns.find(c => c.id === id);
       return typeof col.header === "string" ? col.header : id;
     });
-    const lines = [headers.join(",")];
+    // Append per-row calc trace so operator can verify how Send Qty was derived.
+    headers.push("Formula (Send Qty)");
+
+    // Preamble — symbolic formulas at the top of the CSV.
+    const preamble = [
+      `# FC Allocation export — ${account} · ${replenishWeeks}wk cover · window wk ${fromWeek}-${toWeek} · channel ${channel}`,
+      `# Formulas:`,
+      `#   Avg/Wk       = max(Sel Wk avg , 2wk avg)      (kept at 1 decimal so Avg/Wk × Inventory Cover exactly = Target)`,
+      `#   Target       = Avg/Wk × Inventory Cover`,
+      `#   Shortfall    = max(0 , Target − FC SOH)`,
+      `#   IXD cap      = shortfall × 0.35    (Non-IXD skips the cap; substring "NON IXD" in Hazmat Type = Non-IXD)`,
+      `#   Send Qty     = max(0 , (capped) shortfall − Inbound)`,
+      `#`,
+    ];
+    const lines = [...preamble, headers.join(",")];
+
     table.getSortedRowModel().rows.forEach(({ original: r }) => {
       const cells = order.map(id => {
         let v = isFossil && (id === "send_qty" || id === "remarks")
@@ -510,6 +525,21 @@ export default function FCAllocationV2() {
         const s = String(v).replace(/"/g, '""');
         return /[",\n]/.test(s) ? `"${s}"` : s;
       });
+      // Per-row calc trace with actual numbers.
+      const avg    = Number(r.weekly_velocity   || 0);
+      const soh    = Number(r.fc_inventory      || 0);
+      const inb    = Number(r.inbound_to_fc     || 0);
+      const target = Number(r.target_cover_units|| 0);
+      const send   = Number(r.send_qty          || 0);
+      const hazType = String(r.hazmat_type || "").toUpperCase();
+      const isNonIxd = hazType.includes("NON IXD") || hazType.includes("NON-IXD") || hazType.includes("NONIXD");
+      const shortfall = Math.max(0, target - soh);
+      const capped = isNonIxd ? shortfall : shortfall * 0.35;
+      let trace = `Tgt=${avg}×${replenishWeeks}=${target} · Shortfall=max(0,${target}-${soh})=${shortfall}`;
+      if (!isNonIxd) trace += ` · IXD×0.35=${capped.toFixed(1)}`;
+      trace += ` · Send=max(0,${capped.toFixed(1)}-${inb})=${send}`;
+      const traceEsc = trace.replace(/"/g, '""');
+      cells.push(/[",\n]/.test(traceEsc) ? `"${traceEsc}"` : traceEsc);
       lines.push(cells.join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -911,9 +941,12 @@ export default function FCAllocationV2() {
                                        : "bg-emerald-50 text-emerald-700";
                             content = <span className={cn("inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded", tone)}>{f || "—"}</span>;
                           } else {
+                            // Use cell.getValue() so columns with accessorFn (e.g. basis-aware
+                            // "Total sold qty") show the derived value, not the raw row field.
+                            const v = cell.getValue();
                             content = (
                               <span className="tabular-nums">
-                                {r[colId] ?? "—"}
+                                {v ?? r[colId] ?? "—"}
                               </span>
                             );
                           }

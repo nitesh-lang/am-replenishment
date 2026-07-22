@@ -1098,6 +1098,7 @@ def calculate_final_allocation(
         "velocity_basis",
         "weekly_velocity",
         "total_units_sold",
+        "units_last_14d",
         "fc_inventory",
         "fc_in_transit",
         "transfer_in",
