@@ -58,22 +58,35 @@ ACCOUNT_SLUGS = {
     "fossil":      "fossil",
 }
 
+# CLI account → .env variable suffix (mirrors sp_inbound_pull.py). AA/WM/Fossil
+# use compact vendor-central suffixes in .env (AUDIOARRAY / WHITEMULBERRY /
+# CAMBIUMRETAIL) that don't match the underscore-separated CLI slug.
+ACCOUNT_ENV_KEY = {
+    "nexlev":      "NEXLEV",
+    "viomi":       "VIOMI",
+    "audio_array": "AUDIOARRAY",
+    "wm":          "WHITEMULBERRY",
+    "fossil":      "CAMBIUMRETAIL",
+}
+
 
 def output_path(account: str) -> Path:
     slug = ACCOUNT_SLUGS.get(account, account.lower().replace(" ", "_"))
+    if slug == "fossil":
+        return REPO_ROOT / "data" / "input" / "Fossil Replenishment" / f"fba_returns_{slug}.csv"
     return REPO_ROOT / "data" / "input" / f"fba_returns_{slug}.csv"
 
 
 def get_access_token(account: str) -> str:
-    acct = account.upper()
-    cid = os.environ.get(f"SP_LWA_CLIENT_ID_{acct}")     or os.environ.get("SP_LWA_CLIENT_ID")
-    sec = os.environ.get(f"SP_LWA_CLIENT_SECRET_{acct}") or os.environ.get("SP_LWA_CLIENT_SECRET")
-    rt  = os.environ.get(f"SP_REFRESH_TOKEN_{acct}")
+    env_key = ACCOUNT_ENV_KEY.get(account, account.upper())
+    cid = os.environ.get(f"SP_LWA_CLIENT_ID_{env_key}")     or os.environ.get("SP_LWA_CLIENT_ID")
+    sec = os.environ.get(f"SP_LWA_CLIENT_SECRET_{env_key}") or os.environ.get("SP_LWA_CLIENT_SECRET")
+    rt  = os.environ.get(f"SP_REFRESH_TOKEN_{env_key}")
     if not rt:
-        raise SystemExit(f"❌ Missing SP_REFRESH_TOKEN_{acct} in .env")
+        raise SystemExit(f"❌ Missing SP_REFRESH_TOKEN_{env_key} in .env")
     if not cid or not sec:
-        raise SystemExit(f"❌ Missing LWA creds for {acct}. Provide either "
-                         f"SP_LWA_CLIENT_ID_{acct} + SP_LWA_CLIENT_SECRET_{acct}, "
+        raise SystemExit(f"❌ Missing LWA creds for {env_key}. Provide either "
+                         f"SP_LWA_CLIENT_ID_{env_key} + SP_LWA_CLIENT_SECRET_{env_key}, "
                          f"or the shared SP_LWA_CLIENT_ID + SP_LWA_CLIENT_SECRET.")
     r = requests.post(LWA_URL, data={
         "grant_type": "refresh_token", "refresh_token": rt,
