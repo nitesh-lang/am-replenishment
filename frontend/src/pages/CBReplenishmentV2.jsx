@@ -381,6 +381,8 @@ export default function CBReplenishmentV2() {
   function exportCSV() {
     const order = columns.map(c => c.id);
     const headers = order.map(id => columns.find(c => c.id === id).header);
+    // Append a status column so operator can see EOL vs Active alongside numbers.
+    headers.push("CB Status");
     const lines = [headers.join(",")];
     table.getSortedRowModel().rows.forEach(({ original: r }) => {
       const cells = order.map(id => {
@@ -393,6 +395,8 @@ export default function CBReplenishmentV2() {
         const s = String(v).replace(/"/g, '""');
         return /[",\n]/.test(s) ? `"${s}"` : s;
       });
+      // "CB EOL" when master flagged CB=No, else "Active".
+      cells.push(r.is_eol === true ? "CB EOL" : "Active");
       lines.push(cells.join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
