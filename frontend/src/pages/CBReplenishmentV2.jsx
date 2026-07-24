@@ -197,6 +197,7 @@ export default function CBReplenishmentV2() {
       if (view === "deficiency") return (r.deficiency || 0) > 0;
       if (view === "po_req")     return (r.po_requirement || 0) > 0;
       if (view === "no_open_po") return !r.open_po || r.open_po === 0;
+      if (view === "cb_eol")     return r.is_eol === true;
       if (view === "edited") {
         return (workingValues[r.model] != null && workingValues[r.model] !== "") ||
                (remarksValues[r.model] != null && remarksValues[r.model] !== "");
@@ -224,6 +225,7 @@ export default function CBReplenishmentV2() {
     { key: "deficiency", label: "Has Deficiency", count: rows.filter(r => (r.deficiency || 0) > 0).length, accent: "bg-red-100 text-red-700" },
     { key: "po_req",     label: "Has PO Req",     count: rows.filter(r => (r.po_requirement || 0) > 0).length },
     { key: "no_open_po", label: "No Open PO",     count: rows.filter(r => !r.open_po || r.open_po === 0).length },
+    { key: "cb_eol",     label: "CB EOL",         count: rows.filter(r => r.is_eol === true).length, accent: "bg-slate-200 text-slate-700" },
     { key: "edited",     label: "Edited",         count: rows.filter(r => (workingValues[r.model] != null && workingValues[r.model] !== "") || (remarksValues[r.model] != null && remarksValues[r.model] !== "")).length },
   ], [rows, workingValues, remarksValues]);
 
@@ -631,6 +633,14 @@ export default function CBReplenishmentV2() {
                                   ? <ChevronDown  className="w-3.5 h-3.5 text-indigo-600" />
                                   : <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
                                 {r.model}
+                                {r.is_eol === true && (
+                                  <span
+                                    title="Cambium has EOL'd this SKU (CB=No in master)"
+                                    className="inline-flex ml-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-slate-200 text-slate-700 ring-1 ring-slate-300"
+                                  >
+                                    CB EOL
+                                  </span>
+                                )}
                               </span>
                             );
                           } else if (colId === "asin" || colId === "sku") {

@@ -338,6 +338,16 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             "hazmat type": "hazmat_type",
         })
 
+        # EOL flag — the "CB" column in the master carries operator's Yes/No
+        # tag per ASIN. "No" means Cambium has EOL'd it (2026-07-24 rule).
+        # Kept as an explicit bool so the frontend can badge/filter.
+        if "cb" in master_df.columns:
+            master_df["is_eol"] = (
+                master_df["cb"].astype(str).str.strip().str.lower() == "no"
+            )
+        else:
+            master_df["is_eol"] = False
+
         # Drop static china_in_transit from master — now sourced from Pipeline inventory
         if "china in transit" in master_df.columns:
             master_df = master_df.drop(columns=["china in transit"])

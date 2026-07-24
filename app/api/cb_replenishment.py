@@ -108,11 +108,16 @@ def get_cb_replenishment(
         # =========================
         # FINAL RESPONSE
         # =========================
+        # Ensure is_eol exists on the df even if the master hasn't been updated yet
+        if "is_eol" not in df.columns:
+            df["is_eol"] = False
+
         response_df = df[[
             "brand",
             "model",
             "asin",
             "sku",
+            "is_eol",
             "china_in_transit",
             "final_cb_qty",
             "ampm_inventory",
@@ -131,6 +136,7 @@ def get_cb_replenishment(
             "remarks",
             "hazmat_type"
         ]].copy()
+        response_df["is_eol"] = response_df["is_eol"].fillna(False).astype(bool)
 
         # Master column "Hazmat Type" is actually ASIN Sort Details
         response_df = response_df.rename(columns={"hazmat_type": "asin_sort_details"})
