@@ -206,22 +206,81 @@ def _read_error_doc(token: str, doc_id: str) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def _load_master_skus() -> set[str] | None:
-    """sku_master's FBA SKU column, uppercased. Returns None if not readable."""
+_ACCOUNT_MASTER = {
+    "NEXLEV":         [("replenishment_master_nexlev.xlsx", None)],
+    "VIOMI":          [("replenishment_master_viomi.xlsx",  None)],
+    "AUDIOARRAY":     [("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")],
+    "WHITEMULBERRY":  [("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")],
+    # CAMBIUMRETAIL (Fossil) deliberately uses global sku_master only — per
+    # operator directive 2026-07-27. Fossil Replenishment.xlsx has ~12 SKUs
+    # not in global; those go unfiltered on purpose, since Fossil's own
+    # master is the operator's planning list, not a broader catalog.
+}
+
+
+def _load_master_skus(account: str | None = None) -> set[str] | None:
+    """Return the union of allowed FBA SKUs for the filter.
+
+    - Always includes the global sku_master's FBA SKU column (catalog-wide).
+    - Additionally includes the account's own replenishment master when
+      `account` is given, so per-account SKUs missing from global sku_master
+      don't get silently dropped (audit 2026-07-27: ~29 orphans across all
+      accounts — 2 Nex/Vio, 13 AA, 0 WM, 12 Fossil).
+
+    Returns None if BOTH sources fail (in which case caller skips the filter).
+    """
     try:
         import pandas as pd
-        sm = pd.read_excel(REPO / "data" / "input" / "sku_master.xlsx")
-        sm.columns = sm.columns.str.strip()
-        return set(sm["FBA SKU"].astype(str).str.strip().str.upper())
     except Exception as e:
-        print(f"  ! sku_master load failed ({e}); skipping master-SKU filter")
+        print(f"  ! pandas unavailable ({e}); skipping master-SKU filter")
         return None
 
+    skus: set[str] = set()
 
-def tsv_to_csv(raw: bytes, out_path: Path, filter_master_skus: bool = True) -> tuple[int, int]:
+    # Global sku_master
+    try:
+        sm = pd.read_excel(REPO / "data" / "input" / "sku_master.xlsx")
+        sm.columns = sm.columns.str.strip()
+        col = "FBA SKU" if "FBA SKU" in sm.columns else next(
+            (c for c in sm.columns if str(c).strip().upper() in ("SKU", "MERCHANT SKU")), None
+        )
+        if col:
+            skus |= set(sm[col].astype(str).str.strip().str.upper())
+    except Exception as e:
+        print(f"  ! sku_master load failed ({e}); trying per-account master only")
+
+    # Per-account replenishment master
+    if account and account.upper() in _ACCOUNT_MASTER:
+        for fname, sheet in _ACCOUNT_MASTER[account.upper()]:
+            path = REPO / "data" / "input" / fname
+            try:
+                own = pd.read_excel(path, sheet_name=sheet) if sheet else pd.read_excel(path)
+                own.columns = own.columns.str.strip()
+                col = next(
+                    (c for c in own.columns if str(c).strip().upper() in ("SKU", "FBA SKU", "MERCHANT SKU")),
+                    None,
+                )
+                if col:
+                    own_skus = set(own[col].astype(str).str.strip().str.upper())
+                    own_skus.discard("NAN"); own_skus.discard("")
+                    added = own_skus - skus
+                    skus |= own_skus
+                    if added:
+                        print(f"  + {len(added)} extra SKU(s) from {fname} ({account}) not in global sku_master")
+            except Exception as e:
+                print(f"  ! {account} master {fname} load failed ({e})")
+
+    if not skus:
+        print("  ! no master SKUs loaded from either source; skipping master-SKU filter")
+        return None
+    return skus
+
+
+def tsv_to_csv(raw: bytes, out_path: Path, filter_master_skus: bool = True,
+               account: str | None = None) -> tuple[int, int]:
     """Report is TSV; write to CSV.
     When filter_master_skus=True, keep only rows whose Merchant SKU is in
-    sku_master.xlsx — matches the "master SKUs only" convention.
+    the master SKU set (global sku_master ∪ per-account replenishment master).
     Returns (kept_rows, dropped_rows)."""
     import csv
     text = raw.decode("utf-8-sig", errors="replace")
@@ -242,7 +301,7 @@ def tsv_to_csv(raw: bytes, out_path: Path, filter_master_skus: bool = True) -> t
 
     kept, dropped = body, []
     if filter_master_skus:
-        master_skus = _load_master_skus()
+        master_skus = _load_master_skus(account)
         if master_skus is not None:
             # After the rename, the SKU column is "Merchant SKU"
             sku_idx = next(
@@ -273,7 +332,7 @@ def run_account(acct: str, start: date, end: date, week: int,
     print(f"\n=== {acct}  {start} -> {end}  → Week {week}/{fname} ===")
     tok = get_access_token(acct)
     raw = pull_all_orders(tok, start, end)
-    kept, dropped = tsv_to_csv(raw, out_path, filter_master_skus=filter_master)
+    kept, dropped = tsv_to_csv(raw, out_path, filter_master_skus=filter_master, account=acct)
     tag = f" (dropped {dropped} non-master SKU rows)" if dropped else ""
     print(f"  wrote {kept} rows{tag} -> {out_path.relative_to(REPO)}")
 
