@@ -418,23 +418,30 @@ def calculate_fc_plan(
     # =================================================
     # FC SHORTFALL
     # =================================================
+    # Effective stock at each FC = Ending Warehouse Balance
+    #                            + In Transit Between Warehouses (arriving at this FC)
+    # The transship column represents units already dispatched by Amazon toward this
+    # FC — they'll land shortly, so they cover part of this FC's requirement even
+    # though they aren't yet in Ending Balance. Amazon's getInventorySummaries does
+    # not expose this per-FC (only ledger does), so we must add it here.
+    df["fc_effective_stock"] = df["fc_inventory"] + df["fc_in_transit"]
 
     df["fc_shortfall"] = (
-        df["required_units"] - df["fc_inventory"]
+        df["required_units"] - df["fc_effective_stock"]
     ).clip(lower=0).round(2)
 
     # =================================================
     # ADDITIONAL EXPLANATION METRICS (FOR UI)
     # =================================================
 
-    # Coverage weeks at FC
+    # Coverage weeks at FC — count in-transit toward cover
     df["coverage_weeks"] = (
-        df["fc_inventory"] / df["weekly_velocity"].replace(0, 1)
+        df["fc_effective_stock"] / df["weekly_velocity"].replace(0, 1)
     ).round(2)
 
-    # Excess inventory
+    # Excess inventory — count in-transit toward excess
     df["excess_inventory"] = (
-        df["fc_inventory"] - df["required_units"]
+        df["fc_effective_stock"] - df["required_units"]
     ).clip(lower=0).round(2)
 
     # =================================================

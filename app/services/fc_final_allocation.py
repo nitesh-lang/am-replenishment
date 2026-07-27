@@ -150,8 +150,20 @@ def calculate_final_allocation(
    
     df_plan["total_units_sold"] = df_plan["total_units_90d"]
 
+    # Effective stock at each FC after transfers:
+    #   Ending Warehouse Balance
+    # + In Transit Between Warehouses (arriving at this FC per ledger)
+    # + transfer_in (tool's own recommended FC→FC transfers)
+    #
+    # fc_in_transit comes from the ledger and represents Amazon-side transfers
+    # already in flight toward this FC. Ignoring it caused the tool to over-
+    # recommend send_qty (e.g. DEL5 fc_inv=0 but 50 units en route → tool used
+    # to ship 50 more; correct answer is 0).
+    df_plan["fc_in_transit"] = pd.to_numeric(
+        df_plan.get("fc_in_transit", 0), errors="coerce"
+    ).fillna(0)
     df_plan["post_transfer_stock"] = (
-        df_plan["fc_inventory"] + df_plan["transfer_in"]
+        df_plan["fc_inventory"] + df_plan["fc_in_transit"] + df_plan["transfer_in"]
     )
     
 
@@ -224,7 +236,7 @@ def calculate_final_allocation(
         df_plan["listing_status"] = "-"
         df_plan["fill_pct"]       = 100.0        # no governance reduction
         df_plan["velocity_flag"]  = "OK"         # no SHORT flagging for Fossil
-        df_plan["allocation_logic"] = "send_qty = max(0, weekly_velocity * replenish_weeks - (fc_inventory + transfer_in))"
+        df_plan["allocation_logic"] = "send_qty = max(0, weekly_velocity * replenish_weeks - (fc_inventory + fc_in_transit + transfer_in))"
         df_plan["coverage_gap_units"] = df_plan["adjusted_shortfall"]
 
         # ==========================================================
@@ -731,7 +743,7 @@ def calculate_final_allocation(
 
     df_plan["allocation_logic"] = (
         "send_qty = max(0, weekly_velocity * replenish_weeks "
-        "- (fc_inventory + transfer_in))"
+        "- (fc_inventory + fc_in_transit + transfer_in))"
     )
 
     df_plan["coverage_gap_units"] = (

@@ -507,11 +507,12 @@ export default function FCAllocationV2() {
     const preamble = [
       `# FC Allocation export — ${account} · ${replenishWeeks}wk cover · window wk ${fromWeek}-${toWeek} · channel ${channel}`,
       `# Formulas:`,
-      `#   Avg/Wk       = max(Sel Wk avg , 2wk avg)      (kept at 1 decimal so Avg/Wk × Inventory Cover exactly = Target)`,
-      `#   Target       = Avg/Wk × Inventory Cover`,
-      `#   Shortfall    = max(0 , Target − FC SOH)`,
-      `#   IXD cap      = shortfall × 0.35    (Non-IXD skips the cap; substring "NON IXD" in Hazmat Type = Non-IXD)`,
-      `#   Send Qty     = max(0 , (capped) shortfall − Inbound)`,
+      `#   Avg/Wk         = max(Sel Wk avg , 2wk avg)  (kept at 1 decimal so Avg/Wk × Inventory Cover exactly = Target)`,
+      `#   Target         = Avg/Wk × Inventory Cover`,
+      `#   Effective SOH  = FC SOH + FC BTW WH  (ledger "In Transit Between Warehouses" — units arriving at this FC)`,
+      `#   Shortfall      = max(0 , Target − Effective SOH)`,
+      `#   IXD cap        = shortfall × 0.35    (Non-IXD skips the cap; substring "NON IXD" in Hazmat Type = Non-IXD)`,
+      `#   Send Qty       = max(0 , (capped) shortfall − Inbound)`,
       `#`,
     ];
     const lines = [...preamble, headers.join(",")];
@@ -528,14 +529,16 @@ export default function FCAllocationV2() {
       // Per-row calc trace with actual numbers.
       const avg    = Number(r.weekly_velocity   || 0);
       const soh    = Number(r.fc_inventory      || 0);
+      const btwWH  = Number(r.fc_in_transit     || 0);
       const inb    = Number(r.inbound_to_fc     || 0);
       const target = Number(r.target_cover_units|| 0);
       const send   = Number(r.send_qty          || 0);
       const hazType = String(r.hazmat_type || "").toUpperCase();
       const isNonIxd = hazType.includes("NON IXD") || hazType.includes("NON-IXD") || hazType.includes("NONIXD");
-      const shortfall = Math.max(0, target - soh);
+      const effSoh = soh + btwWH;
+      const shortfall = Math.max(0, target - effSoh);
       const capped = isNonIxd ? shortfall : shortfall * 0.35;
-      let trace = `Tgt=${avg}×${replenishWeeks}=${target} · Shortfall=max(0,${target}-${soh})=${shortfall}`;
+      let trace = `Tgt=${avg}×${replenishWeeks}=${target} · EffSOH=${soh}+${btwWH}=${effSoh} · Shortfall=max(0,${target}-${effSoh})=${shortfall}`;
       if (!isNonIxd) trace += ` · IXD×0.35=${capped.toFixed(1)}`;
       trace += ` · Send=max(0,${capped.toFixed(1)}-${inb})=${send}`;
       const traceEsc = trace.replace(/"/g, '""');
