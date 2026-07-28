@@ -5,6 +5,56 @@ from app.services.file_cache import get
 DATA_PATH = Path("data/input/Fossil Replenishment")
 
 # =============================================
+# STOCKOUT RECOVERY DETECTION
+# =============================================
+# SKUs that hit Fossil SOH = 0 for >= this many past weeks in the
+# fossil_soh_history.csv AND currently have SOH > 0 get auto-promoted to
+# 12-week cover with a Remarks note. Rationale: their reported weekly
+# sales are stockout-suppressed, so the matrix-based cover would under-
+# order. Detected dynamically from history — no manual maintenance.
+STOCKOUT_ZERO_WEEK_THRESHOLD = 3
+
+
+def _detect_stockout_recovery() -> dict[str, dict]:
+    """Return per-SKU dict of stockout-recovery signals from history CSV.
+
+    Only returns SKUs meeting:
+      - >= STOCKOUT_ZERO_WEEK_THRESHOLD zero-SOH weeks in past snapshots
+      - Current SOH (latest snapshot) > 0 (supply is back)
+
+    Value dict: {zero_weeks, peak_soh, current_soh}
+    """
+    hist_path = DATA_PATH / "fossil_soh_history.csv"
+    if not hist_path.exists():
+        return {}
+    try:
+        h = pd.read_csv(hist_path)
+    except Exception:
+        return {}
+    if h.empty or "SKU" not in h.columns or "Fossil SOH" not in h.columns:
+        return {}
+    h["Fossil SOH"] = pd.to_numeric(h["Fossil SOH"], errors="coerce").fillna(0).astype(int)
+    latest_date = h["snapshot_date"].max()
+    current = h[h["snapshot_date"] == latest_date].set_index("SKU")["Fossil SOH"]
+    past = h[h["snapshot_date"] != latest_date]
+    zero_wks = past.groupby("SKU")["Fossil SOH"].apply(lambda s: int((s == 0).sum()))
+    peak = h.groupby("SKU")["Fossil SOH"].max()
+
+    out: dict[str, dict] = {}
+    for sku, zw in zero_wks.items():
+        if zw < STOCKOUT_ZERO_WEEK_THRESHOLD:
+            continue
+        cs = int(current.get(sku, 0))
+        if cs <= 0:
+            continue
+        out[sku] = {
+            "zero_weeks":  int(zw),
+            "peak_soh":    int(peak.get(sku, 0)),
+            "current_soh": cs,
+        }
+    return out
+
+# =============================================
 # WEEKS OF COVER MATRIX
 # Brand x Assortment Type (FP / Discount / VD)
 # =============================================
@@ -211,6 +261,17 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     }
     master_df.loc[master_df["SKU"].isin(CORE_SKUS), "Weeks of Cover"] = 12
 
+    # Stockout-recovery auto-promotion — SKUs that hit SOH=0 in prior
+    # weeks (their reported sales are suppressed) but supply is back now
+    # get boosted to 12-week cover. Detected dynamically from
+    # fossil_soh_history.csv. Also captures the "old cover" so the
+    # Remarks column can explain the elevation for the operator.
+    stockout_signals = _detect_stockout_recovery()
+    master_df["_prev_cover"] = master_df["Weeks of Cover"].astype(int)
+    if stockout_signals:
+        so_skus = list(stockout_signals.keys())
+        master_df.loc[master_df["SKU"].isin(so_skus), "Weeks of Cover"] = 12
+
     # =====================
     # REQUIRED INVENTORY
     # For FP/Discount, use the higher of 12-week avg vs last-4-week avg so
@@ -240,8 +301,36 @@ def load_fossil_replenishment(from_week: int = None, to_week: int = None, cover_
     # Cap at Fossil SOH — can't send more than what Fossil actually has
     master_df["Replenishment Qty"] = master_df[["Replenishment Qty", "Fossil SOH"]].min(axis=1)
 
+    # =====================
+    # REMARKS (stockout recovery elevation)
+    # For any SKU auto-promoted via stockout-recovery, show operator:
+    #   how many zero-SOH weeks were detected, peak SOH seen, cover
+    #   boosted from Xwk to 12wk, and the additional Required Inventory
+    #   that boost added over the matrix cover.
+    # =====================
+    master_df["Remarks"] = ""
+    if stockout_signals:
+        eff_now = effective_sales  # already computed above
+        for sku, sig in stockout_signals.items():
+            mask = master_df["SKU"] == sku
+            if not mask.any():
+                continue
+            idx = master_df.index[mask][0]
+            prev_cov = int(master_df.at[idx, "_prev_cover"])
+            if prev_cov >= 12:
+                continue  # already at 12wk via CORE_SKUS — no elevation to report
+            eff = float(eff_now.iloc[idx] if hasattr(eff_now, 'iloc') else eff_now[idx])
+            uplift = int(round(eff * (12 - prev_cov)))
+            master_df.at[idx, "Remarks"] = (
+                f"Stockout recovery: {sig['zero_weeks']}wk zero-SOH history "
+                f"(peak SOH {sig['peak_soh']}, current {sig['current_soh']}); "
+                f"cover boosted {prev_cov}→12wk (+{uplift} units)"
+            )
+
+    master_df = master_df.drop(columns=["_prev_cover"], errors="ignore")
+
     # Preserve string columns before blanket fillna(0)
-    str_cols = ["SKU", "ASIN", "Item No", "Brand", "Assortment Type", "Fossil Assortment", "Category"]
+    str_cols = ["SKU", "ASIN", "Item No", "Brand", "Assortment Type", "Fossil Assortment", "Category", "Remarks"]
     for col in str_cols:
         if col in master_df.columns:
             master_df[col] = master_df[col].fillna("").astype(str).str.strip()
