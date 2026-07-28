@@ -157,6 +157,7 @@ export default function FossilReplenishmentV2() {
     { id: "Fossil SOH",                      accessorKey: "Fossil SOH",                     header: "Fossil SOH", size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "Required Inventory",              accessorKey: "Required Inventory",             header: "Required",   size: 95,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "Replenishment Qty",               accessorKey: "Replenishment Qty",              header: "Replen Qty", size: 100, meta: { group: "plan", numeric: true, sortDescFirst: true } },
+    { id: "Remarks",                         accessorKey: "Remarks",                        header: "Remarks",    size: 360, meta: { group: "plan" } },
   ], []);
 
   const table = useReactTable({
