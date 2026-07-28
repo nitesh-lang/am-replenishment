@@ -402,7 +402,10 @@ def calculate_replenishment(
             # Exclude other brands — keep only Nexlev (shared by both accounts)
             sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "Nexlev"]
         elif account.upper() == "AUDIO ARRAY":
-            sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "Audio Array"]
+            # Tonor rows added to the AA master (2026-07-28) share the same
+            # Amazon Seller account, so their weekly_sales_snapshot brand is
+            # "Tonor". Include both so Tonor SKUs get proper velocity.
+            sales_n = sales_n[sales_n["brand"].astype(str).str.strip().isin(["Audio Array", "Tonor"])]
         elif account.upper() == "WHITE MULBERRY":
             sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "White Mulberry"]
 
@@ -490,7 +493,7 @@ def calculate_replenishment(
         if account.upper() in ("NEXLEV", "VIOMI"):
             sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "Nexlev"]
         elif account.upper() == "AUDIO ARRAY":
-            sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "Audio Array"]
+            sales_4 = sales_4[sales_4["brand"].astype(str).str.strip().isin(["Audio Array", "Tonor"])]
         elif account.upper() == "WHITE MULBERRY":
             sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "White Mulberry"]
     if account.upper() == "AUDIO ARRAY":
@@ -552,7 +555,7 @@ def calculate_replenishment(
         if account.upper() in ("NEXLEV", "VIOMI"):
             sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "Nexlev"]
         elif account.upper() == "AUDIO ARRAY":
-            sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "Audio Array"]
+            sales_2 = sales_2[sales_2["brand"].astype(str).str.strip().isin(["Audio Array", "Tonor"])]
         elif account.upper() == "WHITE MULBERRY":
             sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "White Mulberry"]
     if account.upper() == "AUDIO ARRAY":
