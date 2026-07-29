@@ -756,12 +756,24 @@ def calculate_final_allocation(
 
     if account.lower() == "white mulberry":
         ampm_file = "data/input/Inventory_snapshot_WM.xlsx"
+        _ampm_extra = None
     elif account.lower() == "audio array":
         ampm_file = "data/input/Inventory_snapshot_audio_array.xlsx"
+        # Tonor SKUs (added to AA master 2026-07-28) have their AMPM /
+        # B2B rows in a separate snapshot file. Union both so lookups
+        # find Tonor rows too.
+        _ampm_extra = "Inventory_snapshot_tonor.xlsx"
     else:
         ampm_file = "data/input/inventory_snapshot_nexlev.xlsx"
+        _ampm_extra = None
 
     ampm_df = get(ampm_file.replace("data/input/", ""))
+    if _ampm_extra is not None:
+        try:
+            _extra = get(_ampm_extra)
+            ampm_df = pd.concat([ampm_df, _extra], ignore_index=True)
+        except Exception as e:
+            print(f"⚠️ AMPM extra file {_ampm_extra} skipped: {e}")
 
     ampm_df.columns = ampm_df.columns.str.lower().str.strip()
 
@@ -811,6 +823,11 @@ def calculate_final_allocation(
     # Same ASIN→SKU→Model cascade as AMPM, filtered to Channel == "B2B - AMPM".
     # =========================
     b2b_raw = get(ampm_file.replace("data/input/", ""))
+    if _ampm_extra is not None:
+        try:
+            b2b_raw = pd.concat([b2b_raw, get(_ampm_extra)], ignore_index=True)
+        except Exception:
+            pass
     b2b_raw = b2b_raw.copy()
     b2b_raw.columns = b2b_raw.columns.str.lower().str.strip()
     b2b_df = b2b_raw[b2b_raw["channel"].str.lower() == "b2b - ampm"].copy()

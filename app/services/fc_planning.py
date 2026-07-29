@@ -27,8 +27,13 @@ ACCOUNT_FILES = {
         "ledger":      "inventory_ledger_WM.csv",
     },
     "audio array": {
-        "fba_aliases": ["audio array"],
-        "ledger":      "inventory_ledger_Audio Array.csv",
+        # Tonor SKUs (added to AA master 2026-07-28) ship through the
+        # Viomi Amazon Seller account, so their FBA shipments land in
+        # Viomi.csv and their ledger rows in inventory_ledger_viomi.csv.
+        # Union both — master-join by SKU/ASIN filters to AA/Tonor only,
+        # Viomi's own SKUs won't attach because they're not in AA master.
+        "fba_aliases": ["audio array", "viomi"],
+        "ledger":      ["inventory_ledger_Audio Array.csv", "inventory_ledger_viomi.csv"],
     },
     "fossil": {
         "fba_aliases": ["cr", "cambium retail"],
@@ -139,7 +144,14 @@ def load_fc_data(
         from_week=from_week,
         to_week=to_week,
     )
-    ledger    = get(files["ledger"]).copy()
+    # ledger may be a single filename or a list (for accounts that pool
+    # ledgers across multiple Seller accounts — e.g. AA + Viomi for Tonor).
+    _led = files["ledger"]
+    if isinstance(_led, str):
+        ledger = get(_led).copy()
+    else:
+        _parts = [get(f).copy() for f in _led]
+        ledger = pd.concat(_parts, ignore_index=True) if len(_parts) > 1 else _parts[0]
 
     shipments.columns = shipments.columns.str.strip()
     ledger.columns    = ledger.columns.str.strip()

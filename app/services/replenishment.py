@@ -60,7 +60,11 @@ def load_data(account: str):
     amazon_inv_map = {
         "NEXLEV":         ["inventory_amazon_nexlev.csv"],
         "VIOMI":          ["inventory_amazon_viomi.csv"],
-        "AUDIO ARRAY":    ["inventory_amazon_audio_array.csv"],
+        # AA + Viomi: Tonor SKUs ship through the Viomi Amazon Seller
+        # account, so their inventory rows are in inventory_amazon_viomi.csv.
+        # Master-join to AA sheet filters to only AA/Tonor SKUs — Viomi's
+        # own SKUs won't attach (they're in Nexlev/Viomi masters, not AA).
+        "AUDIO ARRAY":    ["inventory_amazon_audio_array.csv", "inventory_amazon_viomi.csv"],
         "WHITE MULBERRY": ["inventory_amazon_WM.csv", "inventory_amazon_viomi.csv"],
     }
     if account.upper() not in amazon_inv_map:
@@ -69,7 +73,12 @@ def load_data(account: str):
     amazon_inventory = pd.concat(_parts, ignore_index=True) if len(_parts) > 1 else _parts[0]
 
     if account.upper() == "AUDIO ARRAY":
-        inventory = get("Inventory_snapshot_audio_array.xlsx")
+        # Tonor SKUs (added to AA master 2026-07-28) have their AMPM /
+        # B2B stock in a separate snapshot file. Union both so lookups
+        # find Tonor rows too.
+        aa_inv    = get("Inventory_snapshot_audio_array.xlsx")
+        tonor_inv = get("Inventory_snapshot_tonor.xlsx")
+        inventory = pd.concat([aa_inv, tonor_inv], ignore_index=True)
 
     elif account.upper() == "WHITE MULBERRY":
         inventory = get("Inventory_snapshot_WM.xlsx")
@@ -87,7 +96,7 @@ def load_data(account: str):
     ledger_map = {
         "NEXLEV":         ["inventory_ledger_nexlev.csv"],
         "VIOMI":          ["inventory_ledger_viomi.csv"],
-        "AUDIO ARRAY":    ["inventory_ledger_Audio Array.csv"],
+        "AUDIO ARRAY":    ["inventory_ledger_Audio Array.csv", "inventory_ledger_viomi.csv"],
         "WHITE MULBERRY": ["inventory_ledger_WM.csv", "inventory_ledger_viomi.csv"],
     }
     try:
