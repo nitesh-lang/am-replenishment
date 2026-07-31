@@ -24,6 +24,7 @@ from app.api.data_freshness import router as data_freshness_router
 from app.api.master_carton import router as master_carton_router
 from app.api.auth import router as auth_router
 from app.api.usage import router as usage_router
+from app.api.internal_po import router as internal_po_router
 
 
 
@@ -191,6 +192,9 @@ app.include_router(data_freshness_router)
 app.include_router(master_carton_router)
 app.include_router(auth_router)
 app.include_router(usage_router)
+app.include_router(internal_po_router)
+# /api alias so bundle callers that use /api/ prefix don't 404
+app.include_router(internal_po_router, prefix="/api")
 
 # =====================================================
 # ROOT

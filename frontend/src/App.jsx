@@ -23,6 +23,7 @@ import FossilReplenishment from "./pages/FossilReplenishment";
 import FossilReplenishmentV2 from "./pages/FossilReplenishmentV2";
 import BlinkitReplenishment from "./pages/BlinkitReplenishment";
 import FBAInboundV2 from "./pages/FBAInboundV2";
+import PoCreationV2 from "./pages/PoCreationV2";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import UsageAnalytics from "./pages/UsageAnalytics";
@@ -78,6 +79,8 @@ function App() {
           <Route path="/fc-allocation"         element={<Gated moduleKey="fc-allocation"><FCAllocationV2 /></Gated>} />
           <Route path="/fc-allocation-v1"      element={<Gated moduleKey="fc-allocation"><FCAllocation /></Gated>} />
           <Route path="/fc-allocation-v2"      element={<Navigate to="/fc-allocation" replace />} />
+
+          <Route path="/po-creation"           element={<Gated moduleKey="fc-allocation"><PoCreationV2 /></Gated>} />
 
           <Route path="/sales-analytics"       element={<Gated moduleKey="sales-analytics"><SalesAnalytics /></Gated>} />
           <Route path="/region-sales"          element={<Gated moduleKey="region-sales"><RegionSales /></Gated>} />

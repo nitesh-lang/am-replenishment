@@ -41,6 +41,7 @@ export default function Layout({ children }) {
     { name: "Replenishment", path: "/replenishment",          moduleKey: "replenishment" },
     { name: "FBA Inbound",   path: "/fba-inbound",            moduleKey: "replenishment" },
     { name: "FC Allocation", path: "/fc-allocation",          moduleKey: "fc-allocation" },
+    { name: "PO Creation",   path: "/po-creation",            moduleKey: "fc-allocation" },
     { name: "Reorder",       path: "/china-reorder",          moduleKey: "china-reorder" },
     { name: "CB",            path: "/cb-replenishment",       moduleKey: "cb-replenishment" },
     { name: "Clicktech",     path: "/wm-replenishment",       moduleKey: "wm-replenishment" },
