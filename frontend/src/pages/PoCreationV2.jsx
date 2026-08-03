@@ -135,18 +135,11 @@ export default function PoCreationV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* helpers to read row fields by source */
+  /* Recommended qty depends on source. Same field the source tab treats as
+     the "final recommended quantity". */
   const rowRec = r => source === "FC Allocation"
     ? Number(r.send_qty || 0)
-    : Number(r.replenishment_qty || r.recommended_qty || 0);
-  const rowFC = r => source === "FC Allocation" ? r.fulfillment_center : "—";
-  const rowSOH = r => source === "FC Allocation"
-    ? (r.fc_inventory ?? 0)
-    : (r.real_am_inv_available ?? r.real_am_inv ?? 0);
-  const rowAvg = r => source === "FC Allocation"
-    ? (r.weekly_velocity ?? 0)
-    : (r.sales_velocity ?? 0);
-  const rowFill = r => source === "FC Allocation" ? r.fill_pct : null;
+    : Number(r.replenishment_qty || 0);
 
   /* derived */
   const rowsInPo = useMemo(
@@ -234,30 +227,74 @@ export default function PoCreationV2() {
     }
   }
 
-  /* Column set adapts to source. Replenishment source has no FC column. */
+  /* Full column mirrors of the Replenishment / FC Allocation tabs, with
+     3 PO-Creation-specific extras injected:
+       - "include"  (checkbox)  at position 0
+       - "sendqty"  (editable)  right after the Recommended column
+       - "delta"    (Δ vs Rec)  right after sendqty                                        */
   const cols = useMemo(() => {
-    const base = [
-      { id: "include",     header: "",              w: 40 },
-      { id: "model",       header: "Model",         w: 130 },
-      { id: "sku",         header: "SKU",           w: 100 },
-      { id: "asin",        header: "ASIN",          w: 110 },
+    if (source === "FC Allocation") {
+      return [
+        { id: "include",           header: "",                w: 40 },
+        { id: "model",             field: "model",             header: "Model",           w: 140 },
+        { id: "sku",               field: "sku",               header: "SKU",             w: 110, mono: true },
+        { id: "fulfillment_center",field: "fulfillment_center",header: "FC",              w: 80, mono: true },
+        { id: "asin",              field: "asin",              header: "ASIN",            w: 105, mono: true },
+        { id: "weekly_velocity",   field: "weekly_velocity",   header: "Avg/Wk",          w: 80, numeric: true },
+        { id: "window_velocity",   field: "window_velocity",   header: "Sel Wk",          w: 75, numeric: true },
+        { id: "last_2_velocity",   field: "last_2_velocity",   header: "2wk",             w: 65, numeric: true },
+        { id: "velocity_basis",    field: "velocity_basis",    header: "Basis",           w: 70 },
+        { id: "total_units_sold",  fn: r => (r.velocity_basis === "2wk" ? (r.units_last_14d || 0) : (r.total_units_sold || 0)),
+                                                               header: "Total sold qty", w: 110, numeric: true },
+        { id: "fc_inventory",      field: "fc_inventory",      header: "FC SOH",          w: 80, numeric: true },
+        { id: "ampm_inventory",    field: "ampm_inventory",    header: "Mother WH",       w: 100, numeric: true },
+        { id: "b2b_inventory",     field: "b2b_inventory",     header: "B2B",             w: 65, numeric: true },
+        { id: "inbound_to_fc",     field: "inbound_to_fc",     header: "Inbound",         w: 85, numeric: true },
+        { id: "target_cover_units",field: "target_cover_units",header: "Target",          w: 80, numeric: true },
+        { id: "expected_units",    field: "expected_units",    header: "Required",        w: 90, numeric: true },
+        { id: "send_qty",          field: "send_qty",          header: "Recommended",     w: 100, numeric: true, bold: true },
+        { id: "sendqty",           header: "Send Qty",         w: 110, numeric: true, editable: true },
+        { id: "delta",             header: "Δ vs Rec",         w: 90, numeric: true },
+        { id: "fill_pct",          fn: r => r.fill_pct != null ? `${Number(r.fill_pct).toFixed(0)}%` : "—",
+                                                               header: "Fill %",         w: 75, numeric: true },
+        { id: "velocity_flag",     field: "velocity_flag",     header: "Vel Flag",        w: 95 },
+        { id: "buffer_note",       field: "buffer_note",       header: "Buffer",          w: 120 },
+        { id: "master_carton",     field: "master_carton",     header: "MC",              w: 55 },
+        { id: "hazmat_type",       field: "hazmat_type",       header: "Hazmat",          w: 90 },
+      ];
+    }
+    // Replenishment source — full ReplenishmentV2 mirror
+    return [
+      { id: "include",           header: "",                w: 40 },
+      { id: "model",             field: "model",             header: "Model",           w: 130 },
+      { id: "sku",               field: "sku",               header: "SKU",             w: 95, mono: true },
+      { id: "asin",              field: "asin",              header: "ASIN",            w: 100, mono: true },
+      { id: "sales_velocity",    field: "sales_velocity",    header: "Avg/Wk",          w: 75, numeric: true },
+      { id: "window_velocity",   field: "window_velocity",   header: "Sel Wk",          w: 70, numeric: true },
+      { id: "last_2_velocity",   field: "last_2_velocity",   header: "2wk",             w: 60, numeric: true },
+      { id: "velocity_basis",    field: "velocity_basis",    header: "Basis",           w: 70 },
+      { id: "total_units_sold",  fn: r => (r.velocity_basis === "2wk" ? (r.units_last_2w || 0) : (r.total_units_sold || 0)),
+                                                             header: "Total sold qty", w: 110, numeric: true },
+      { id: "inbound_inventory", field: "inbound_inventory", header: "Inbound",         w: 75, numeric: true },
+      { id: "real_am_inv_available", field: "real_am_inv_available", header: "Real AM Inv", w: 95, numeric: true },
+      { id: "ampm_inventory",    field: "ampm_inventory",    header: "Mother WH",       w: 90, numeric: true },
+      { id: "b2b_inventory",     field: "b2b_inventory",     header: "B2B",             w: 60, numeric: true },
+      { id: "required_units",    field: "required_units",    header: "Req",             w: 65, numeric: true },
+      { id: "warehouse_shortfall", field: "warehouse_shortfall", header: "Shortfall",   w: 85, numeric: true },
+      { id: "replenishment_qty", field: "replenishment_qty", header: "Replen Qty",      w: 95, numeric: true, bold: true },
+      { id: "sendqty",           header: "Send Qty",         w: 110, numeric: true, editable: true },
+      { id: "delta",             header: "Δ vs Rec",         w: 90, numeric: true },
+      { id: "buffer_note",       field: "buffer_note",       header: "Buffer",          w: 100 },
+      { id: "oos_weeks_3m",      field: "oos_weeks_3m",      header: "OOS 3m",          w: 70, numeric: true },
+      { id: "thin_weeks_3m",     field: "thin_weeks_3m",     header: "Thin 3m",         w: 70, numeric: true },
+      { id: "lost_units_3m",     field: "lost_units_3m",     header: "Lost Est",        w: 80, numeric: true },
+      { id: "momentum_flag",     field: "momentum_flag",     header: "Momentum",        w: 95 },
+      { id: "recommended_qty",   field: "recommended_qty",   header: "Rec Qty",         w: 80, numeric: true },
+      { id: "cartons_needed",    field: "cartons_needed",    header: "Cartons",         w: 80, numeric: true },
+      { id: "ixd_type",          field: "ixd_type",          header: "IXD",             w: 65 },
+      { id: "hazmat_type",       field: "hazmat_type",       header: "Hazmat",          w: 90 },
+      { id: "master_carton",     field: "master_carton",     header: "MC",              w: 55 },
     ];
-    if (source === "FC Allocation") {
-      base.push({ id: "fc",  header: "FC",  w: 65 });
-      base.push({ id: "soh", header: "FC SOH", w: 75, numeric: true });
-    } else {
-      base.push({ id: "soh", header: "Real AM Inv", w: 100, numeric: true });
-    }
-    base.push(
-      { id: "avg",         header: "Avg/Wk",        w: 75, numeric: true },
-      { id: "recommended", header: "Recommended",   w: 100, numeric: true },
-      { id: "sendqty",     header: "Send Qty",      w: 110, numeric: true, editable: true },
-      { id: "delta",       header: "Δ vs Rec",      w: 90, numeric: true },
-    );
-    if (source === "FC Allocation") {
-      base.push({ id: "fill", header: "Fill %", w: 70, numeric: true });
-    }
-    return base;
   }, [source]);
 
   return (
@@ -394,35 +431,50 @@ export default function PoCreationV2() {
               const rec = rowRec(r);
               const num = Number(q || 0);
               const delta = num - rec;
-              const sku   = r.sku || r.SKU || "";
-              const asin  = r.asin || r.ASIN || "";
-              const model = r.model || r.Model || "";
               return (
                 <tr key={k} className={cn(!isIncluded && "opacity-40 bg-slate-50")}>
-                  <td>
-                    <input type="checkbox" checked={isIncluded} onChange={() => toggleRow(r)} />
-                  </td>
-                  <td className="font-semibold text-slate-900">{model || "—"}</td>
-                  <td className="font-mono text-xs text-slate-700">{sku}</td>
-                  <td className="font-mono text-xs text-slate-500">{asin || "—"}</td>
-                  {source === "FC Allocation" && (
-                    <td className="font-mono text-xs">{rowFC(r)}</td>
-                  )}
-                  <td className="text-right tabular-nums">{rowSOH(r)}</td>
-                  <td className="text-right tabular-nums">{rowAvg(r)}</td>
-                  <td className="text-right tabular-nums font-semibold">{rec}</td>
-                  <td className="text-right">
-                    <input type="number" min="0" value={q}
-                      onChange={e => setQty(r, e.target.value)}
-                      className="w-20 text-right px-1.5 py-1 border border-slate-200 rounded text-xs font-mono bg-amber-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
-                  </td>
-                  <td className={cn("text-right tabular-nums font-semibold",
-                    delta > 0 ? "text-emerald-700" : delta < 0 ? "text-red-700" : "text-slate-400")}>
-                    {delta > 0 ? `+${delta}` : delta}
-                  </td>
-                  {source === "FC Allocation" && (
-                    <td className="text-right tabular-nums">{rowFill(r) != null ? `${Number(rowFill(r)).toFixed(0)}%` : "—"}</td>
-                  )}
+                  {cols.map(c => {
+                    /* PO-specific columns */
+                    if (c.id === "include") {
+                      return (
+                        <td key={c.id}>
+                          <input type="checkbox" checked={isIncluded} onChange={() => toggleRow(r)} />
+                        </td>
+                      );
+                    }
+                    if (c.id === "sendqty") {
+                      return (
+                        <td key={c.id} className="text-right">
+                          <input type="number" min="0" value={q}
+                            onChange={e => setQty(r, e.target.value)}
+                            className="w-20 text-right px-1.5 py-1 border border-slate-200 rounded text-xs font-mono bg-amber-50 focus:outline-none focus:ring-2 focus:ring-indigo-500/40" />
+                        </td>
+                      );
+                    }
+                    if (c.id === "delta") {
+                      return (
+                        <td key={c.id} className={cn("text-right tabular-nums font-semibold",
+                          delta > 0 ? "text-emerald-700" : delta < 0 ? "text-red-700" : "text-slate-400")}>
+                          {delta > 0 ? `+${delta}` : delta}
+                        </td>
+                      );
+                    }
+                    /* Mirror columns from the source tab */
+                    const raw = c.fn ? c.fn(r) : r[c.field];
+                    const value = raw == null || raw === "" ? "—" : raw;
+                    return (
+                      <td key={c.id}
+                        className={cn(
+                          c.numeric ? "text-right tabular-nums" : "text-left",
+                          c.mono   && "font-mono text-xs",
+                          c.bold   && "font-semibold",
+                          !c.mono && c.id === "model" && "font-semibold text-slate-900",
+                          !c.mono && c.id === "asin" && "text-slate-500",
+                        )}>
+                        {value}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
