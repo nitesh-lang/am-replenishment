@@ -1,22 +1,43 @@
 /*
    PO Creation V2
    ==============
-   Brand Manager takes the FC Allocation send recommendations, adjusts
-   quantities, picks a Selling Account, and clicks Create Internal PO.
-   One Internal PO is generated per FC, then forwarded to OrderPilot's
-   /pos/ingest endpoint.
+   Brand Manager takes the send recommendations (from Replenishment or
+   FC Allocation), adjusts quantities, picks a Selling Account, and
+   clicks Create Internal PO. One Internal PO is generated per FC
+   (FC Allocation source) or per SKU-group (Replenishment source),
+   then forwarded to OrderPilot's /pos/ingest endpoint.
 
-   Additive to FC Allocation — does NOT touch the existing tab's calc.
+   Additive — does NOT touch the existing tabs' calc.
 */
 import React, { useEffect, useMemo, useState } from "react";
 import { Send, Save, PackagePlus, Loader2 } from "lucide-react";
 import { cn } from "../lib/cn";
-import { getFCFinal } from "../api/replenishment";
+import { getFCFinal, getReplenishment } from "../api/replenishment";
 
 const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
-const ACCOUNTS = ["NEXLEV", "VIOMI", "AUDIO ARRAY", "WHITE MULBERRY", "FOSSIL"];
+// Fallback list — used only if /selling-accounts returns empty (e.g. env
+// vars not set in the current environment). Order matches the operator's
+// convention.
+const FALLBACK_SELLING_ACCOUNTS = [
+  { id: "NEXLEV",         name: "Nexlev" },
+  { id: "VIOMI",          name: "Viomi" },
+  { id: "AUDIOARRAY",     name: "Audio Array" },
+  { id: "WHITEMULBERRY",  name: "White Mulberry" },
+  { id: "CAMBIUMRETAIL",  name: "Cambium Retail" },
+];
+
+// Maps the selling account choice to the account key each source-API expects.
+const ACCOUNT_FOR_API = {
+  NEXLEV:        "NEXLEV",
+  VIOMI:         "VIOMI",
+  AUDIOARRAY:    "AUDIO ARRAY",
+  WHITEMULBERRY: "WHITE MULBERRY",
+  CAMBIUMRETAIL: "FOSSIL",   // FC Allocation & Replenishment both use "FOSSIL" for Cambium Retail
+};
+
 const COVER_OPTIONS = [2, 4, 6, 8, 10, 12];
+const SOURCES = ["Replenishment", "FC Allocation"];
 
 function KPI({ label, value, tone = "slate" }) {
   const toneCls = {
@@ -35,89 +56,121 @@ function KPI({ label, value, tone = "slate" }) {
 }
 
 export default function PoCreationV2() {
-  /* filters — mirror FC Allocation */
-  const [account, setAccount]           = useState("NEXLEV");
+  /* filters */
   const [replenishWeeks, setReplenishWeeks] = useState(8);
   const [channel]                       = useState("All");
   const [fromWeek, setFromWeek]         = useState(null);
   const [toWeek,   setToWeek]           = useState(null);
   const [availableWeeks, setAvailableWeeks] = useState([]);
+  const [source, setSource]             = useState("Replenishment");  // NEW
 
-  /* selling account (asked at PO time, orthogonal to brand filter) */
-  const [sellingAccounts, setSellingAccounts] = useState([]);
-  const [sellingAccountId, setSellingAccountId] = useState("");
+  /* selling account (drives the grid data account too, now that
+     Brand-source is removed) */
+  const [sellingAccounts,   setSellingAccounts]   = useState(FALLBACK_SELLING_ACCOUNTS);
+  const [sellingAccountId,  setSellingAccountId]  = useState("NEXLEV");
 
   /* grid data */
   const [rows,    setRows]    = useState([]);
   const [loading, setLoading] = useState(true);
 
   /* per-row user overrides (checkbox + Send Qty edits) */
-  const [included,  setIncluded]  = useState({});     // { key: bool }
-  const [sendQty,   setSendQty]   = useState({});     // { key: number|"" }
+  const [included,  setIncluded]  = useState({});
+  const [sendQty,   setSendQty]   = useState({});
 
-  const [viewMode, setViewMode]   = useState("all");  // "all" | "in-po"
+  const [viewMode, setViewMode]   = useState("all");
 
   /* submission state */
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
 
-  const rowKey = r => `${r.sku}||${r.fulfillment_center}`;
+  /* Row key differs by source (FC Allocation is per-(SKU,FC); Replenishment
+     is per-SKU). */
+  const rowKey = r => source === "FC Allocation"
+    ? `${r.sku}||${r.fulfillment_center}`
+    : `${r.sku}`;
 
-  /* fetch grid data */
+  /* fetch grid data — refetch when source, account, cover, or week range change */
   useEffect(() => {
     setLoading(true);
-    getFCFinal(replenishWeeks, channel, account, 12, fromWeek, toWeek)
+    const account = ACCOUNT_FOR_API[sellingAccountId] || "NEXLEV";
+    const promise = source === "FC Allocation"
+      ? getFCFinal(replenishWeeks, channel, account, 12, fromWeek, toWeek)
+      : getReplenishment(12, replenishWeeks, account);
+
+    promise
       .then(json => {
         const data = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
-        setAvailableWeeks(json?.available_weeks || []);
-        // Default include = rows where send_qty > 0
+        if (json?.available_weeks) setAvailableWeeks(json.available_weeks);
         const inc = {}, sq = {};
         data.forEach(r => {
-          const k = `${r.sku}||${r.fulfillment_center}`;
-          const q = Number(r.send_qty || 0);
-          inc[k] = q > 0;
-          sq[k]  = q;
+          const k = source === "FC Allocation"
+            ? `${r.sku}||${r.fulfillment_center}`
+            : `${r.sku}`;
+          const rec = source === "FC Allocation"
+            ? Number(r.send_qty || 0)
+            : Number(r.replenishment_qty || r.recommended_qty || 0);
+          inc[k] = rec > 0;
+          sq[k]  = rec;
         });
         setIncluded(inc);
         setSendQty(sq);
         setRows(data);
       })
-      .catch(err => { console.error("FC data load failed", err); setRows([]); })
+      .catch(err => { console.error(`${source} data load failed`, err); setRows([]); })
       .finally(() => setLoading(false));
-  }, [account, replenishWeeks, channel, fromWeek, toWeek]);
+  }, [sellingAccountId, replenishWeeks, channel, fromWeek, toWeek, source]);
 
-  /* fetch selling accounts once */
+  /* fetch selling accounts once — fall back to hardcoded list if empty/error */
   useEffect(() => {
     fetch(`${BASE}/selling-accounts`)
       .then(r => r.json())
       .then(j => {
         const acs = Array.isArray(j?.data) ? j.data : [];
-        setSellingAccounts(acs);
-        if (acs.length && !sellingAccountId) setSellingAccountId(acs[0].id);
+        if (acs.length > 0) {
+          setSellingAccounts(acs);
+          if (!sellingAccountId) setSellingAccountId(acs[0].id);
+        }
       })
-      .catch(err => console.error("selling-accounts load failed", err));
+      .catch(err => console.error("selling-accounts load failed, using fallback", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* helpers to read row fields by source */
+  const rowRec = r => source === "FC Allocation"
+    ? Number(r.send_qty || 0)
+    : Number(r.replenishment_qty || r.recommended_qty || 0);
+  const rowFC = r => source === "FC Allocation" ? r.fulfillment_center : "—";
+  const rowSOH = r => source === "FC Allocation"
+    ? (r.fc_inventory ?? 0)
+    : (r.real_am_inv_available ?? r.real_am_inv ?? 0);
+  const rowAvg = r => source === "FC Allocation"
+    ? (r.weekly_velocity ?? 0)
+    : (r.sales_velocity ?? 0);
+  const rowFill = r => source === "FC Allocation" ? r.fill_pct : null;
 
   /* derived */
   const rowsInPo = useMemo(
     () => rows.filter(r => included[rowKey(r)] && Number(sendQty[rowKey(r)] || 0) > 0),
-    [rows, included, sendQty]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, included, sendQty, source]
   );
   const displayedRows = viewMode === "in-po" ? rowsInPo : rows;
 
   const kpis = useMemo(() => {
     const totalUnits = rowsInPo.reduce((a, r) => a + Number(sendQty[rowKey(r)] || 0), 0);
     const skus = new Set(rowsInPo.map(r => r.sku)).size;
-    const fcs  = new Set(rowsInPo.map(r => r.fulfillment_center)).size;
+    const fcs  = source === "FC Allocation"
+      ? new Set(rowsInPo.map(r => r.fulfillment_center)).size
+      : 1;
     let overrides = 0;
     rowsInPo.forEach(r => {
       const q = Number(sendQty[rowKey(r)] || 0);
-      const rec = Number(r.send_qty || 0);
+      const rec = rowRec(r);
       if (q !== rec) overrides++;
     });
     return { totalUnits, skus, fcs, overrides };
-  }, [rowsInPo, sendQty]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowsInPo, sendQty, source]);
 
   /* handlers */
   function toggleAll(next) {
@@ -139,15 +192,17 @@ export default function PoCreationV2() {
 
     setSubmitting(true);
     setSubmitResult(null);
-    const selling = sellingAccounts.find(a => a.id === sellingAccountId) || { id: sellingAccountId, name: sellingAccountId };
+    const selling = sellingAccounts.find(a => a.id === sellingAccountId)
+      || { id: sellingAccountId, name: sellingAccountId };
+    const account = ACCOUNT_FOR_API[sellingAccountId] || sellingAccountId;
     const lines = rowsInPo.map(r => {
       const req = Number(sendQty[rowKey(r)] || 0);
-      const rec = Number(r.send_qty || 0);
+      const rec = rowRec(r);
       return {
-        sku: r.sku,
-        asin: r.asin || "",
-        model: r.model || "",
-        ship_to_fc: r.fulfillment_center,
+        sku: r.sku || r.SKU,
+        asin: r.asin || r.ASIN || "",
+        model: r.model || r.Model || "",
+        ship_to_fc: source === "FC Allocation" ? r.fulfillment_center : "WAREHOUSE",
         recommended_qty: rec,
         quantity_requested: req,
         delta_vs_rec: req - rec,
@@ -156,7 +211,8 @@ export default function PoCreationV2() {
 
     const body = {
       selling_account: selling,
-      brand: account,   // grid data is scoped by brand/account filter
+      brand: account,
+      source,
       week_range: (fromWeek && toWeek) ? `Wk${fromWeek}-Wk${toWeek}` : `${replenishWeeks}wk cover`,
       cover: replenishWeeks,
       created_by: localStorage.getItem("bmName") || "",
@@ -178,19 +234,31 @@ export default function PoCreationV2() {
     }
   }
 
-  const cols = [
-    { id: "include",     header: "",              w: 40 },
-    { id: "model",       header: "Model",         w: 130 },
-    { id: "sku",         header: "SKU",           w: 100 },
-    { id: "asin",        header: "ASIN",          w: 110 },
-    { id: "fc",          header: "FC",            w: 65 },
-    { id: "avg",         header: "Avg/Wk",        w: 75, numeric: true },
-    { id: "soh",         header: "FC SOH",        w: 75, numeric: true },
-    { id: "recommended", header: "Recommended",   w: 100, numeric: true },
-    { id: "sendqty",     header: "Send Qty",      w: 110, numeric: true, editable: true },
-    { id: "delta",       header: "Δ vs Rec",      w: 90, numeric: true },
-    { id: "fill",        header: "Fill %",        w: 70, numeric: true },
-  ];
+  /* Column set adapts to source. Replenishment source has no FC column. */
+  const cols = useMemo(() => {
+    const base = [
+      { id: "include",     header: "",              w: 40 },
+      { id: "model",       header: "Model",         w: 130 },
+      { id: "sku",         header: "SKU",           w: 100 },
+      { id: "asin",        header: "ASIN",          w: 110 },
+    ];
+    if (source === "FC Allocation") {
+      base.push({ id: "fc",  header: "FC",  w: 65 });
+      base.push({ id: "soh", header: "FC SOH", w: 75, numeric: true });
+    } else {
+      base.push({ id: "soh", header: "Real AM Inv", w: 100, numeric: true });
+    }
+    base.push(
+      { id: "avg",         header: "Avg/Wk",        w: 75, numeric: true },
+      { id: "recommended", header: "Recommended",   w: 100, numeric: true },
+      { id: "sendqty",     header: "Send Qty",      w: 110, numeric: true, editable: true },
+      { id: "delta",       header: "Δ vs Rec",      w: 90, numeric: true },
+    );
+    if (source === "FC Allocation") {
+      base.push({ id: "fill", header: "Fill %", w: 70, numeric: true });
+    }
+    return base;
+  }, [source]);
 
   return (
     <div className="px-6 py-5 max-w-[1600px] mx-auto">
@@ -201,43 +269,54 @@ export default function PoCreationV2() {
           PO Creation
         </h1>
         <p className="text-xs text-slate-500 mt-0.5">
-          Adjust FC Allocation recommendations and dispatch Internal POs to OrderPilot. One PO per FC.
+          Adjust send recommendations and dispatch Internal POs to OrderPilot.
+          One PO per FC (FC Allocation source) or one per selection (Replenishment source).
         </p>
       </div>
 
-      {/* Selling Account + filters */}
+      {/* Filters row */}
       <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3 mb-3">
         <div className="grid grid-cols-12 gap-3 items-end">
+          {/* Selling Account */}
           <div className="col-span-3">
             <label className="block text-[11px] font-semibold text-slate-500 mb-1">Selling Account</label>
             <select value={sellingAccountId} onChange={e => setSellingAccountId(e.target.value)}
               className="w-full px-2 py-1.5 text-sm rounded-md border border-indigo-200 bg-indigo-50 font-semibold">
-              <option value="" disabled>Select account…</option>
               {sellingAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
-          <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-slate-500 mb-1">Brand (grid source)</label>
-            <select value={account} onChange={e => setAccount(e.target.value)}
-              className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
-              {ACCOUNTS.map(a => <option key={a}>{a}</option>)}
-            </select>
-          </div>
+
+          {/* Past Sales range */}
           <div className="col-span-3">
             <label className="block text-[11px] font-semibold text-slate-500 mb-1">Past Sales (Selected week)</label>
             <div className="grid grid-cols-2 gap-1.5">
               <select value={fromWeek ?? ""} onChange={e => setFromWeek(Number(e.target.value))}
                 className="px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white"
                 disabled={!availableWeeks.length}>
-                {availableWeeks.map(w => <option key={`f${w}`} value={w}>From Wk {w}</option>)}
+                {availableWeeks.length === 0
+                  ? <option value="">—</option>
+                  : availableWeeks.map(w => <option key={`f${w}`} value={w}>From Wk {w}</option>)}
               </select>
               <select value={toWeek ?? ""} onChange={e => setToWeek(Number(e.target.value))}
                 className="px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white"
                 disabled={!availableWeeks.length}>
-                {availableWeeks.map(w => <option key={`t${w}`} value={w}>To Wk {w}</option>)}
+                {availableWeeks.length === 0
+                  ? <option value="">—</option>
+                  : availableWeeks.map(w => <option key={`t${w}`} value={w}>To Wk {w}</option>)}
               </select>
             </div>
           </div>
+
+          {/* NEW: Source dropdown, no title, sits to the LEFT of Inventory Cover */}
+          <div className="col-span-2">
+            <div className="h-4 mb-1" />
+            <select value={source} onChange={e => setSource(e.target.value)}
+              className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white font-semibold">
+              {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          {/* Inventory Cover */}
           <div className="col-span-1">
             <label className="block text-[11px] font-semibold text-slate-500 mb-1">Inventory Cover</label>
             <select value={replenishWeeks} onChange={e => setReplenishWeeks(Number(e.target.value))}
@@ -245,6 +324,8 @@ export default function PoCreationV2() {
               {COVER_OPTIONS.map(n => <option key={n}>{n}</option>)}
             </select>
           </div>
+
+          {/* View toggle */}
           <div className="col-span-3 flex items-end justify-end gap-2">
             <div className="inline-flex rounded-md border border-slate-200 bg-white">
               <button onClick={() => setViewMode("all")}
@@ -262,7 +343,7 @@ export default function PoCreationV2() {
       <div className="grid grid-cols-4 gap-3 mb-3">
         <KPI label="Total units in PO" value={kpis.totalUnits.toLocaleString()} tone="indigo" />
         <KPI label="# SKUs" value={kpis.skus} />
-        <KPI label="# FCs (POs)" value={kpis.fcs} />
+        <KPI label={source === "FC Allocation" ? "# FCs (POs)" : "# POs"} value={kpis.fcs} />
         <KPI label="# Overrides" value={kpis.overrides} tone={kpis.overrides ? "amber" : "slate"} />
       </div>
 
@@ -310,20 +391,25 @@ export default function PoCreationV2() {
               const k = rowKey(r);
               const isIncluded = !!included[k];
               const q = sendQty[k] ?? "";
-              const rec = Number(r.send_qty || 0);
+              const rec = rowRec(r);
               const num = Number(q || 0);
               const delta = num - rec;
+              const sku   = r.sku || r.SKU || "";
+              const asin  = r.asin || r.ASIN || "";
+              const model = r.model || r.Model || "";
               return (
                 <tr key={k} className={cn(!isIncluded && "opacity-40 bg-slate-50")}>
                   <td>
                     <input type="checkbox" checked={isIncluded} onChange={() => toggleRow(r)} />
                   </td>
-                  <td className="font-semibold text-slate-900">{r.model || "—"}</td>
-                  <td className="font-mono text-xs text-slate-700">{r.sku}</td>
-                  <td className="font-mono text-xs text-slate-500">{r.asin || "—"}</td>
-                  <td className="font-mono text-xs">{r.fulfillment_center}</td>
-                  <td className="text-right tabular-nums">{r.weekly_velocity ?? 0}</td>
-                  <td className="text-right tabular-nums">{r.fc_inventory ?? 0}</td>
+                  <td className="font-semibold text-slate-900">{model || "—"}</td>
+                  <td className="font-mono text-xs text-slate-700">{sku}</td>
+                  <td className="font-mono text-xs text-slate-500">{asin || "—"}</td>
+                  {source === "FC Allocation" && (
+                    <td className="font-mono text-xs">{rowFC(r)}</td>
+                  )}
+                  <td className="text-right tabular-nums">{rowSOH(r)}</td>
+                  <td className="text-right tabular-nums">{rowAvg(r)}</td>
                   <td className="text-right tabular-nums font-semibold">{rec}</td>
                   <td className="text-right">
                     <input type="number" min="0" value={q}
@@ -334,7 +420,9 @@ export default function PoCreationV2() {
                     delta > 0 ? "text-emerald-700" : delta < 0 ? "text-red-700" : "text-slate-400")}>
                     {delta > 0 ? `+${delta}` : delta}
                   </td>
-                  <td className="text-right tabular-nums">{r.fill_pct != null ? `${Number(r.fill_pct).toFixed(0)}%` : "—"}</td>
+                  {source === "FC Allocation" && (
+                    <td className="text-right tabular-nums">{rowFill(r) != null ? `${Number(rowFill(r)).toFixed(0)}%` : "—"}</td>
+                  )}
                 </tr>
               );
             })}
