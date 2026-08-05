@@ -36,10 +36,21 @@ def calculate_final_allocation(
 
     if df_plan is None or df_plan.empty:
         return pd.DataFrame()
-    
+
     # ADD HERE
     if "model" not in df_plan.columns:
        df_plan["model"] = "-"
+
+    # ==========================================================
+    # MASTER-SHADOW ROWS
+    # Any Active SKU that exists in the account's replenishment
+    # master but has no SOH, no in-transit and no inbound at any
+    # FC gets skipped by ledger-driven planning. Operator wants
+    # every master SKU visible in FC Allocation (even at 0 stock).
+    # Seed one row per (missing SKU, active FC) with zero data;
+    # downstream steps handle them uniformly.
+    # ==========================================================
+    df_plan = _seed_master_shadow_rows(df_plan, account)
 
     required_cols = [
         "sku",
@@ -1234,3 +1245,136 @@ def calculate_final_allocation(
     ] = "2wk"
 
     return final_df
+
+
+# =============================================================
+# MASTER-SHADOW ROW HELPER
+# =============================================================
+def _load_account_master(account: str) -> pd.DataFrame | None:
+    """Return the account's replenishment master as a normalized df with
+    columns {sku, model, status, asin, category, ampm_inventory, master_carton}
+    where present. Returns None if no master is defined for the account."""
+    a = account.lower()
+    try:
+        if a == "nexlev":
+            m = get("replenishment_master_nexlev.xlsx")
+        elif a == "viomi":
+            m = get("replenishment_master_viomi.xlsx")
+        elif a == "audio array":
+            m = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")
+        elif a == "white mulberry":
+            m = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
+        elif a == "fossil":
+            m = get_excel_sheet("Fossil Replenishment/Fossil Replenishment.xlsx", "Sheet1")
+            m.columns = m.columns.str.strip()
+            m = m.rename(columns={"SKU": "sku", "Item No": "model", "ASIN": "asin"})
+        else:
+            return None
+    except Exception:
+        return None
+
+    m = m.copy()
+    m.columns = m.columns.str.strip()
+    m = m.rename(columns={
+        "SKU": "sku", "Model": "model", "ASIN": "asin", "Category": "category",
+        "AMPM": "ampm_inventory", "Master Carton": "master_carton",
+        "Status": "status", "Hazmat Type": "hazmat_type",
+    })
+    if "sku" not in m.columns:
+        return None
+    m["sku"] = m["sku"].astype(str).str.strip().str.upper()
+    return m
+
+
+def _account_active_fcs(account: str) -> list[str]:
+    """Return the list of FCs used by an account, taken from the ledger
+    file's latest date. Empty list if no ledger."""
+    a = account.lower()
+    ledger_path = {
+        "nexlev":         "inventory_ledger_nexlev.csv",
+        "viomi":          "inventory_ledger_viomi.csv",
+        "audio array":    "inventory_ledger_Audio Array.csv",
+        "white mulberry": "inventory_ledger_WM.csv",
+        "fossil":         "Fossil Replenishment/inventory_ledger_fossil.csv",
+    }.get(a)
+    if not ledger_path:
+        return []
+    try:
+        led = get(ledger_path)
+    except Exception:
+        return []
+    if led is None or led.empty or "Date" not in led.columns or "Location" not in led.columns:
+        return []
+    latest = led["Date"].max()
+    return sorted(led.loc[led["Date"] == latest, "Location"].dropna().unique().tolist())
+
+
+def _seed_master_shadow_rows(df_plan: pd.DataFrame, account: str) -> pd.DataFrame:
+    """For each Active master SKU missing from df_plan, add one row per
+    active FC with zero SOH/velocity. Downstream target_cover / send_qty
+    logic runs uniformly; shadow rows surface as fc_inventory=0,
+    send_qty=0 with allocation_logic='master-only'."""
+    master = _load_account_master(account)
+    if master is None or master.empty:
+        return df_plan
+
+    # Active-only when the column exists (Fossil master has no Status col;
+    # take the whole sheet in that case).
+    if "status" in master.columns:
+        active_mask = master["status"].astype(str).str.strip().str.lower() == "active"
+        master = master[active_mask]
+    if master.empty:
+        return df_plan
+
+    existing_skus = set(df_plan["sku"].astype(str).str.strip().str.upper().tolist())
+    missing = master[~master["sku"].isin(existing_skus)]
+    if missing.empty:
+        return df_plan
+
+    fcs = _account_active_fcs(account)
+    if not fcs:
+        return df_plan
+
+    # Cross-product: missing SKUs × active FCs
+    rows: list[dict] = []
+    for _, r in missing.iterrows():
+        base = {
+            "sku": r["sku"],
+            "model": r.get("model", "-"),
+            "asin": r.get("asin", ""),
+            "category": r.get("category", ""),
+            "hazmat_type": r.get("hazmat_type", ""),
+            "master_carton": r.get("master_carton", 0),
+            "ampm_inventory": r.get("ampm_inventory", 0),
+        }
+        for fc in fcs:
+            rows.append({**base, "fulfillment_center": fc})
+
+    shadow = pd.DataFrame(rows)
+
+    # Zero-fill everything else that fc_planning would have provided
+    zero_cols = [
+        "window_velocity", "last_2_velocity", "weekly_velocity",
+        "total_units_90d", "total_units_sold", "units_last_14d",
+        "fc_inventory", "fc_in_transit", "transfer_in",
+        "required_units", "fc_shortfall", "coverage_weeks", "excess_inventory",
+        "b2b_inventory",
+    ]
+    for c in zero_cols:
+        if c not in shadow.columns:
+            shadow[c] = 0
+    if "velocity_basis" not in shadow.columns:
+        shadow["velocity_basis"] = "window"
+    if "listing_status" not in shadow.columns:
+        shadow["listing_status"] = "Active"
+
+    # Align to df_plan columns before concat — extra cols will be filled
+    # downstream by the standard column-defaulting block.
+    for c in df_plan.columns:
+        if c not in shadow.columns:
+            shadow[c] = 0
+    shadow = shadow[[c for c in df_plan.columns if c in shadow.columns] +
+                    [c for c in shadow.columns if c not in df_plan.columns]]
+
+    combined = pd.concat([df_plan, shadow[df_plan.columns]], ignore_index=True)
+    return combined
