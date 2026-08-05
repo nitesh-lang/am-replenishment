@@ -144,10 +144,14 @@ def upsert_user(email: str, name: str, password: str | None, role: str, allowed_
     email = email.strip().lower()
     if role not in ("admin", "user"):
         raise ValueError("role must be 'admin' or 'user'")
-    # Validate modules
+    # Silently drop unknown modules (e.g. legacy slugs like
+    # 'china-reorder-working' that were retired but still linger in old
+    # user records). Raising here made every edit — even a password
+    # reset — fail because the frontend replays the full module list.
     invalid = [m for m in allowed_modules if m not in ALL_MODULES]
     if invalid:
-        raise ValueError(f"Unknown modules: {invalid}")
+        print(f"WARN: upsert_user dropping unknown modules for {email}: {invalid}")
+        allowed_modules = [m for m in allowed_modules if m in ALL_MODULES]
 
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
