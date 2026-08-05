@@ -469,6 +469,41 @@ def china_reorder_logic(
 
     df = pd.merge(sales_agg, inv_agg, on="model", how="outer").fillna(0)
 
+    # ============================================================
+    # MASTER-SHADOW ROWS
+    # If a Model exists in sku_master for this brand but has no sales
+    # and no inventory (0 units across every channel), it gets silently
+    # dropped from both aggregates and never appears here. Operator wants
+    # every master SKU visible even at 0. Seed missing models with zero
+    # rows; downstream target_stock / suggested_reorder math handles them.
+    # ============================================================
+    try:
+        _sm = get("sku_master.xlsx")
+        _sm.columns = _sm.columns.str.strip()
+        _sm = _sm.dropna(subset=["Model"]).copy()
+        _sm["_brand"] = _sm["Brand"].astype(str).str.strip().str.lower()
+        _sm["_model"] = _sm["Model"].astype(str).str.strip().str.upper()
+        _brand_models = set(
+            _sm.loc[_sm["_brand"] == brand_clean, "_model"].dropna().tolist()
+        )
+        _existing = set(df["model"].astype(str).str.strip().str.upper().tolist())
+        _missing = sorted(_brand_models - _existing)
+        if _missing:
+            shadow_rows = pd.DataFrame({
+                "model": _missing,
+                "last_12w_sales": 0,
+                "avg_weekly_sales": 0.0,
+                "current_inventory": 0,
+                "open_order_qty": 0,
+                "pipeline_qty": 0,
+            })
+            for c in df.columns:
+                if c not in shadow_rows.columns:
+                    shadow_rows[c] = 0
+            df = pd.concat([df, shadow_rows[df.columns]], ignore_index=True)
+    except Exception as _e:
+        print(f"⚠️  master-shadow seeding failed for {brand_clean}: {_e}")
+
     # Merge category columns
     if not category_map.empty and len(category_map.columns) > 1:
         df = df.merge(category_map, on="model", how="left")
