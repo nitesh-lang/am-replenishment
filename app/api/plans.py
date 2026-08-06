@@ -15,9 +15,19 @@ Auth: Authorization: Bearer <token>. Admins bypass module checks.
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 
 from app.services import plans_service, auth_users
 from app.services.auth_tokens import require_module
+
+
+def _ok(payload: dict, status_code: int = 200) -> JSONResponse:
+    """JSONResponse wrapper that handles datetime + other non-JSON-native
+    types via FastAPI's jsonable_encoder. Every list/get/mutate endpoint
+    that returns DB rows must route through this — plan_batches has
+    timestamp columns (proposed_at/approved_at/created_at/updated_at)
+    that the raw json module can't serialize."""
+    return JSONResponse(jsonable_encoder(payload), status_code=status_code)
 
 
 router = APIRouter(tags=["plans"])
@@ -52,14 +62,14 @@ def _editor_or_approver(request: Request) -> str:
 def list_plans(request: Request, account: str | None = None, status: str | None = None, limit: int = 50):
     _either(request)
     rows = plans_service.list_batches(account=account, status=status, limit=limit)
-    return JSONResponse({"status": "ok", "batches": rows})
+    return _ok({"status": "ok", "batches": rows})
 
 
 @router.get("/plans/{batch_id}")
 def get_plan(batch_id: str, request: Request, include_deleted: bool = True):
     _either(request)
     try:
-        return JSONResponse({"status": "ok", "batch": plans_service.get_batch(batch_id, include_deleted=include_deleted)})
+        return _ok({"status": "ok", "batch": plans_service.get_batch(batch_id, include_deleted=include_deleted)})
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -87,7 +97,7 @@ async def propose(request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return JSONResponse({"status": "ok", "batch_id": batch_id})
+    return _ok({"status": "ok", "batch_id": batch_id})
 
 
 @router.post("/plans/save-draft")
@@ -107,7 +117,7 @@ async def save_draft(request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return JSONResponse({"status": "ok", "batch_id": batch_id})
+    return _ok({"status": "ok", "batch_id": batch_id})
 
 
 @router.post("/plans/{batch_id}/send")
@@ -119,7 +129,7 @@ def send(batch_id: str, request: Request):
         out = plans_service.send_to_approver(batch_id, actor, actor_is_admin=is_admin)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return JSONResponse({"status": "ok", "batch": out})
+    return _ok({"status": "ok", "batch": out})
 
 
 # ============================================================
@@ -141,7 +151,7 @@ async def patch_line(batch_id: str, line_id: int, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return JSONResponse({"status": "ok", "line": out}, status_code=200)
+    return _ok({"status": "ok", "line": out})
 
 
 @router.post("/plans/{batch_id}/lines")
@@ -164,7 +174,7 @@ async def post_line(batch_id: str, request: Request):
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return JSONResponse({"status": "ok", "line": out}, status_code=201)
+    return _ok({"status": "ok", "line": out}, status_code=201)
 
 
 @router.delete("/plans/{batch_id}/lines/{line_id}")
@@ -176,7 +186,7 @@ def del_line(batch_id: str, line_id: int, request: Request):
                                         actor=actor, actor_is_admin=is_admin)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return JSONResponse({"status": "ok", "line": out})
+    return _ok({"status": "ok", "line": out})
 
 
 # ============================================================
@@ -190,7 +200,7 @@ def approve(batch_id: str, request: Request):
         out = plans_service.approve_plan(batch_id=batch_id, actor=actor, actor_is_admin=is_admin)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return JSONResponse({"status": "ok", "batch": out})
+    return _ok({"status": "ok", "batch": out})
 
 
 @router.post("/plans/{batch_id}/push")
@@ -203,4 +213,4 @@ def push(batch_id: str, request: Request):
     # STUB returns 202 Accepted with the not-implemented status so callers
     # can distinguish "we accepted the call but haven't wired the bridge"
     # from a real success/failure.
-    return JSONResponse(out, status_code=202)
+    return _ok(out, status_code=202)
