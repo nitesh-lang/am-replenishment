@@ -29,8 +29,9 @@ export default function PlansApproval() {
   const [batch, setBatch] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  // Editor defaults to seeing their own drafts; approver defaults to proposed.
-  const [statusFilter, setStatusFilter] = useState(isEditor && !isApprover ? "draft" : "proposed");
+  // Default: show ALL so editors see both their drafts and their already-sent
+  // proposals (and approvers see everything they can act on).
+  const [statusFilter, setStatusFilter] = useState("");
 
   async function refreshList() {
     setErr("");
@@ -111,28 +112,40 @@ export default function PlansApproval() {
                 </div>
               </div>
             )}
-            {batches.map((b) => (
-              <div
-                key={b.batch_id}
-                onClick={() => setSelectedId(b.batch_id)}
-                style={{
-                  padding: 10, borderBottom: "1px solid #f3f4f6", cursor: "pointer",
-                  background: selectedId === b.batch_id ? "#eff6ff" : "white",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <strong style={{ fontSize: 13 }}>{b.account}</strong>
-                  <span style={{
-                    padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                    background: STATUS_COLORS[b.status] || "#9ca3af", color: "white",
-                  }}>{b.status}</span>
+            {batches.map((b) => {
+              const mine = (b.proposed_by || "").toLowerCase() === (user?.email || "").toLowerCase();
+              return (
+                <div
+                  key={b.batch_id}
+                  onClick={() => setSelectedId(b.batch_id)}
+                  style={{
+                    padding: 10, borderBottom: "1px solid #f3f4f6", cursor: "pointer",
+                    background: selectedId === b.batch_id ? "#eff6ff" : "white",
+                    borderLeft: mine ? "3px solid #8b5cf6" : "3px solid transparent",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                    <strong style={{ fontSize: 13 }}>
+                      {b.account}
+                      {mine && <span style={{ marginLeft: 6, fontSize: 10, color: "#8b5cf6", fontWeight: 600 }}>MINE</span>}
+                    </strong>
+                    <span style={{
+                      padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                      background: STATUS_COLORS[b.status] || "#9ca3af", color: "white",
+                    }}>{b.status}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
+                    {b.proposed_by} · {fmt(b.proposed_at)}
+                  </div>
+                  {b.source_module && (
+                    <div style={{ fontSize: 10, color: "#6b7280", marginTop: 2 }}>
+                      from <b>{b.source_module}</b> → {b.approver_email || "any approver"}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{b.batch_id}</div>
                 </div>
-                <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
-                  {b.proposed_by} · {fmt(b.proposed_at)}
-                </div>
-                <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{b.batch_id}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
