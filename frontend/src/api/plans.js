@@ -88,6 +88,7 @@ export function approvePlan(batchId) {
   return req("POST", `${P}/${encodeURIComponent(batchId)}/approve`);
 }
 
-export function pushPlan(batchId) {
-  return req("POST", `${P}/${encodeURIComponent(batchId)}/push`);
+export function pushPlan(batchId, { dryRun = false } = {}) {
+  const qs = dryRun ? "?dry_run=true" : "";
+  return req("POST", `${P}/${encodeURIComponent(batchId)}/push${qs}`);
 }

@@ -220,13 +220,22 @@ def approve(batch_id: str, request: Request):
 
 
 @router.post("/plans/{batch_id}/push")
-def push(batch_id: str, request: Request):
+def push(batch_id: str, request: Request, dry_run: bool = False):
+    """Push an approved batch to OrderPilot. Query param dry_run=true
+    previews the shipment_ids without persisting (batch stays approved).
+    Real push flips status → pushed and stores orderpilot_shipment_id
+    per line. Retry-safe (OrderPilot is idempotent on batch_id)."""
     actor = _approver(request)
     try:
-        out = plans_service.push_plan(batch_id=batch_id, actor=actor)
+        out = plans_service.push_plan(batch_id=batch_id, actor=actor, dry_run=dry_run)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    # STUB returns 202 Accepted with the not-implemented status so callers
-    # can distinguish "we accepted the call but haven't wired the bridge"
-    # from a real success/failure.
-    return _ok(out, status_code=202)
+    # Status codes:
+    #   200 = pushed successfully (real or dry-run)
+    #   202 = fallback stub (env vars missing)
+    #   500 = network/server error surfaced to caller with details
+    if out.get("status") == "not_implemented":
+        return _ok(out, status_code=202)
+    if out.get("status") == "error":
+        return _ok(out, status_code=502)
+    return _ok(out, status_code=200)

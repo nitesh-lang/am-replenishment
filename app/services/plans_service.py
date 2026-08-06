@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import psycopg2
+import requests
 from psycopg2.extras import RealDictCursor
 
 from app.services.db import get_conn
@@ -639,35 +640,184 @@ def approve_plan(batch_id: str, actor: str, actor_is_admin: bool = False) -> dic
     return out
 
 
-def push_plan(batch_id: str, actor: str) -> dict:
-    """Push an approved plan to OrderPilot's /api/inbound-plans endpoint.
+def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
+    """Push an approved batch to OrderPilot's receiver.
 
-    STUB: intentionally not wired to OrderPilot yet. We build the entire
-    lifecycle first, test approvals in prod, then wire the push after
-    both apps have coordinated the contract + auth handshake.
+    Reads env vars ORDERPILOT_PUSH_URL + ORDERPILOT_PUSH_TOKEN. Both must
+    be set — else returns not_implemented (falls back to stub behavior).
 
-    Calling this today records a 'push_stub_called' event and returns
-    a not-implemented payload. Batch status stays 'approved'.
+    On 200:
+      * status='pushed', pushed_at=NOW()
+      * each line's orderpilot_shipment_id populated from response
+        shipment_ids[destination_fc] map
+      * push_success event logged with the response body
+    On non-200:
+      * status stays 'approved', push_error populated
+      * push_failed event logged
+      * caller can retry (OrderPilot is idempotent on batch_id)
+
+    dry_run=True → appends ?dry_run=true; OrderPilot returns preview
+    shipment_ids without persisting. Batch status does NOT flip on
+    dry-run success — this is verify-wiring-only.
     """
+    actor = (actor or "").strip().lower()
+    url   = (os.environ.get("ORDERPILOT_PUSH_URL")   or "").strip()
+    token = (os.environ.get("ORDERPILOT_PUSH_TOKEN") or "").strip()
+
+    if not url or not token:
+        # Fallback to stub if either env var is unset — makes the
+        # cutover safe: forget one config value and we no-op instead of
+        # POSTing garbage.
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                    VALUES (%s, 'push_stub_called', %s, %s)
+                    """,
+                    (batch_id, actor,
+                     json.dumps({"note": "ORDERPILOT_PUSH_URL or _TOKEN unset"})),
+                )
+            conn.commit()
+        return {"status": "not_implemented",
+                "message": "ORDERPILOT_PUSH_URL/TOKEN not set",
+                "batch_id": batch_id}
+
+    # ---------------- Load batch + lines ----------------
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT status FROM plan_batches WHERE batch_id = %s", (batch_id,))
-            row = cur.fetchone()
-            if not row:
+            cur.execute("SELECT * FROM plan_batches WHERE batch_id = %s", (batch_id,))
+            b = cur.fetchone()
+            if not b:
                 raise ValueError(f"batch not found: {batch_id}")
-            if row["status"] != "approved":
-                raise ValueError(f"batch is {row['status']}; only 'approved' can be pushed")
+            if b["status"] != "approved":
+                raise ValueError(f"batch is {b['status']}; only 'approved' can be pushed")
             cur.execute(
-                """
-                INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
-                VALUES (%s, 'push_stub_called', %s, %s)
-                """,
-                (batch_id, (actor or "").strip().lower(),
-                 json.dumps({"note": "push endpoint not yet wired to OrderPilot"})),
+                """SELECT * FROM plan_lines
+                   WHERE batch_id = %s AND is_deleted = FALSE
+                   ORDER BY id""",
+                (batch_id,),
+            )
+            lines = [dict(r) for r in cur.fetchall()]
+
+    if not lines:
+        raise ValueError("no active lines to push")
+
+    # ---------------- Build payload ----------------
+    def _iso(dt):
+        return dt.isoformat() if dt else None
+
+    payload = {
+        "source":         "am_replenishment",
+        "batch_id":       b["batch_id"],
+        "account":        b["account"],
+        "source_module":  b.get("source_module"),
+        "proposed_by":    b["proposed_by"],
+        "approved_by":    b.get("approved_by"),
+        "approved_at":    _iso(b.get("approved_at")),
+        "lines": [
+            {
+                "line_id":         l["id"],
+                "sku":             l["sku"],
+                "model":           l.get("model"),
+                "asin":            l.get("asin"),
+                "destination_fc":  l["destination_fc"],
+                "ship_from_wh":    l.get("ship_from_wh"),
+                "qty":             int(l["qty"]),
+                "notes":           l.get("notes"),
+            }
+            for l in lines
+        ],
+    }
+
+    # ---------------- POST ----------------
+    target_url = url + ("?dry_run=true" if dry_run else "")
+    try:
+        resp = requests.post(
+            target_url,
+            json=payload,
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type":  "application/json"},
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        err_msg = f"network error: {type(e).__name__}: {e}"
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE plan_batches SET push_error = %s, updated_at = NOW() WHERE batch_id = %s",
+                    (err_msg, batch_id),
+                )
+                cur.execute(
+                    """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                       VALUES (%s, 'push_failed', %s, %s)""",
+                    (batch_id, actor, json.dumps({"error": err_msg, "dry_run": dry_run})),
+                )
+            conn.commit()
+        return {"status": "error", "batch_id": batch_id, "error": err_msg}
+
+    # ---------------- Handle response ----------------
+    try:
+        body = resp.json()
+    except ValueError:
+        body = {"raw": resp.text[:500]}
+
+    if resp.status_code == 200 and body.get("status") == "ok":
+        shipment_ids = body.get("shipment_ids") or {}
+        if dry_run:
+            # Verify-only run — DO NOT persist status or line ids
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                           VALUES (%s, 'push_dry_run', %s, %s)""",
+                        (batch_id, actor,
+                         json.dumps({"shipment_ids": shipment_ids, "response": body})),
+                    )
+                conn.commit()
+            return {"status": "ok", "dry_run": True, "batch_id": batch_id,
+                    "preview_shipment_ids": shipment_ids}
+
+        # Real push — flip status and store shipment IDs per line
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE plan_batches
+                       SET status = 'pushed', pushed_at = NOW(), push_error = NULL, updated_at = NOW()
+                       WHERE batch_id = %s""",
+                    (batch_id,),
+                )
+                for l in lines:
+                    sid = shipment_ids.get(l["destination_fc"])
+                    if sid:
+                        cur.execute(
+                            """UPDATE plan_lines
+                               SET orderpilot_shipment_id = %s, pushed_at = NOW()
+                               WHERE id = %s""",
+                            (sid, l["id"]),
+                        )
+                cur.execute(
+                    """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                       VALUES (%s, 'push_success', %s, %s)""",
+                    (batch_id, actor,
+                     json.dumps({"shipment_ids": shipment_ids, "response": body})),
+                )
+            conn.commit()
+        return {"status": "ok", "batch_id": batch_id, "shipment_ids": shipment_ids}
+
+    # Non-200 or status != ok
+    err_msg = f"HTTP {resp.status_code}: {body.get('detail') or body.get('raw') or json.dumps(body)[:200]}"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE plan_batches SET push_error = %s, updated_at = NOW() WHERE batch_id = %s",
+                (err_msg, batch_id),
+            )
+            cur.execute(
+                """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                   VALUES (%s, 'push_failed', %s, %s)""",
+                (batch_id, actor,
+                 json.dumps({"status_code": resp.status_code, "response": body, "dry_run": dry_run})),
             )
         conn.commit()
-    return {
-        "status": "not_implemented",
-        "message": "push_plan STUB — OrderPilot bridge not wired yet",
-        "batch_id": batch_id,
-    }
+    return {"status": "error", "batch_id": batch_id, "error": err_msg, "response": body}

@@ -259,14 +259,43 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
           </button>
         )}
         {canPush && (
-          <button
-            onClick={() => act(() => pushPlan(batch.batch_id).then((r) => alert(r.message || "Pushed")))}
-            disabled={busy}
-            style={btnStyle("#f59e0b")}
-            title="Push to OrderPilot — currently a stub"
-          >
-            → Push to OrderPilot (stub)
-          </button>
+          <>
+            <button
+              onClick={() => act(() =>
+                pushPlan(batch.batch_id, { dryRun: true }).then((r) => {
+                  const preview = r.preview_shipment_ids
+                    ? Object.entries(r.preview_shipment_ids).map(([fc, id]) => `  ${fc}: ${id}`).join("\n")
+                    : "(no preview_shipment_ids in response)";
+                  alert(`DRY RUN — no data written to OrderPilot\n\npreview shipment_ids:\n${preview}`);
+                })
+              )}
+              disabled={busy}
+              style={btnStyle("#6b7280")}
+              title="Preview shipment_ids from OrderPilot without persisting"
+            >
+              ⓘ Dry-run Push
+            </button>
+            <button
+              onClick={() => {
+                if (!confirm(`Push batch ${batch.batch_id} to OrderPilot for real?\n\nThis creates shipment records in OrderPilot's 3P Shipments tab.`)) return;
+                act(() =>
+                  pushPlan(batch.batch_id).then((r) => {
+                    if (r.status === "ok") {
+                      const ids = r.shipment_ids || {};
+                      alert(`Pushed successfully!\n\nOrderPilot shipment IDs:\n${Object.entries(ids).map(([fc, id]) => `  ${fc}: ${id}`).join("\n")}`);
+                    } else {
+                      alert(`Push failed: ${r.error || r.message || "unknown"}`);
+                    }
+                  })
+                );
+              }}
+              disabled={busy}
+              style={btnStyle("#f59e0b")}
+              title="Push to OrderPilot for real (creates shipments)"
+            >
+              → Push to OrderPilot
+            </button>
+          </>
         )}
         {canDelete && (
           <button
