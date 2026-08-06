@@ -46,8 +46,6 @@ export default function Layout({ children }) {
     { name: "Fossil",          path: "/fossil-replenishment",  show: canAccess("fossil-replenishment") },
     { name: "Blinkit",         path: "/blinkit-replenishment", show: canAccess("blinkit-replenishment") },
     { name: "Plans",           path: "/plans",                 show: canAccess("plans-editor") || canAccess("plans-approver") || user?.role === "admin" },
-    { name: "Sales Analytics", path: "/sales-analytics",       show: canAccess("sales-analytics") },
-    { name: "Region Sales",    path: "/region-sales",          show: canAccess("region-sales") },
     { name: "Usage",           path: "/usage",                 show: user?.role === "admin" },
     { name: "Users",           path: "/admin",                 show: user?.role === "admin" },
   ].filter(i => i.show);
