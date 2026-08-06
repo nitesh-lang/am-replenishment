@@ -9,7 +9,7 @@ import { logUsage } from "../auth/usage";
 
 export default function Replenishment() {
 
-  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+  const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
   /* ============================================================
      STATE

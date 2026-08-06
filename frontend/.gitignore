@@ -8,7 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
+# dist is committed — backend serves it as the SPA. Rebuild + commit
+# after every frontend change until we wire Render to do this in-build.
+# dist
 dist-ssr
 *.local
 

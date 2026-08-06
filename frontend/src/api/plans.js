@@ -1,11 +1,12 @@
 // API client for the plan approval workflow.
 // All calls send the auth Bearer token; caller handles 401/403 → login redirect.
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 const STORAGE_KEY = "am_repl_auth_v2";
-// Hit /api/plans (backend registers every route under both /plans/* and
-// /api/plans/*). Using the /api prefix gives us a URL Chrome hasn't
-// preflighted before, avoiding poisoned CORS-preflight cache entries.
+// Same-origin: SPA is now served by the FastAPI backend, so /api/*
+// resolves to the same host as the page. No CORS handshake needed.
+// Dev fallback: use VITE_API_BASE when running vite dev locally
+// (import.meta.env.DEV is true only during `vite dev`, false in build).
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 const P = "/api/plans";
 
 function token() {

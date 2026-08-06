@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { Users, Plus, Pencil, Trash2, X, Check, Shield, User as UserIcon, KeyRound, Eye, EyeOff } from "lucide-react";
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 const MODULE_LABELS = {
   "dashboard":              "Dashboard",

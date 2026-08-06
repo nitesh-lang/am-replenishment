@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 export default function WMReplenishment() {
 
-  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+  const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);

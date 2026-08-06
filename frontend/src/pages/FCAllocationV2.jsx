@@ -29,7 +29,7 @@ import { cn } from "../lib/cn";
      - Master Carton editing
 ============================================================ */
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 const FC_CLUSTER = {
   BLR5: "BLR", BLR7: "BLR", BLR8: "BLR",

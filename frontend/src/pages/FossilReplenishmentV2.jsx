@@ -24,7 +24,7 @@ import { useAuth } from "../auth/AuthContext";
    Read-only (no save endpoint).
 ============================================================ */
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 const BRAND_ORDER = ["Fossil", "Armani Exchange", "Michael Kors", "Emporio Armani", "Diesel", "Skagen"];
 

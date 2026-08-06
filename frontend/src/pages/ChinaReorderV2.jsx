@@ -22,7 +22,7 @@ import { cn } from "../lib/cn";
    Read-only.
 ============================================================ */
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 // Viomi excluded — it shares Nexlev's manufactured SKUs (rebrand for
 // separate Amazon listings), so reordering is done at the Nexlev level.

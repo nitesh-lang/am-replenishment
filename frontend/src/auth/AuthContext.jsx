@@ -4,7 +4,7 @@ import { logUsage } from "./usage";
 const AuthContext = createContext(null);
 
 const STORAGE_KEY = "am_repl_auth_v2";
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 // Session expires at midnight local time. Re-login required after that.
 function nextLocalMidnight() {

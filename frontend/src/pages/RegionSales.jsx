@@ -30,7 +30,8 @@ export default function RegionSales() {
   useEffect(() => {
     setLoading(true);
 
-    fetch(`https://am-replenishment.onrender.com/region-sales?account=${account}`)
+    // Same-origin: BASE is empty in prod, hits API on same host as SPA
+    fetch(`${import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : ""}/region-sales?account=${account}`)
       .then((res) => res.json())
       .then((res) => {
         setData(Array.isArray(res) ? res : []);

@@ -44,7 +44,7 @@ export default function FCAllocation() {
   // SOP help modal
   const [sopOpen, setSopOpen] = useState(false);
 
-  const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+  const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
   // Fossil cluster mapping
   const FC_CLUSTER = {

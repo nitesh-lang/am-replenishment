@@ -14,7 +14,7 @@ import { Send, Save, PackagePlus, Loader2 } from "lucide-react";
 import { cn } from "../lib/cn";
 import { getFCFinal, getReplenishment } from "../api/replenishment";
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 // Fallback list — used only if /selling-accounts returns empty (e.g. env
 // vars not set in the current environment). Order matches the operator's

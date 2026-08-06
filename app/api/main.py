@@ -1,7 +1,11 @@
 from dotenv import load_dotenv
 load_dotenv()
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 
 # =====================================================
@@ -211,10 +215,53 @@ app.include_router(plans_router)
 app.include_router(plans_router, prefix="/api")
 
 # =====================================================
-# ROOT
+# SPA — serve the Vite-built React app so frontend + API are
+# the same origin (no CORS handshake, works across every
+# browser / ISP / network path).
+#
+# 1. /assets/* and other static files served from frontend/dist
+# 2. SPA fallback: any GET not matching an API route returns
+#    index.html so client-side routing works (/plans, /dashboard, ...)
+# 3. API routes registered above still win over the fallback.
 # =====================================================
-@app.get("/")
-def root():
-    return {
-        "message": "AM Inventory Replenishment API running"
-    }
+_SPA_ROOT = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+if _SPA_ROOT.exists() and (_SPA_ROOT / "index.html").exists():
+    # Mount static assets (JS/CSS bundles, favicon, etc.) under /assets/*
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(_SPA_ROOT / "assets")),
+        name="spa-assets",
+    )
+
+    @app.get("/", include_in_schema=False)
+    def _spa_root():
+        return FileResponse(_SPA_ROOT / "index.html")
+
+    @app.get("/vite.svg", include_in_schema=False)
+    def _vite_svg():
+        return FileResponse(_SPA_ROOT / "vite.svg")
+
+    # SPA fallback for any GET not matched by an API route above.
+    # Placed at the END so router routes have priority.
+    @app.exception_handler(StarletteHTTPException)
+    async def _spa_fallback(request, exc):
+        # Only rewrite 404s on non-API GET routes to serve the SPA.
+        if (
+            exc.status_code == 404
+            and request.method == "GET"
+            and not request.url.path.startswith(("/api/", "/auth/"))
+        ):
+            return FileResponse(_SPA_ROOT / "index.html")
+        # For everything else, re-raise the original exception so FastAPI
+        # emits its normal JSON error response with CORS headers intact.
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+
+    print(f"✅ SPA mounted from {_SPA_ROOT}")
+else:
+    print(f"⚠️  SPA dist not found at {_SPA_ROOT}; frontend served separately")
+
+    @app.get("/")
+    def root():
+        return {"message": "AM Inventory Replenishment API running"}

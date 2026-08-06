@@ -16,7 +16,7 @@ import DataFreshnessBanner from "../components/DataFreshnessBanner";
              ASIN + Model enriched from sku_master.xlsx via SellerSKU.
 ============================================================ */
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 const STATUS_STYLES = {
   IN_TRANSIT:    "bg-sky-100 text-sky-800 ring-sky-200",

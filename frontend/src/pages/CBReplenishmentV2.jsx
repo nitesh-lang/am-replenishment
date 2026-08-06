@@ -28,7 +28,7 @@ import { cn } from "../lib/cn";
      POST /api/cb-replenishment/reset
 ============================================================ */
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 export default function CBReplenishmentV2() {
   /* ─────────── state ─────────── */
