@@ -316,12 +316,18 @@ def _assert_editable(cur, batch_id: str, actor: str, actor_is_admin: bool = Fals
     return b
 
 
-def edit_line(batch_id: str, line_id: int, new_qty: int, actor: str,
-              row_version: int | None = None, actor_is_admin: bool = False) -> dict:
+def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
+              row_version: int | None = None, actor_is_admin: bool = False,
+              notes: str | None = None) -> dict:
+    """Edit qty and/or notes on a line. Pass None for either to leave
+    that field unchanged. At least one must be provided."""
     actor = (actor or "").strip().lower()
-    new_qty = int(round(float(new_qty)))
-    if new_qty < 0:
-        raise ValueError("qty must be >= 0")
+    if new_qty is None and notes is None:
+        raise ValueError("must provide qty and/or notes")
+    if new_qty is not None:
+        new_qty = int(round(float(new_qty)))
+        if new_qty < 0:
+            raise ValueError("qty must be >= 0")
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             _assert_editable(cur, batch_id, actor, actor_is_admin)
@@ -338,24 +344,37 @@ def edit_line(batch_id: str, line_id: int, new_qty: int, actor: str,
                     f"(expected {row_version}, current {line['row_version']})"
                 )
             old_qty = int(line["qty"])
+            old_notes = line.get("notes")
+            # Build a dynamic UPDATE that only touches the fields provided
+            sets = ["edited_by = %s", "last_edited_at = NOW()", "row_version = row_version + 1"]
+            vals: list = [actor]
+            if new_qty is not None:
+                sets.append("qty = %s")
+                vals.append(new_qty)
+            if notes is not None:
+                sets.append("notes = %s")
+                vals.append(notes)
+            vals.append(line_id)
             cur.execute(
-                """
-                UPDATE plan_lines
-                SET qty = %s, edited_by = %s, last_edited_at = NOW(),
-                    row_version = row_version + 1
-                WHERE id = %s
-                RETURNING *
-                """,
-                (new_qty, actor, line_id),
+                f"UPDATE plan_lines SET {', '.join(sets)} WHERE id = %s RETURNING *",
+                tuple(vals),
             )
             updated = dict(cur.fetchone())
-            cur.execute(
-                """
-                INSERT INTO plan_line_events (batch_id, line_id, event_type, actor, payload_json)
-                VALUES (%s, %s, 'edit_qty', %s, %s)
-                """,
-                (batch_id, line_id, actor, json.dumps({"from": old_qty, "to": new_qty})),
-            )
+            evt_payload: dict = {}
+            if new_qty is not None and new_qty != old_qty:
+                evt_payload["qty_from"] = old_qty
+                evt_payload["qty_to"] = new_qty
+            if notes is not None and notes != (old_notes or ""):
+                evt_payload["notes_changed"] = True
+            if evt_payload:
+                cur.execute(
+                    """
+                    INSERT INTO plan_line_events (batch_id, line_id, event_type, actor, payload_json)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (batch_id, line_id, "edit_qty" if "qty_to" in evt_payload else "edit_notes",
+                     actor, json.dumps(evt_payload)),
+                )
         conn.commit()
     return updated
 
@@ -468,6 +487,56 @@ def delete_line(batch_id: str, line_id: int, actor: str, actor_is_admin: bool = 
             )
         conn.commit()
     return out
+
+
+# ============================================================
+# DELETE ENTIRE BATCH
+# ============================================================
+def delete_batch(batch_id: str, actor: str, actor_is_admin: bool = False) -> dict:
+    """Hard-delete an entire batch and all its lines (FK cascade).
+
+    Allowed:
+      - status=draft     — only the proposer (or admin)
+      - status=proposed  — the assigned approver (or admin)
+      - status=approved  — admin only (approved plans stay for audit)
+      - status=pushed    — admin only (avoid orphaning OrderPilot records)
+    """
+    actor = (actor or "").strip().lower()
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT status, proposed_by, approver_email FROM plan_batches WHERE batch_id = %s",
+                (batch_id,),
+            )
+            b = cur.fetchone()
+            if not b:
+                raise ValueError(f"batch not found: {batch_id}")
+            status = b["status"]
+            if not actor_is_admin:
+                if status == "draft":
+                    if (b.get("proposed_by") or "").strip().lower() != actor:
+                        raise ValueError("only the draft's proposer (or admin) can delete it")
+                elif status == "proposed":
+                    target = (b.get("approver_email") or "").strip().lower()
+                    if not target or actor != target:
+                        raise ValueError(
+                            f"this batch is addressed to {target}; only they (or admin) can delete"
+                        )
+                else:
+                    raise ValueError(
+                        f"batch is {status}; only admin can delete after approval to preserve audit trail"
+                    )
+            # Audit event BEFORE delete so it survives (plan_line_events has no FK to plan_batches)
+            cur.execute(
+                """
+                INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                VALUES (%s, 'delete_batch', %s, %s)
+                """,
+                (batch_id, actor, json.dumps({"prior_status": status})),
+            )
+            cur.execute("DELETE FROM plan_batches WHERE batch_id = %s", (batch_id,))
+        conn.commit()
+    return {"batch_id": batch_id, "prior_status": status, "deleted_by": actor}
 
 
 # ============================================================

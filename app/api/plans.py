@@ -137,15 +137,18 @@ def send(batch_id: str, request: Request):
 # ============================================================
 @router.patch("/plans/{batch_id}/lines/{line_id}")
 async def patch_line(batch_id: str, line_id: int, request: Request):
+    """Edit qty and/or notes on a line. Body may contain qty, notes, or both."""
     actor = _editor_or_approver(request)
     is_admin = auth_users.is_admin(actor)
     body = await request.json()
-    if "qty" not in body:
-        raise HTTPException(status_code=400, detail="qty is required")
+    if "qty" not in body and "notes" not in body:
+        raise HTTPException(status_code=400, detail="qty and/or notes is required")
     try:
         out = plans_service.edit_line(
             batch_id=batch_id, line_id=line_id,
-            new_qty=int(body["qty"]), actor=actor,
+            new_qty=(int(body["qty"]) if "qty" in body else None),
+            notes=body.get("notes"),
+            actor=actor,
             row_version=body.get("row_version"),
             actor_is_admin=is_admin,
         )
@@ -187,6 +190,19 @@ def del_line(batch_id: str, line_id: int, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return _ok({"status": "ok", "line": out})
+
+
+@router.delete("/plans/{batch_id}")
+def del_batch(batch_id: str, request: Request):
+    """Delete an entire batch. Draft → proposer; Proposed → assigned
+    approver; Approved/Pushed → admin only (audit-safe)."""
+    actor = _editor_or_approver(request)
+    is_admin = auth_users.is_admin(actor)
+    try:
+        out = plans_service.delete_batch(batch_id=batch_id, actor=actor, actor_is_admin=is_admin)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return _ok({"status": "ok", "deleted": out})
 
 
 # ============================================================

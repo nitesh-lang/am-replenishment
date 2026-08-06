@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   listPlans, getPlan, editLine, addLine, deleteLine, approvePlan, pushPlan,
-  sendToApprover,
+  sendToApprover, deletePlan,
 } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
@@ -177,6 +177,14 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
   const canSend = isEditor && ownDraft;
   const canApprove = isApprover && batch.status === "proposed";
   const canPush = isApprover && batch.status === "approved";
+  // Delete permissions (mirrored from backend):
+  //  - draft    -> proposer (or admin)
+  //  - proposed -> assigned approver (or admin)
+  //  - approved / pushed -> admin only (audit-preserving)
+  const canDelete =
+    (batch.status === "draft" && (ownDraft || currentEmail === (batch.proposed_by || "").toLowerCase())) ||
+    (batch.status === "proposed" && isApprover) ||
+    ((batch.status === "approved" || batch.status === "pushed") && isApprover /* admin has isApprover=true */);
 
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -260,6 +268,23 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
             → Push to OrderPilot (stub)
           </button>
         )}
+        {canDelete && (
+          <button
+            onClick={() => {
+              if (!confirm(`⚠ Delete entire batch ${batch.batch_id}?\n\nAll ${batch.lines?.length || 0} rows will be permanently removed. Cannot be undone (audit event is preserved).`)) return;
+              act(() => deletePlan(batch.batch_id).then(() => {
+                alert("Batch deleted.");
+                // Trigger navigation back — parent will re-fetch list
+                window.location.hash = "";
+              }));
+            }}
+            disabled={busy}
+            style={{ ...btnStyle("#ef4444"), marginLeft: "auto" }}
+            title="Delete this batch and all its rows"
+          >
+            🗑 Delete Plan
+          </button>
+        )}
       </div>
 
       {err && <div style={{ color: "#ef4444", marginBottom: 12 }}>{err}</div>}
@@ -273,6 +298,7 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
             <tr style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
               <Th>SKU</Th><Th>Model</Th><Th>ASIN</Th><Th>FC</Th>
               <Th align="right">Qty</Th><Th align="right">Original</Th>
+              <Th>Remarks</Th>
               <Th>Added By</Th><Th>Edited By</Th>
               {canEdit && <Th>Actions</Th>}
             </tr>
@@ -311,14 +337,31 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
 
 function LineRow({ line, canEdit, batchId, onReload }) {
   const [qty, setQty] = useState(String(line.qty));
+  const [notes, setNotes] = useState(line.notes || "");
   const [busy, setBusy] = useState(false);
-  const dirty = String(line.qty) !== qty;
+  const qtyDirty   = String(line.qty) !== qty;
+  const notesDirty = (line.notes || "") !== notes;
+  const dirty = qtyDirty || notesDirty;
   const deleted = !!line.is_deleted;
 
   async function save() {
     setBusy(true);
     try {
-      await editLine(batchId, line.id, { qty: Number(qty), row_version: line.row_version });
+      await editLine(batchId, line.id, {
+        ...(qtyDirty ? { qty: Number(qty) } : {}),
+        ...(notesDirty ? { notes } : {}),
+        row_version: line.row_version,
+      });
+      await onReload();
+    } catch (e) { alert(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function saveNotesOnBlur() {
+    if (!notesDirty) return;
+    setBusy(true);
+    try {
+      await editLine(batchId, line.id, { notes, row_version: line.row_version });
       await onReload();
     } catch (e) { alert(e.message); }
     finally { setBusy(false); }
@@ -354,6 +397,24 @@ function LineRow({ line, canEdit, batchId, onReload }) {
         )}
       </Td>
       <Td align="right"><span style={{ color: "#9ca3af" }}>{line.original_send_qty}</span></Td>
+      <Td>
+        {canEdit && !deleted ? (
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={saveNotesOnBlur}
+            placeholder="add remarks…"
+            style={{
+              width: 180, padding: 4, fontSize: 12,
+              border: notesDirty ? "1px solid #f59e0b" : "1px solid #d1d5db",
+              borderRadius: 3,
+            }}
+          />
+        ) : (
+          <span style={{ fontSize: 12, color: "#6b7280" }}>{line.notes || "—"}</span>
+        )}
+      </Td>
       <Td><Badge>{line.added_by}</Badge></Td>
       <Td>{line.edited_by ? <Badge color="#f59e0b">{line.edited_by}</Badge> : "—"}</Td>
       {canEdit && (
