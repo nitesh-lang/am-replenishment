@@ -89,7 +89,18 @@ export default function PlansApproval() {
           </div>
           <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, maxHeight: "70vh", overflow: "auto" }}>
             {batches.length === 0 && (
-              <div style={{ padding: 12, color: "#9ca3af", fontSize: 13 }}>No batches.</div>
+              <div style={{ padding: 12, color: "#6b7280", fontSize: 12, lineHeight: 1.5 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>No batches in this view.</div>
+                <div>
+                  Naresh proposes plans from <b>FC Allocation → Propose to Approver</b> (goes to Sagar)
+                  or from <b>Fossil Replenishment → Propose to Approver</b> (goes to Kanwal). Once
+                  proposed, the batch will appear here for the assigned approver to curate + approve.
+                </div>
+                <div style={{ marginTop: 6, color: "#9ca3af" }}>
+                  Not seeing the Propose button? Check that the user has <code>plans-editor</code> in
+                  their allowed_modules (admin panel).
+                </div>
+              </div>
             )}
             {batches.map((b) => (
               <div
@@ -155,10 +166,18 @@ function BatchDetail({ batch, onReload, isApprover }) {
       <div style={{
         background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6,
         padding: 12, marginBottom: 12, display: "grid",
-        gridTemplateColumns: "repeat(6, 1fr)", gap: 12,
+        gridTemplateColumns: "repeat(4, 1fr)", gap: 12,
       }}>
         <Stat label="Account" value={batch.account} />
+        <Stat label="From tab" value={batch.source_module || "—"} />
+        <Stat label="Assigned to" value={batch.approver_email || "(any approver)"} />
         <Stat label="Status" value={batch.status} color={STATUS_COLORS[batch.status]} />
+      </div>
+      <div style={{
+        background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6,
+        padding: 12, marginBottom: 12, display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)", gap: 12,
+      }}>
         <Stat label="Total Units" value={s.total_units} />
         <Stat label="Unique SKUs" value={s.unique_skus} />
         <Stat label="Unique FCs" value={s.unique_fcs} />

@@ -42,6 +42,8 @@ _DDL = """
 CREATE TABLE IF NOT EXISTS plan_batches (
     batch_id        TEXT PRIMARY KEY,
     account         TEXT NOT NULL,
+    source_module   TEXT,                 -- 'fc-allocation' | 'fossil-replenishment' | ...
+    approver_email  TEXT,                 -- if set, only this user (or admin) can approve
     week_tag        TEXT,
     status          TEXT NOT NULL DEFAULT 'proposed',
     proposed_by     TEXT NOT NULL,
@@ -54,6 +56,9 @@ CREATE TABLE IF NOT EXISTS plan_batches (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Add columns idempotently for pre-existing deployments
+ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS source_module  TEXT;
+ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS approver_email TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_plan_batches_account_status
     ON plan_batches (account, status);
@@ -125,18 +130,31 @@ def propose_plan(
     proposed_by: str,
     week_tag: str | None,
     rows: list[dict],
+    source_module: str | None = None,
+    approver_email: str | None = None,
 ) -> str:
     """Snapshot the caller-provided rows into a new batch.
 
-    `rows` is expected to be the current FC Allocation output for the
-    account, filtered to `send_qty > 0`. Each row must have at minimum:
-    sku, destination_fc, qty (int), and optionally model / asin /
-    ship_from_wh / original_send_qty.
+    `rows` is expected to be the current FC Allocation / Fossil
+    Replenishment output for the account, filtered to `send_qty > 0`.
+    Each row must have at minimum: sku, destination_fc, qty (int), and
+    optionally model / asin / ship_from_wh / original_send_qty.
+
+    Optional targeting:
+      source_module   — the tab that originated the plan ('fc-allocation',
+                        'fossil-replenishment', ...) so the approver UI can
+                        show context.
+      approver_email  — if set, only this user (or an admin) can approve
+                        the batch. Naresh proposes from FC Allocation →
+                        target Sagar; Naresh proposes from Fossil
+                        Replenishment → target Kanwal.
 
     Returns the new batch_id.
     """
     account = (account or "").strip()
     proposed_by = (proposed_by or "").strip().lower()
+    approver_email = (approver_email or "").strip().lower() or None
+    source_module = (source_module or "").strip() or None
     if not account or not proposed_by:
         raise ValueError("account and proposed_by are required")
     if not rows:
@@ -147,10 +165,12 @@ def propose_plan(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO plan_batches (batch_id, account, week_tag, status, proposed_by)
-                VALUES (%s, %s, %s, 'proposed', %s)
+                INSERT INTO plan_batches
+                    (batch_id, account, source_module, approver_email,
+                     week_tag, status, proposed_by)
+                VALUES (%s, %s, %s, %s, %s, 'proposed', %s)
                 """,
-                (batch_id, account, week_tag, proposed_by),
+                (batch_id, account, source_module, approver_email, week_tag, proposed_by),
             )
             for r in rows:
                 sku = str(r.get("sku", "")).strip().upper()
@@ -422,16 +442,26 @@ def delete_line(batch_id: str, line_id: int, actor: str) -> dict:
 # ============================================================
 # APPROVAL + PUSH
 # ============================================================
-def approve_plan(batch_id: str, actor: str) -> dict:
+def approve_plan(batch_id: str, actor: str, actor_is_admin: bool = False) -> dict:
     actor = (actor or "").strip().lower()
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            cur.execute("SELECT status, account FROM plan_batches WHERE batch_id = %s", (batch_id,))
+            cur.execute(
+                "SELECT status, account, approver_email FROM plan_batches WHERE batch_id = %s",
+                (batch_id,),
+            )
             b = cur.fetchone()
             if not b:
                 raise ValueError(f"batch not found: {batch_id}")
             if b["status"] != "proposed":
                 raise ValueError(f"batch is {b['status']}; only 'proposed' can be approved")
+            # Enforce approver targeting: if the batch was addressed to a
+            # specific approver, only that person (or an admin) may approve.
+            target = (b.get("approver_email") or "").strip().lower()
+            if target and not actor_is_admin and actor != target:
+                raise ValueError(
+                    f"this batch is addressed to {target}; only they (or an admin) can approve"
+                )
             # At least one non-deleted line must exist
             cur.execute(
                 "SELECT COUNT(*) AS n FROM plan_lines WHERE batch_id = %s AND is_deleted = FALSE",

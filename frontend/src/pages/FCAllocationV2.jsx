@@ -630,10 +630,16 @@ export default function FCAllocationV2() {
                     setTimeout(() => setProposeMsg(""), 4000);
                     return;
                   }
-                  if (!confirm(`Propose ${toSend.length} rows for ${account} to approver?`)) return;
+                  const approver = "sagar@cambiumretail.com";
+                  if (!confirm(`Propose ${toSend.length} rows for ${account} to ${approver}?`)) return;
                   setProposing(true); setProposeMsg("");
                   try {
-                    const j = await proposePlan({ account, rows: toSend });
+                    const j = await proposePlan({
+                      account,
+                      rows: toSend,
+                      source_module: "fc-allocation",
+                      approver_email: approver,
+                    });
                     setProposeMsg(`Proposed → ${j.batch_id}`);
                   } catch (e) {
                     setProposeMsg(`Error: ${e.message}`);

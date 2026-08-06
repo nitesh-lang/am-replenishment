@@ -16,7 +16,7 @@ Auth: Authorization: Bearer <token>. Admins bypass module checks.
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from app.services import plans_service
+from app.services import plans_service, auth_users
 from app.services.auth_tokens import require_module
 
 
@@ -64,12 +64,15 @@ def get_plan(batch_id: str, request: Request, include_deleted: bool = True):
 async def propose(request: Request):
     actor = _editor(request)
     body = await request.json()
-    account   = body.get("account")
-    week_tag  = body.get("week_tag")
-    rows      = body.get("rows") or []
+    account         = body.get("account")
+    week_tag        = body.get("week_tag")
+    rows            = body.get("rows") or []
+    source_module   = body.get("source_module")
+    approver_email  = body.get("approver_email")
     try:
         batch_id = plans_service.propose_plan(
             account=account, proposed_by=actor, week_tag=week_tag, rows=rows,
+            source_module=source_module, approver_email=approver_email,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -133,8 +136,9 @@ def del_line(batch_id: str, line_id: int, request: Request):
 @router.post("/plans/{batch_id}/approve")
 def approve(batch_id: str, request: Request):
     actor = _approver(request)
+    is_admin = auth_users.is_admin(actor)
     try:
-        out = plans_service.approve_plan(batch_id=batch_id, actor=actor)
+        out = plans_service.approve_plan(batch_id=batch_id, actor=actor, actor_is_admin=is_admin)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse({"status": "ok", "batch": out})
