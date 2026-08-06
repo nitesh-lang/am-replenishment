@@ -27,6 +27,7 @@ import PoCreationV2 from "./pages/PoCreationV2";
 import Dashboard from "./pages/Dashboard";
 import Admin from "./pages/Admin";
 import UsageAnalytics from "./pages/UsageAnalytics";
+import PlansApproval from "./pages/PlansApproval";
 
 function Gated({ moduleKey, children }) {
   return (
@@ -100,6 +101,15 @@ function App() {
           <Route path="/fossil-replenishment-v1" element={<Gated moduleKey="fossil-replenishment"><FossilReplenishment /></Gated>} />
           <Route path="/fossil-replenishment-v2" element={<Navigate to="/fossil-replenishment" replace />} />
           <Route path="/blinkit-replenishment" element={<Gated moduleKey="blinkit-replenishment"><BlinkitReplenishment /></Gated>} />
+
+          {/* Plan approval workflow — visible to both plans-editor (Naresh)
+              and plans-approver (Sagar). The page itself gates edit
+              controls by module. Push to OrderPilot is a STUB for now. */}
+          <Route path="/plans" element={
+            <ProtectedRoute>
+              <Layout><PlansApproval /></Layout>
+            </ProtectedRoute>
+          } />
 
           {/* Admin-only */}
           <Route path="/admin" element={<AdminOnly><Admin /></AdminOnly>} />

@@ -1,0 +1,153 @@
+"""
+Plan approval workflow endpoints.
+
+  POST   /plans/propose                         -> plans-editor
+  GET    /plans                                 -> plans-editor OR plans-approver (list)
+  GET    /plans/{batch_id}                      -> plans-editor OR plans-approver
+  PATCH  /plans/{batch_id}/lines/{line_id}      -> plans-approver (edit qty)
+  POST   /plans/{batch_id}/lines                -> plans-approver (add row)
+  DELETE /plans/{batch_id}/lines/{line_id}      -> plans-approver (soft delete)
+  POST   /plans/{batch_id}/approve              -> plans-approver
+  POST   /plans/{batch_id}/push                 -> plans-approver (STUB: not wired)
+
+Auth: Authorization: Bearer <token>. Admins bypass module checks.
+"""
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
+
+from app.services import plans_service
+from app.services.auth_tokens import require_module
+
+
+router = APIRouter(tags=["plans"])
+
+
+def _editor(request: Request) -> str:
+    return require_module(request, "plans-editor")
+
+
+def _approver(request: Request) -> str:
+    return require_module(request, "plans-approver")
+
+
+def _either(request: Request) -> str:
+    try:
+        return require_module(request, "plans-editor")
+    except HTTPException:
+        return require_module(request, "plans-approver")
+
+
+# ============================================================
+# LIST / GET
+# ============================================================
+@router.get("/plans")
+def list_plans(request: Request, account: str | None = None, status: str | None = None, limit: int = 50):
+    _either(request)
+    rows = plans_service.list_batches(account=account, status=status, limit=limit)
+    return JSONResponse({"status": "ok", "batches": rows})
+
+
+@router.get("/plans/{batch_id}")
+def get_plan(batch_id: str, request: Request, include_deleted: bool = True):
+    _either(request)
+    try:
+        return JSONResponse({"status": "ok", "batch": plans_service.get_batch(batch_id, include_deleted=include_deleted)})
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+# ============================================================
+# PROPOSE (editor)
+# ============================================================
+@router.post("/plans/propose")
+async def propose(request: Request):
+    actor = _editor(request)
+    body = await request.json()
+    account   = body.get("account")
+    week_tag  = body.get("week_tag")
+    rows      = body.get("rows") or []
+    try:
+        batch_id = plans_service.propose_plan(
+            account=account, proposed_by=actor, week_tag=week_tag, rows=rows,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse({"status": "ok", "batch_id": batch_id})
+
+
+# ============================================================
+# LINE EDITS (approver)
+# ============================================================
+@router.patch("/plans/{batch_id}/lines/{line_id}")
+async def patch_line(batch_id: str, line_id: int, request: Request):
+    actor = _approver(request)
+    body = await request.json()
+    if "qty" not in body:
+        raise HTTPException(status_code=400, detail="qty is required")
+    try:
+        out = plans_service.edit_line(
+            batch_id=batch_id, line_id=line_id,
+            new_qty=int(body["qty"]), actor=actor,
+            row_version=body.get("row_version"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse({"status": "ok", "line": out}, status_code=200)
+
+
+@router.post("/plans/{batch_id}/lines")
+async def post_line(batch_id: str, request: Request):
+    actor = _approver(request)
+    body = await request.json()
+    try:
+        out = plans_service.add_line(
+            batch_id=batch_id,
+            sku=body.get("sku", ""),
+            destination_fc=body.get("destination_fc", ""),
+            qty=int(body.get("qty", 0)),
+            actor=actor,
+            model=body.get("model"),
+            asin=body.get("asin"),
+            ship_from_wh=body.get("ship_from_wh"),
+            notes=body.get("notes"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse({"status": "ok", "line": out}, status_code=201)
+
+
+@router.delete("/plans/{batch_id}/lines/{line_id}")
+def del_line(batch_id: str, line_id: int, request: Request):
+    actor = _approver(request)
+    try:
+        out = plans_service.delete_line(batch_id=batch_id, line_id=line_id, actor=actor)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse({"status": "ok", "line": out})
+
+
+# ============================================================
+# APPROVE + PUSH
+# ============================================================
+@router.post("/plans/{batch_id}/approve")
+def approve(batch_id: str, request: Request):
+    actor = _approver(request)
+    try:
+        out = plans_service.approve_plan(batch_id=batch_id, actor=actor)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse({"status": "ok", "batch": out})
+
+
+@router.post("/plans/{batch_id}/push")
+def push(batch_id: str, request: Request):
+    actor = _approver(request)
+    try:
+        out = plans_service.push_plan(batch_id=batch_id, actor=actor)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # STUB returns 202 Accepted with the not-implemented status so callers
+    # can distinguish "we accepted the call but haven't wired the bridge"
+    # from a real success/failure.
+    return JSONResponse(out, status_code=202)

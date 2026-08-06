@@ -25,6 +25,7 @@ from app.api.master_carton import router as master_carton_router
 from app.api.auth import router as auth_router
 from app.api.usage import router as usage_router
 from app.api.internal_po import router as internal_po_router
+from app.api.plans import router as plans_router
 
 
 
@@ -53,6 +54,12 @@ def create_tables():
         print("✅ Usage log table ready")
     except Exception as e:
         print(f"⚠️ Usage log init warning: {e}")
+    try:
+        from app.services import plans_service
+        plans_service.ensure_plans_tables()
+        print("✅ Plans tables ready")
+    except Exception as e:
+        print(f"⚠️ Plans table init warning: {e}")
     _unshallow_repo()
     _preload_data_files()
 
@@ -195,6 +202,8 @@ app.include_router(usage_router)
 app.include_router(internal_po_router)
 # /api alias so bundle callers that use /api/ prefix don't 404
 app.include_router(internal_po_router, prefix="/api")
+app.include_router(plans_router)
+app.include_router(plans_router, prefix="/api")
 
 # =====================================================
 # ROOT

@@ -22,6 +22,10 @@ ALL_MODULES = [
     "wm-replenishment",
     "fossil-replenishment",
     "blinkit-replenishment",
+    # Plan approval workflow (Naresh proposes, Sagar approves;
+    # push to OrderPilot is currently STUB — see plans_service.push_plan)
+    "plans-editor",
+    "plans-approver",
 ]
 
 

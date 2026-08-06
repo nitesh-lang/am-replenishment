@@ -53,6 +53,7 @@ export default function Layout({ children }) {
   const moreItems = [
     { name: "Sales Analytics", path: "/sales-analytics", moduleKey: "sales-analytics", show: canAccess("sales-analytics") },
     { name: "Region Sales",    path: "/region-sales",    moduleKey: "region-sales",    show: canAccess("region-sales") },
+    { name: "Plans Approval",  path: "/plans",                                          show: canAccess("plans-editor") || canAccess("plans-approver") || user?.role === "admin" },
     { name: "Usage Analytics", path: "/usage",                                          show: user?.role === "admin" },
     { name: "User Management", path: "/admin",                                          show: user?.role === "admin" },
   ].filter(i => i.show);

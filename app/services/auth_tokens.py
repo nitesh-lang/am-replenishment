@@ -105,3 +105,24 @@ def require_admin(request: Request) -> str:
     if not email or not auth_users.is_admin(email):
         raise HTTPException(status_code=403, detail="Admin access required")
     return email
+
+
+def require_module(request: Request, module: str) -> str:
+    """Return the authenticated user's email if they have the given
+    module in allowed_modules OR they are an admin. Raise 401/403.
+    """
+    payload = verify_token(_bearer(request))
+    if not payload:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    email = (payload.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if auth_users.is_admin(email):
+        return email
+    user = auth_users.get_user(email)
+    if not user:
+        raise HTTPException(status_code=403, detail="Unknown user")
+    allowed = user.get("allowed_modules") or []
+    if module not in allowed:
+        raise HTTPException(status_code=403, detail=f"Access to '{module}' required")
+    return email
