@@ -18,6 +18,7 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -30,12 +31,32 @@ export function AuthProvider({ children }) {
           localStorage.removeItem(STORAGE_KEY);
         } else {
           setUser(session);
+          // Silently re-sync allowed_modules + role from the server so RBAC
+          // grants take effect on the next page load, not just after logout+login.
+          fetch(`${BASE}/auth/me?email=${encodeURIComponent(session.email)}`)
+            .then((r) => r.ok ? r.json() : null)
+            .then((j) => {
+              if (cancelled || !j || j.status !== "ok" || !j.user) return;
+              const freshMods = j.user.allowed_modules || [];
+              const freshRole = j.user.role;
+              const oldMods = session.allowedModules || [];
+              const modsChanged =
+                freshMods.length !== oldMods.length ||
+                freshMods.some((m) => !oldMods.includes(m));
+              if (modsChanged || freshRole !== session.role) {
+                const merged = { ...session, allowedModules: freshMods, role: freshRole };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+                setUser(merged);
+              }
+            })
+            .catch(() => { /* stale session tolerated */ });
         }
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
     setReady(true);
+    return () => { cancelled = true; };
   }, []);
 
   // Schedule auto-logout at the session's midnight expiry
