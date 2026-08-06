@@ -3,6 +3,12 @@
 
 const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 const STORAGE_KEY = "am_repl_auth_v2";
+// Chrome caches CORS preflight per URL. If the API cold-started and a
+// preflight to /plans got no CORS headers back, Chrome cached that
+// failure for 10 min and blocks every subsequent /plans call. Every
+// endpoint is aliased under /api/* so hopping there gives a fresh
+// preflight cache and dodges any poisoned entry.
+const P = "/api/plans";
 
 function token() {
   try {
@@ -33,19 +39,19 @@ async function req(method, path, body) {
 }
 
 export function proposePlan({ account, week_tag, rows, source_module, approver_email, as_draft }) {
-  return req("POST", "/plans/propose", {
+  return req("POST", `${P}/propose`, {
     account, week_tag, rows, source_module, approver_email, as_draft,
   });
 }
 
 export function saveDraft({ account, week_tag, rows, source_module, approver_email }) {
-  return req("POST", "/plans/save-draft", {
+  return req("POST", `${P}/save-draft`, {
     account, week_tag, rows, source_module, approver_email,
   });
 }
 
 export function sendToApprover(batchId) {
-  return req("POST", `/plans/${encodeURIComponent(batchId)}/send`);
+  return req("POST", `${P}/${encodeURIComponent(batchId)}/send`);
 }
 
 export function listPlans({ account, status, limit = 50 } = {}) {
@@ -53,38 +59,32 @@ export function listPlans({ account, status, limit = 50 } = {}) {
   if (account) p.set("account", account);
   if (status) p.set("status", status);
   p.set("limit", String(limit));
-  return req("GET", `/plans?${p.toString()}`);
+  return req("GET", `${P}?${p.toString()}`);
 }
 
 export function getPlan(batchId, { includeDeleted = true } = {}) {
-  return req(
-    "GET",
-    `/plans/${encodeURIComponent(batchId)}?include_deleted=${includeDeleted}`
-  );
+  return req("GET", `${P}/${encodeURIComponent(batchId)}?include_deleted=${includeDeleted}`);
 }
 
 export function editLine(batchId, lineId, { qty, row_version }) {
-  return req("PATCH", `/plans/${encodeURIComponent(batchId)}/lines/${lineId}`, {
+  return req("PATCH", `${P}/${encodeURIComponent(batchId)}/lines/${lineId}`, {
     qty,
     row_version,
   });
 }
 
 export function addLine(batchId, payload) {
-  return req("POST", `/plans/${encodeURIComponent(batchId)}/lines`, payload);
+  return req("POST", `${P}/${encodeURIComponent(batchId)}/lines`, payload);
 }
 
 export function deleteLine(batchId, lineId) {
-  return req(
-    "DELETE",
-    `/plans/${encodeURIComponent(batchId)}/lines/${lineId}`
-  );
+  return req("DELETE", `${P}/${encodeURIComponent(batchId)}/lines/${lineId}`);
 }
 
 export function approvePlan(batchId) {
-  return req("POST", `/plans/${encodeURIComponent(batchId)}/approve`);
+  return req("POST", `${P}/${encodeURIComponent(batchId)}/approve`);
 }
 
 export function pushPlan(batchId) {
-  return req("POST", `/plans/${encodeURIComponent(batchId)}/push`);
+  return req("POST", `${P}/${encodeURIComponent(batchId)}/push`);
 }
