@@ -226,6 +226,25 @@ app.include_router(plans_router, prefix="/api")
 # =====================================================
 _SPA_ROOT = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
+# Every React Router path in the SPA. When the browser hits any of these
+# (Accept: text/html) we serve index.html even if an API route with the
+# same URL exists — this avoids the double-purpose collision between
+# API routes like /replenishment (JSON data) and SPA routes like
+# /replenishment (React page). API clients still hit the JSON handlers
+# because they send Accept: application/json.
+_SPA_ROUTES = {
+    "/", "/login", "/forgot-password",
+    "/dashboard", "/replenishment", "/replenishment-v1", "/replenishment-v2",
+    "/fba-inbound", "/fc-allocation", "/fc-allocation-v1", "/fc-allocation-v2",
+    "/po-creation", "/china-reorder", "/china-reorder-v1", "/china-reorder-v2",
+    "/cb-replenishment", "/cb-replenishment-v1", "/cb-replenishment-v2",
+    "/wm-replenishment", "/wm-replenishment-v1", "/wm-replenishment-v2",
+    "/fossil-replenishment", "/fossil-replenishment-v1", "/fossil-replenishment-v2",
+    "/blinkit-replenishment",
+    "/plans", "/sales-analytics", "/region-sales",
+    "/usage", "/admin",
+}
+
 if _SPA_ROOT.exists() and (_SPA_ROOT / "index.html").exists():
     # Mount static assets (JS/CSS bundles, favicon, etc.) under /assets/*
     app.mount(
@@ -234,27 +253,34 @@ if _SPA_ROOT.exists() and (_SPA_ROOT / "index.html").exists():
         name="spa-assets",
     )
 
-    @app.get("/", include_in_schema=False)
-    def _spa_root():
-        return FileResponse(_SPA_ROOT / "index.html")
-
     @app.get("/vite.svg", include_in_schema=False)
     def _vite_svg():
         return FileResponse(_SPA_ROOT / "vite.svg")
 
-    # SPA fallback for any GET not matched by an API route above.
-    # Placed at the END so router routes have priority.
+    # Intercept browser GETs to SPA paths BEFORE router matching. Any
+    # request that says it wants HTML gets index.html. API/JSON callers
+    # (Accept: application/json) fall through to the router as usual.
+    @app.middleware("http")
+    async def _spa_route_intercept(request, call_next):
+        if (
+            request.method == "GET"
+            and request.url.path in _SPA_ROUTES
+            and "text/html" in request.headers.get("accept", "").lower()
+        ):
+            return FileResponse(_SPA_ROOT / "index.html")
+        return await call_next(request)
+
+    # SPA fallback: any unmatched GET that also isn't an /api/, /auth/,
+    # or static-asset path returns index.html so client-side deep links
+    # + hard-refreshes work.
     @app.exception_handler(StarletteHTTPException)
     async def _spa_fallback(request, exc):
-        # Only rewrite 404s on non-API GET routes to serve the SPA.
         if (
             exc.status_code == 404
             and request.method == "GET"
-            and not request.url.path.startswith(("/api/", "/auth/"))
+            and not request.url.path.startswith(("/api/", "/auth/", "/assets/", "/health", "/_debug"))
         ):
             return FileResponse(_SPA_ROOT / "index.html")
-        # For everything else, re-raise the original exception so FastAPI
-        # emits its normal JSON error response with CORS headers intact.
         from fastapi.responses import JSONResponse
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
