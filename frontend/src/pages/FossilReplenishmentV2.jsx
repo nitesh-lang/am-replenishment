@@ -15,7 +15,7 @@ import { SOPModal, SOPButton } from "../components/SOPModal";
 import { FossilReplenishmentSOPContent } from "../components/SOPContents";
 import DataFreshnessBanner from "../components/DataFreshnessBanner";
 import { cn } from "../lib/cn";
-import { proposePlan } from "../api/plans";
+import { proposePlan, saveDraft } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
 /* ============================================================
@@ -359,52 +359,66 @@ export default function FossilReplenishmentV2() {
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
-            {canPropose && (
-              <button
-                onClick={async () => {
-                  const toSend = (rows || [])
-                    .filter((r) => Number(r["Replenishment Qty"]) > 0)
-                    .map((r) => ({
-                      sku: r["SKU"],
-                      model: r["Item No"] || r["Model"] || "",
-                      asin: r["ASIN"] || "",
-                      // Fossil is 1P Vendor Central; no per-FC breakdown at
-                      // this granularity. Use a placeholder so the approver
-                      // sees SKU-level rows; Kanwal can add FC-specific
-                      // splits during curation.
-                      destination_fc: "VENDOR",
-                      qty: Math.round(Number(r["Replenishment Qty"])),
-                    }));
-                  if (toSend.length === 0) {
-                    setProposeMsg("Nothing to propose — no rows with Replenishment Qty > 0");
-                    setTimeout(() => setProposeMsg(""), 4000);
-                    return;
-                  }
-                  const approver = "kanwal@cambiumretail.com";
-                  if (!confirm(`Propose ${toSend.length} Fossil SKUs to ${approver}?`)) return;
-                  setProposing(true); setProposeMsg("");
-                  try {
-                    const j = await proposePlan({
-                      account: "FOSSIL",
-                      rows: toSend,
-                      source_module: "fossil-replenishment",
-                      approver_email: approver,
-                    });
-                    setProposeMsg(`Proposed → ${j.batch_id}`);
-                  } catch (e) {
-                    setProposeMsg(`Error: ${e.message}`);
-                  } finally {
-                    setProposing(false);
-                    setTimeout(() => setProposeMsg(""), 8000);
-                  }
-                }}
-                disabled={proposing}
-                className="px-3 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
-                title="Snapshot the Fossil replenishment plan for Kanwal to approve"
-              >
-                {proposing ? "Proposing…" : "Propose to Approver"}
-              </button>
-            )}
+            {canPropose && (() => {
+              const APPROVER = "kanwal@cambiumretail.com";
+              const buildRows = () => (rows || [])
+                .filter((r) => Number(r["Replenishment Qty"]) > 0)
+                .map((r) => ({
+                  sku: r["SKU"],
+                  model: r["Item No"] || r["Model"] || "",
+                  asin: r["ASIN"] || "",
+                  // Fossil is 1P Vendor Central; no per-FC breakdown at
+                  // this granularity. Placeholder — Kanwal can split during curation.
+                  destination_fc: "VENDOR",
+                  qty: Math.round(Number(r["Replenishment Qty"])),
+                }));
+              const runSubmit = async (kind) => {
+                const toSend = buildRows();
+                if (toSend.length === 0) {
+                  setProposeMsg("Nothing to save — no rows with Replenishment Qty > 0");
+                  setTimeout(() => setProposeMsg(""), 4000);
+                  return;
+                }
+                const verb = kind === "draft" ? "Save" : "Propose";
+                const target = kind === "draft" ? "a draft (editable, not yet sent)" : APPROVER;
+                if (!confirm(`${verb} ${toSend.length} Fossil SKUs → ${target}?`)) return;
+                setProposing(true); setProposeMsg("");
+                try {
+                  const fn = kind === "draft" ? saveDraft : proposePlan;
+                  const j = await fn({
+                    account: "FOSSIL", rows: toSend,
+                    source_module: "fossil-replenishment",
+                    approver_email: APPROVER,
+                  });
+                  setProposeMsg(`${kind === "draft" ? "Draft saved" : "Proposed"} → ${j.batch_id}`);
+                } catch (e) {
+                  setProposeMsg(`Error: ${e.message}`);
+                } finally {
+                  setProposing(false);
+                  setTimeout(() => setProposeMsg(""), 8000);
+                }
+              };
+              return (
+                <>
+                  <button
+                    onClick={() => runSubmit("draft")}
+                    disabled={proposing}
+                    className="px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                    title="Save current rows as an editable draft. You can tweak before sending to Kanwal."
+                  >
+                    Save Draft
+                  </button>
+                  <button
+                    onClick={() => runSubmit("propose")}
+                    disabled={proposing}
+                    className="px-3 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50"
+                    title="Send immediately to Kanwal, skipping the draft state"
+                  >
+                    {proposing ? "…" : "Propose to Approver"}
+                  </button>
+                </>
+              );
+            })()}
             {proposeMsg && (
               <span className="text-xs text-amber-700 ml-1">{proposeMsg}</span>
             )}

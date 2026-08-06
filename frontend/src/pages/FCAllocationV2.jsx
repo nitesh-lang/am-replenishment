@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 
 import { getFCFinal } from "../api/replenishment";
-import { proposePlan } from "../api/plans";
+import { proposePlan, saveDraft } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 import { CommandPalette } from "../components/CommandPalette";
 import { SavedViews } from "../components/SavedViews";
@@ -613,48 +613,64 @@ export default function FCAllocationV2() {
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
-            {canPropose && (
-              <button
-                onClick={async () => {
-                  const toSend = rows
-                    .filter((r) => (r.send_qty || 0) > 0)
-                    .map((r) => ({
-                      sku: r.sku,
-                      model: r.model,
-                      asin: r.asin,
-                      destination_fc: r.fulfillment_center,
-                      qty: Math.round(r.send_qty || 0),
-                    }));
-                  if (toSend.length === 0) {
-                    setProposeMsg("Nothing to propose — no rows with send_qty > 0");
-                    setTimeout(() => setProposeMsg(""), 4000);
-                    return;
-                  }
-                  const approver = "sagar@cambiumretail.com";
-                  if (!confirm(`Propose ${toSend.length} rows for ${account} to ${approver}?`)) return;
-                  setProposing(true); setProposeMsg("");
-                  try {
-                    const j = await proposePlan({
-                      account,
-                      rows: toSend,
-                      source_module: "fc-allocation",
-                      approver_email: approver,
-                    });
-                    setProposeMsg(`Proposed → ${j.batch_id}`);
-                  } catch (e) {
-                    setProposeMsg(`Error: ${e.message}`);
-                  } finally {
-                    setProposing(false);
-                    setTimeout(() => setProposeMsg(""), 8000);
-                  }
-                }}
-                disabled={proposing}
-                className="px-3 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
-                title="Snapshot current FC Allocation rows into a plan for approver review"
-              >
-                {proposing ? "Proposing…" : "Propose to Approver"}
-              </button>
-            )}
+            {canPropose && (() => {
+              const APPROVER = "sagar@cambiumretail.com";
+              const buildRows = () => rows
+                .filter((r) => (r.send_qty || 0) > 0)
+                .map((r) => ({
+                  sku: r.sku,
+                  model: r.model,
+                  asin: r.asin,
+                  destination_fc: r.fulfillment_center,
+                  qty: Math.round(r.send_qty || 0),
+                }));
+              const runSubmit = async (kind) => {
+                const toSend = buildRows();
+                if (toSend.length === 0) {
+                  setProposeMsg("Nothing to save — no rows with send_qty > 0");
+                  setTimeout(() => setProposeMsg(""), 4000);
+                  return;
+                }
+                const verb = kind === "draft" ? "Save" : "Propose";
+                const target = kind === "draft" ? "a draft (editable, not yet sent)" : APPROVER;
+                if (!confirm(`${verb} ${toSend.length} rows for ${account} → ${target}?`)) return;
+                setProposing(true); setProposeMsg("");
+                try {
+                  const fn = kind === "draft" ? saveDraft : proposePlan;
+                  const j = await fn({
+                    account, rows: toSend,
+                    source_module: "fc-allocation",
+                    approver_email: APPROVER,
+                  });
+                  setProposeMsg(`${kind === "draft" ? "Draft saved" : "Proposed"} → ${j.batch_id}`);
+                } catch (e) {
+                  setProposeMsg(`Error: ${e.message}`);
+                } finally {
+                  setProposing(false);
+                  setTimeout(() => setProposeMsg(""), 8000);
+                }
+              };
+              return (
+                <>
+                  <button
+                    onClick={() => runSubmit("draft")}
+                    disabled={proposing}
+                    className="px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                    title="Save current rows as an editable draft plan. You can tweak it before sending to the approver."
+                  >
+                    Save Draft
+                  </button>
+                  <button
+                    onClick={() => runSubmit("propose")}
+                    disabled={proposing}
+                    className="px-3 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50"
+                    title="Send immediately to the approver, skipping the draft state"
+                  >
+                    {proposing ? "…" : "Propose to Approver"}
+                  </button>
+                </>
+              );
+            })()}
             {proposeMsg && (
               <span className="text-xs text-amber-700 ml-1">{proposeMsg}</span>
             )}

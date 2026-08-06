@@ -32,8 +32,20 @@ async function req(method, path, body) {
   return j;
 }
 
-export function proposePlan({ account, week_tag, rows }) {
-  return req("POST", "/plans/propose", { account, week_tag, rows });
+export function proposePlan({ account, week_tag, rows, source_module, approver_email, as_draft }) {
+  return req("POST", "/plans/propose", {
+    account, week_tag, rows, source_module, approver_email, as_draft,
+  });
+}
+
+export function saveDraft({ account, week_tag, rows, source_module, approver_email }) {
+  return req("POST", "/plans/save-draft", {
+    account, week_tag, rows, source_module, approver_email,
+  });
+}
+
+export function sendToApprover(batchId) {
+  return req("POST", `/plans/${encodeURIComponent(batchId)}/send`);
 }
 
 export function listPlans({ account, status, limit = 50 } = {}) {

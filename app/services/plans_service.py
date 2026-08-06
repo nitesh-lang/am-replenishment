@@ -16,11 +16,16 @@ Tables:
   plan_line_events   — append-only audit log (add/edit/delete/undelete)
 
 Status flow:
-  draft -> proposed (Naresh's "Propose" action; also the initial state
-                     when the batch is created)
-  proposed -> approved (Sagar's "Approve" action)
-  approved -> pushed (push_plan STUB; not shipped yet)
-  approved -> failed (retry available)
+  draft    -> proposed  (Naresh's "Send to Approver" action; drafts are
+                         editor-editable snapshots)
+  proposed -> approved  (assigned approver's "Approve" action)
+  approved -> pushed    (push_plan STUB; not shipped yet)
+  approved -> failed    (retry available)
+
+Edit permissions:
+  status='draft'    — only the proposer (or admin) can edit lines
+  status='proposed' — only the assigned approver (or admin) can edit lines
+  status='approved' or later — nobody can edit (create a new batch instead)
 """
 
 import json
@@ -132,6 +137,7 @@ def propose_plan(
     rows: list[dict],
     source_module: str | None = None,
     approver_email: str | None = None,
+    as_draft: bool = False,
 ) -> str:
     """Snapshot the caller-provided rows into a new batch.
 
@@ -161,6 +167,7 @@ def propose_plan(
         raise ValueError("no rows to propose")
 
     batch_id = _new_batch_id()
+    initial_status = "draft" if as_draft else "proposed"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -168,9 +175,9 @@ def propose_plan(
                 INSERT INTO plan_batches
                     (batch_id, account, source_module, approver_email,
                      week_tag, status, proposed_by)
-                VALUES (%s, %s, %s, %s, %s, 'proposed', %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
-                (batch_id, account, source_module, approver_email, week_tag, proposed_by),
+                (batch_id, account, source_module, approver_email, week_tag, initial_status, proposed_by),
             )
             for r in rows:
                 sku = str(r.get("sku", "")).strip().upper()
@@ -198,9 +205,10 @@ def propose_plan(
             cur.execute(
                 """
                 INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
-                VALUES (%s, 'propose', %s, %s)
+                VALUES (%s, %s, %s, %s)
                 """,
-                (batch_id, proposed_by, json.dumps({"row_count": len(rows), "account": account})),
+                (batch_id, "save_draft" if as_draft else "propose", proposed_by,
+                 json.dumps({"row_count": len(rows), "account": account})),
             )
         conn.commit()
     return batch_id
@@ -276,25 +284,47 @@ def _summarize(lines: list[dict]) -> dict:
 # ============================================================
 # LINE-LEVEL OPS (approver)
 # ============================================================
-def _assert_open(cur, batch_id: str) -> str:
-    cur.execute("SELECT status FROM plan_batches WHERE batch_id = %s", (batch_id,))
+def _assert_editable(cur, batch_id: str, actor: str, actor_is_admin: bool = False) -> dict:
+    """Ensure the batch is in an editable state AND the actor is allowed
+    to edit it (proposer for drafts, assigned approver for proposed).
+    Admin bypasses both checks. Returns the batch row (dict).
+    """
+    cur.execute(
+        "SELECT batch_id, status, proposed_by, approver_email FROM plan_batches WHERE batch_id = %s",
+        (batch_id,),
+    )
     row = cur.fetchone()
     if not row:
         raise ValueError(f"batch not found: {batch_id}")
-    status = row[0] if isinstance(row, tuple) else row["status"]
-    if status not in ("proposed",):
+    b = dict(row) if not isinstance(row, dict) else row
+    status = b["status"]
+    if status not in ("draft", "proposed"):
         raise ValueError(f"batch {batch_id} is {status}; not open for edits")
-    return status
+    if actor_is_admin:
+        return b
+    actor = (actor or "").strip().lower()
+    if status == "draft":
+        # Only the proposer can edit their own draft
+        if (b.get("proposed_by") or "").strip().lower() != actor:
+            raise ValueError("only the draft's proposer (or an admin) can edit it")
+    else:  # proposed
+        target = (b.get("approver_email") or "").strip().lower()
+        if target and actor != target:
+            raise ValueError(
+                f"this batch is addressed to {target}; only they (or an admin) can edit"
+            )
+    return b
 
 
-def edit_line(batch_id: str, line_id: int, new_qty: int, actor: str, row_version: int | None = None) -> dict:
+def edit_line(batch_id: str, line_id: int, new_qty: int, actor: str,
+              row_version: int | None = None, actor_is_admin: bool = False) -> dict:
     actor = (actor or "").strip().lower()
     new_qty = int(round(float(new_qty)))
     if new_qty < 0:
         raise ValueError("qty must be >= 0")
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            _assert_open(cur, batch_id)
+            _assert_editable(cur, batch_id, actor, actor_is_admin)
             cur.execute(
                 "SELECT * FROM plan_lines WHERE id = %s AND batch_id = %s",
                 (line_id, batch_id),
@@ -340,6 +370,7 @@ def add_line(
     asin: str | None = None,
     ship_from_wh: str | None = None,
     notes: str | None = None,
+    actor_is_admin: bool = False,
 ) -> dict:
     sku = (sku or "").strip().upper()
     fc  = (destination_fc or "").strip().upper()
@@ -351,7 +382,7 @@ def add_line(
         raise ValueError("qty must be > 0")
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            _assert_open(cur, batch_id)
+            _assert_editable(cur, batch_id, actor, actor_is_admin)
             # If a soft-deleted row exists for the same (batch, sku, fc), undelete
             # and update it instead of erroring out.
             cur.execute(
@@ -409,11 +440,11 @@ def add_line(
     return out
 
 
-def delete_line(batch_id: str, line_id: int, actor: str) -> dict:
+def delete_line(batch_id: str, line_id: int, actor: str, actor_is_admin: bool = False) -> dict:
     actor = (actor or "").strip().lower()
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
-            _assert_open(cur, batch_id)
+            _assert_editable(cur, batch_id, actor, actor_is_admin)
             cur.execute(
                 """
                 UPDATE plan_lines
@@ -434,6 +465,54 @@ def delete_line(batch_id: str, line_id: int, actor: str) -> dict:
                 VALUES (%s, %s, 'delete', %s, %s)
                 """,
                 (batch_id, line_id, actor, json.dumps({"qty": out["qty"]})),
+            )
+        conn.commit()
+    return out
+
+
+# ============================================================
+# SEND (draft -> proposed)
+# ============================================================
+def send_to_approver(batch_id: str, actor: str, actor_is_admin: bool = False) -> dict:
+    """Flip a draft batch to 'proposed' so the assigned approver can
+    take over. Only the original proposer (or an admin) can send."""
+    actor = (actor or "").strip().lower()
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT status, proposed_by, approver_email FROM plan_batches WHERE batch_id = %s",
+                (batch_id,),
+            )
+            b = cur.fetchone()
+            if not b:
+                raise ValueError(f"batch not found: {batch_id}")
+            if b["status"] != "draft":
+                raise ValueError(f"batch is {b['status']}; only 'draft' can be sent")
+            if not actor_is_admin and (b.get("proposed_by") or "").strip().lower() != actor:
+                raise ValueError("only the draft's proposer (or an admin) can send it")
+            cur.execute(
+                "SELECT COUNT(*) AS n FROM plan_lines WHERE batch_id = %s AND is_deleted = FALSE",
+                (batch_id,),
+            )
+            n = int(cur.fetchone()["n"])
+            if n == 0:
+                raise ValueError("cannot send an empty draft (all lines deleted)")
+            cur.execute(
+                """
+                UPDATE plan_batches
+                SET status = 'proposed', updated_at = NOW()
+                WHERE batch_id = %s
+                RETURNING *
+                """,
+                (batch_id,),
+            )
+            out = dict(cur.fetchone())
+            cur.execute(
+                """
+                INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                VALUES (%s, 'send', %s, %s)
+                """,
+                (batch_id, actor, json.dumps({"active_lines": n, "approver": b.get("approver_email")})),
             )
         conn.commit()
     return out

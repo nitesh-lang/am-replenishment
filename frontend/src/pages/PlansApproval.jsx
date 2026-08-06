@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   listPlans, getPlan, editLine, addLine, deleteLine, approvePlan, pushPlan,
+  sendToApprover,
 } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
 const STATUS_COLORS = {
-  proposed: "#f59e0b",
-  approved: "#10b981",
-  pushed:   "#3b82f6",
-  failed:   "#ef4444",
-  draft:    "#9ca3af",
+  draft:    "#8b5cf6",   // purple — editor-owned
+  proposed: "#f59e0b",   // amber — approver-owned
+  approved: "#10b981",   // green
+  pushed:   "#3b82f6",   // blue
+  failed:   "#ef4444",   // red
 };
 
 function fmt(dt) {
@@ -28,7 +29,8 @@ export default function PlansApproval() {
   const [batch, setBatch] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
-  const [statusFilter, setStatusFilter] = useState("proposed");
+  // Editor defaults to seeing their own drafts; approver defaults to proposed.
+  const [statusFilter, setStatusFilter] = useState(isEditor && !isApprover ? "draft" : "proposed");
 
   async function refreshList() {
     setErr("");
@@ -81,7 +83,8 @@ export default function PlansApproval() {
               style={{ padding: 6, borderRadius: 4, border: "1px solid #d1d5db" }}
             >
               <option value="">All</option>
-              <option value="proposed">Proposed</option>
+              <option value="draft">Draft (editor)</option>
+              <option value="proposed">Proposed (approver)</option>
               <option value="approved">Approved</option>
               <option value="pushed">Pushed</option>
               <option value="failed">Failed</option>
@@ -91,14 +94,20 @@ export default function PlansApproval() {
             {batches.length === 0 && (
               <div style={{ padding: 12, color: "#6b7280", fontSize: 12, lineHeight: 1.5 }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>No batches in this view.</div>
-                <div>
-                  Naresh proposes plans from <b>FC Allocation → Propose to Approver</b> (goes to Sagar)
-                  or from <b>Fossil Replenishment → Propose to Approver</b> (goes to Kanwal). Once
-                  proposed, the batch will appear here for the assigned approver to curate + approve.
+                <div style={{ marginBottom: 8 }}>
+                  <b>Editor flow (Naresh):</b>
+                  <ol style={{ margin: "4px 0 0 18px", padding: 0 }}>
+                    <li>FC Allocation or Fossil Replenishment → <b>Save Draft</b> (creates a purple draft)</li>
+                    <li>Come here → filter <b>Draft</b> → edit qty / add / remove rows</li>
+                    <li>Click <b>→ Send to Approver</b> when ready</li>
+                  </ol>
                 </div>
-                <div style={{ marginTop: 6, color: "#9ca3af" }}>
-                  Not seeing the Propose button? Check that the user has <code>plans-editor</code> in
-                  their allowed_modules (admin panel).
+                <div style={{ marginBottom: 8 }}>
+                  <b>Approver flow (Sagar / Kanwal):</b> filter <b>Proposed</b> → curate → <b>Approve</b>.
+                </div>
+                <div style={{ color: "#9ca3af" }}>
+                  Not seeing the buttons? Confirm the user has <code>plans-editor</code> or
+                  <code>plans-approver</code> in allowed_modules (admin panel).
                 </div>
               </div>
             )}
@@ -136,16 +145,23 @@ export default function PlansApproval() {
           )}
           {loading && <div style={{ padding: 24 }}>Loading…</div>}
           {batch && <BatchDetail batch={batch} onReload={() => loadBatch(batch.batch_id)}
-                                 isApprover={isApprover} />}
+                                 isApprover={isApprover} isEditor={isEditor}
+                                 currentEmail={(user?.email || "").toLowerCase()} />}
         </div>
       </div>
     </div>
   );
 }
 
-function BatchDetail({ batch, onReload, isApprover }) {
+function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
   const s = batch.summary || {};
-  const canEdit = isApprover && batch.status === "proposed";
+  const ownDraft = batch.status === "draft" &&
+                   ((batch.proposed_by || "").toLowerCase() === currentEmail || isApprover);
+  // Editors edit their own drafts; approvers edit proposed batches assigned
+  // to them. Admin bypasses via isApprover being true.
+  const canEdit = (isEditor && ownDraft) ||
+                  (isApprover && batch.status === "proposed");
+  const canSend = isEditor && ownDraft;
   const canApprove = isApprover && batch.status === "proposed";
   const canPush = isApprover && batch.status === "approved";
 
@@ -194,6 +210,19 @@ function BatchDetail({ batch, onReload, isApprover }) {
             style={btnStyle("#3b82f6")}
           >
             {showAdd ? "Cancel Add" : "+ Add Row"}
+          </button>
+        )}
+        {canSend && (
+          <button
+            onClick={() => {
+              if (!confirm(`Send draft ${batch.batch_id} to ${batch.approver_email || "the approver"}?`)) return;
+              act(() => sendToApprover(batch.batch_id));
+            }}
+            disabled={busy}
+            style={btnStyle("#8b5cf6")}
+            title="Flip this draft to 'proposed' and hand it to the assigned approver"
+          >
+            → Send to Approver
           </button>
         )}
         {canApprove && (
