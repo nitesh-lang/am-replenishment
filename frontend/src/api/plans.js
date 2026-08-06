@@ -1,14 +1,16 @@
 // API client for the plan approval workflow.
 // All calls send the auth Bearer token; caller handles 401/403 → login redirect.
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 const STORAGE_KEY = "am_repl_auth_v2";
-// Chrome caches CORS preflight per URL. If the API cold-started and a
-// preflight to /plans got no CORS headers back, Chrome cached that
-// failure for 10 min and blocks every subsequent /plans call. Every
-// endpoint is aliased under /api/* so hopping there gives a fresh
-// preflight cache and dodges any poisoned entry.
+// Use a RELATIVE URL so the browser sees the request as same-origin.
+// The frontend's _redirects proxies /api/* to the backend, which means
+// no CORS handshake is needed at all — bulletproof against browsers,
+// ISPs, and proxies that mishandle CORS headers.
 const P = "/api/plans";
+// Dev fallback: when running Vite locally without the redirect proxy,
+// hop straight to the API host. In prod, VITE_API_BASE is unset so BASE
+// is "" and requests go relative to the frontend's origin.
+const BASE = import.meta.env.DEV ? (import.meta.env.VITE_API_BASE || "http://localhost:8060") : "";
 
 function token() {
   try {
