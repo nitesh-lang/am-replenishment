@@ -1,8 +1,1 @@
-# Proxy /api/* to the FastAPI backend so the browser sees same-origin
-# and no CORS handshake is required. This is a hard fix for
-# environments (ISP proxies, corporate networks, buggy extensions) that
-# strip CORS headers between the API and the browser.
-/api/*  https://am-replenishment.onrender.com/api/:splat  200
-
-# SPA fallback for client-side routing (leave as-is)
 /*  /index.html  200
