@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 
 import { getReplenishment, getKPIs } from "../api/replenishment";
+import { proposePlan, saveDraft } from "../api/plans";
+import { useAuth } from "../auth/AuthContext";
 import { logUsage } from "../auth/usage";
 import { Sparkline, classifyTrend } from "../components/Sparkline";
 import { DetailRow } from "../components/DetailRow";
@@ -32,6 +34,11 @@ import { cn } from "../lib/cn";
 const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8060";
 
 export default function ReplenishmentV2() {
+  const { user } = useAuth();
+  const canPropose = (user?.allowedModules || []).includes("plans-editor") || user?.role === "admin";
+  const [proposing, setProposing] = useState(false);
+  const [proposeMsg, setProposeMsg] = useState("");
+
   /* ─────────── filters / window ─────────── */
   const [fromWeek, setFromWeek] = useState(1);
   const [toWeek, setToWeek] = useState(12);
@@ -481,6 +488,70 @@ export default function ReplenishmentV2() {
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
+            {canPropose && (() => {
+              const APPROVER = String(account).toUpperCase() === "FOSSIL"
+                ? "kanwal@cambiumretail.com"
+                : "sagar@cambiumretail.com";
+              const buildRows = () => (rows || [])
+                .filter((r) => Number(r.replenishment_qty) > 0)
+                .map((r) => ({
+                  sku: r.sku,
+                  model: r.model || "",
+                  asin: r.asin || "",
+                  // Replenishment tab is per-SKU aggregate — no FC dimension
+                  destination_fc: "AGGREGATE",
+                  qty: Math.round(Number(r.replenishment_qty)),
+                }));
+              const runSubmit = async (kind) => {
+                const toSend = buildRows();
+                if (toSend.length === 0) {
+                  setProposeMsg("Nothing to save — no rows with Replen Qty > 0");
+                  setTimeout(() => setProposeMsg(""), 4000);
+                  return;
+                }
+                const verb = kind === "draft" ? "Save" : "Propose";
+                const target = kind === "draft" ? "a draft (editable, not yet sent)" : APPROVER;
+                if (!confirm(`${verb} ${toSend.length} rows for ${account} → ${target}?`)) return;
+                setProposing(true); setProposeMsg("");
+                try {
+                  const fn = kind === "draft" ? saveDraft : proposePlan;
+                  const j = await fn({
+                    account, rows: toSend,
+                    source_module: "replenishment",
+                    approver_email: APPROVER,
+                  });
+                  setProposeMsg(`${kind === "draft" ? "Draft saved" : "Proposed"} → ${j.batch_id}`);
+                } catch (e) {
+                  setProposeMsg(`Error: ${e.message}`);
+                } finally {
+                  setProposing(false);
+                  setTimeout(() => setProposeMsg(""), 8000);
+                }
+              };
+              return (
+                <>
+                  <button
+                    onClick={() => runSubmit("draft")}
+                    disabled={proposing}
+                    className="px-3 py-2 rounded-md border border-slate-300 bg-white text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                    title="Save current rows as an editable draft. Tweak in Plans Approval before sending."
+                  >
+                    Save Draft
+                  </button>
+                  <button
+                    onClick={() => runSubmit("propose")}
+                    disabled={proposing}
+                    className="px-3 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium disabled:opacity-50"
+                    title={`Send immediately to ${APPROVER}`}
+                  >
+                    {proposing ? "…" : "Propose to Approver"}
+                  </button>
+                </>
+              );
+            })()}
+            {proposeMsg && (
+              <span className="text-xs text-amber-700 ml-1">{proposeMsg}</span>
+            )}
             {!isReadOnly && (
               <button
                 onClick={saveWeek}
