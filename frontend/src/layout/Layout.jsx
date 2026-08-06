@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
-import { LogOut, ChevronDown, Search, MoreHorizontal } from "lucide-react";
+import { LogOut, ChevronDown, Search } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 
 /**
@@ -10,16 +10,13 @@ import { useAuth } from "../auth/AuthContext";
  */
 export default function Layout({ children }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const menuRef = useRef(null);
-  const moreRef = useRef(null);
   const navigate = useNavigate();
   const { user, logout, canAccess } = useAuth();
 
   useEffect(() => {
     function onClick(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
-      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
@@ -35,27 +32,24 @@ export default function Layout({ children }) {
     .slice(0, 2)
     .toUpperCase();
 
-  // Primary (operational) modules — always visible in the top bar
+  // Every visible link renders directly in the top nav (no "More" dropdown).
+  // Order: operational modules first, then analytics, then admin-only tools.
   const navItems = [
-    { name: "Dashboard",     path: "/dashboard",              moduleKey: "dashboard" },
-    { name: "Replenishment", path: "/replenishment",          moduleKey: "replenishment" },
-    { name: "FBA Inbound",   path: "/fba-inbound",            moduleKey: "replenishment" },
-    { name: "FC Allocation", path: "/fc-allocation",          moduleKey: "fc-allocation" },
-    { name: "PO Creation",   path: "/po-creation",            moduleKey: "fc-allocation" },
-    { name: "Reorder",       path: "/china-reorder",          moduleKey: "china-reorder" },
-    { name: "CB",            path: "/cb-replenishment",       moduleKey: "cb-replenishment" },
-    { name: "Clicktech",     path: "/wm-replenishment",       moduleKey: "wm-replenishment" },
-    { name: "Fossil",        path: "/fossil-replenishment",   moduleKey: "fossil-replenishment" },
-    { name: "Blinkit",       path: "/blinkit-replenishment",  moduleKey: "blinkit-replenishment" },
-  ].filter(item => canAccess(item.moduleKey));
-
-  // Secondary — analytics + admin. Tucked into a "More ▾" dropdown.
-  const moreItems = [
-    { name: "Sales Analytics", path: "/sales-analytics", moduleKey: "sales-analytics", show: canAccess("sales-analytics") },
-    { name: "Region Sales",    path: "/region-sales",    moduleKey: "region-sales",    show: canAccess("region-sales") },
-    { name: "Plans Approval",  path: "/plans",                                          show: canAccess("plans-editor") || canAccess("plans-approver") || user?.role === "admin" },
-    { name: "Usage Analytics", path: "/usage",                                          show: user?.role === "admin" },
-    { name: "User Management", path: "/admin",                                          show: user?.role === "admin" },
+    { name: "Dashboard",       path: "/dashboard",             show: canAccess("dashboard") },
+    { name: "Replenishment",   path: "/replenishment",         show: canAccess("replenishment") },
+    { name: "FBA Inbound",     path: "/fba-inbound",           show: canAccess("replenishment") },
+    { name: "FC Allocation",   path: "/fc-allocation",         show: canAccess("fc-allocation") },
+    { name: "PO Creation",     path: "/po-creation",           show: canAccess("fc-allocation") },
+    { name: "Reorder",         path: "/china-reorder",         show: canAccess("china-reorder") },
+    { name: "CB",              path: "/cb-replenishment",      show: canAccess("cb-replenishment") },
+    { name: "Clicktech",       path: "/wm-replenishment",      show: canAccess("wm-replenishment") },
+    { name: "Fossil",          path: "/fossil-replenishment",  show: canAccess("fossil-replenishment") },
+    { name: "Blinkit",         path: "/blinkit-replenishment", show: canAccess("blinkit-replenishment") },
+    { name: "Plans",           path: "/plans",                 show: canAccess("plans-editor") || canAccess("plans-approver") || user?.role === "admin" },
+    { name: "Sales Analytics", path: "/sales-analytics",       show: canAccess("sales-analytics") },
+    { name: "Region Sales",    path: "/region-sales",          show: canAccess("region-sales") },
+    { name: "Usage",           path: "/usage",                 show: user?.role === "admin" },
+    { name: "Users",           path: "/admin",                 show: user?.role === "admin" },
   ].filter(i => i.show);
 
   function openCommandPalette() {
@@ -79,7 +73,7 @@ export default function Layout({ children }) {
             </div>
           </div>
 
-          {/* Module nav */}
+          {/* Module nav — everything in one horizontal strip, scrollable if crowded */}
           <nav className="flex items-center gap-0.5 overflow-x-auto flex-1 min-w-0">
             {navItems.map(item => (
               <NavLink
@@ -96,46 +90,6 @@ export default function Layout({ children }) {
                 {item.name}
               </NavLink>
             ))}
-
-            {moreItems.length > 0 && (
-              <div className="relative" ref={moreRef}>
-                <button
-                  onClick={() => setMoreOpen(v => !v)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium whitespace-nowrap transition-colors ${
-                    moreOpen
-                      ? "bg-white/10 text-white"
-                      : "text-white/60 hover:bg-white/5 hover:text-white/90"
-                  }`}
-                >
-                  <MoreHorizontal className="w-3.5 h-3.5" />
-                  More
-                  <ChevronDown className={`w-3 h-3 transition-transform ${moreOpen ? "rotate-180" : ""}`} />
-                </button>
-                {moreOpen && (
-                  <div className="absolute left-0 mt-2 w-64 bg-white border border-slate-300 rounded-lg shadow-2xl py-1.5 z-50 overflow-hidden">
-                    <div className="px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-slate-500 font-bold border-b border-slate-100">
-                      Analytics & Admin
-                    </div>
-                    {moreItems.map(item => (
-                      <NavLink
-                        key={item.path}
-                        to={item.path}
-                        onClick={() => setMoreOpen(false)}
-                        className={({ isActive }) =>
-                          `block px-4 py-2.5 text-sm font-semibold transition-colors ${
-                            isActive
-                              ? "bg-indigo-50 text-indigo-700"
-                              : "text-slate-800 hover:bg-slate-100"
-                          }`
-                        }
-                      >
-                        {item.name}
-                      </NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </nav>
 
           {/* Right controls */}
