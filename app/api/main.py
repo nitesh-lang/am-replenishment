@@ -163,6 +163,11 @@ app.add_middleware(
         "https://am-replenishment-1.onrender.com",
         "https://am-replenishment.onrender.com",
     ],
+    # Cap the preflight cache at 1 min. If the API cold-starts and the
+    # browser gets a failed preflight, Chrome caches that failure for
+    # max_age seconds and blocks every subsequent request without asking
+    # the server. 10 min was too painful; 60s recovers automatically.
+    max_age=60,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
