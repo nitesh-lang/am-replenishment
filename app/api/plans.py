@@ -80,20 +80,21 @@ def get_plan(batch_id: str, request: Request, include_deleted: bool = True):
 @router.post("/plans/propose")
 async def propose(request: Request):
     """Snapshot rows into a batch. Body may include `as_draft=true` to
-    park in the draft state (editor-editable, not yet sent to approver)."""
+    park in the draft state (editor-editable, not yet sent to approver).
+    Optional `cover_weeks` — the N-wk cover selector the editor used;
+    stored on the batch so the approver sees the planning context."""
     actor = _editor(request)
     body = await request.json()
-    account         = body.get("account")
-    week_tag        = body.get("week_tag")
-    rows            = body.get("rows") or []
-    source_module   = body.get("source_module")
-    approver_email  = body.get("approver_email")
-    as_draft        = bool(body.get("as_draft"))
     try:
         batch_id = plans_service.propose_plan(
-            account=account, proposed_by=actor, week_tag=week_tag, rows=rows,
-            source_module=source_module, approver_email=approver_email,
-            as_draft=as_draft,
+            account=body.get("account"),
+            proposed_by=actor,
+            week_tag=body.get("week_tag"),
+            rows=body.get("rows") or [],
+            source_module=body.get("source_module"),
+            approver_email=body.get("approver_email"),
+            as_draft=bool(body.get("as_draft")),
+            cover_weeks=body.get("cover_weeks"),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -113,11 +114,32 @@ async def save_draft(request: Request):
             rows=body.get("rows") or [],
             source_module=body.get("source_module"),
             approver_email=body.get("approver_email"),
+            cover_weeks=body.get("cover_weeks"),
             as_draft=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return _ok({"status": "ok", "batch_id": batch_id})
+
+
+@router.post("/plans/{batch_id}/request-rework")
+async def request_rework(batch_id: str, request: Request):
+    """Approver flips proposed → draft with a feedback note that the
+    original proposer sees when they open the draft."""
+    actor = _approver(request)
+    is_admin = auth_users.is_admin(actor)
+    body = await request.json()
+    feedback = (body.get("feedback") or "").strip()
+    if not feedback:
+        raise HTTPException(status_code=400, detail="feedback is required")
+    try:
+        out = plans_service.request_rework(
+            batch_id=batch_id, actor=actor, feedback=feedback,
+            actor_is_admin=is_admin,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return _ok({"status": "ok", "batch": out})
 
 
 @router.post("/plans/{batch_id}/send")

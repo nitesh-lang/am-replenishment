@@ -505,6 +505,10 @@ export default function ReplenishmentV2() {
                   // per-FC control, use FC Allocation's Propose flow instead.
                   destination_fc: "ISK3",
                   qty: Math.round(Number(r.replenishment_qty)),
+                  // Snapshot planning context so approver sees the numbers
+                  real_am_inv:     r.real_am_inv_available ?? null,
+                  mother_inv:      r.ampm_inventory ?? null,
+                  weekly_velocity: r.weekly_velocity ?? r.sales_velocity ?? null,
                 }));
               const runSubmit = async (kind) => {
                 const toSend = buildRows();
@@ -523,6 +527,7 @@ export default function ReplenishmentV2() {
                     account, rows: toSend,
                     source_module: "replenishment",
                     approver_email: APPROVER,
+                    cover_weeks: Number(replenishWeeks) || null,
                   });
                   setProposeMsg(`${kind === "draft" ? "Draft saved" : "Proposed"} → ${j.batch_id}`);
                 } catch (e) {

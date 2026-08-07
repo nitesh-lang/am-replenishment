@@ -37,16 +37,20 @@ async function req(method, path, body) {
   return j;
 }
 
-export function proposePlan({ account, week_tag, rows, source_module, approver_email, as_draft }) {
+export function proposePlan({ account, week_tag, rows, source_module, approver_email, as_draft, cover_weeks }) {
   return req("POST", `${P}/propose`, {
-    account, week_tag, rows, source_module, approver_email, as_draft,
+    account, week_tag, rows, source_module, approver_email, as_draft, cover_weeks,
   });
 }
 
-export function saveDraft({ account, week_tag, rows, source_module, approver_email }) {
+export function saveDraft({ account, week_tag, rows, source_module, approver_email, cover_weeks }) {
   return req("POST", `${P}/save-draft`, {
-    account, week_tag, rows, source_module, approver_email,
+    account, week_tag, rows, source_module, approver_email, cover_weeks,
   });
+}
+
+export function requestRework(batchId, feedback) {
+  return req("POST", `${P}/${encodeURIComponent(batchId)}/request-rework`, { feedback });
 }
 
 export function sendToApprover(batchId) {

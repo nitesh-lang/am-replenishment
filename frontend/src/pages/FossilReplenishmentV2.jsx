@@ -371,6 +371,10 @@ export default function FossilReplenishmentV2() {
                   // this granularity. Placeholder — Kanwal can split during curation.
                   destination_fc: "VENDOR",
                   qty: Math.round(Number(r["Replenishment Qty"])),
+                  // Snapshot planning context for approver
+                  real_am_inv:     r["Total Inventory"] ?? null,
+                  mother_inv:      r["Cambium SOH"] ?? null,
+                  weekly_velocity: r["Fossil Weekly Sales"] ?? null,
                 }));
               const runSubmit = async (kind) => {
                 const toSend = buildRows();
@@ -389,6 +393,7 @@ export default function FossilReplenishmentV2() {
                     account: "FOSSIL", rows: toSend,
                     source_module: "fossil-replenishment",
                     approver_email: APPROVER,
+                    cover_weeks: Number(coverWeeks) || null,
                   });
                   setProposeMsg(`${kind === "draft" ? "Draft saved" : "Proposed"} → ${j.batch_id}`);
                 } catch (e) {

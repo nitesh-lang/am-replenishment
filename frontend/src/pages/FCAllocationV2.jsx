@@ -623,6 +623,10 @@ export default function FCAllocationV2() {
                   asin: r.asin,
                   destination_fc: r.fulfillment_center,
                   qty: Math.round(r.send_qty || 0),
+                  // Snapshot planning context so approver sees Naresh's numbers
+                  real_am_inv:     r.fc_inventory ?? null,
+                  mother_inv:      r.ampm_inventory ?? null,
+                  weekly_velocity: r.weekly_velocity ?? null,
                 }));
               const runSubmit = async (kind) => {
                 const toSend = buildRows();
@@ -641,6 +645,7 @@ export default function FCAllocationV2() {
                     account, rows: toSend,
                     source_module: "fc-allocation",
                     approver_email: APPROVER,
+                    cover_weeks: Number(replenishWeeks) || null,
                   });
                   setProposeMsg(`${kind === "draft" ? "Draft saved" : "Proposed"} → ${j.batch_id}`);
                 } catch (e) {

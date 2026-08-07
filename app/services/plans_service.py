@@ -63,8 +63,13 @@ CREATE TABLE IF NOT EXISTS plan_batches (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 -- Add columns idempotently for pre-existing deployments
-ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS source_module  TEXT;
-ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS approver_email TEXT;
+ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS source_module     TEXT;
+ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS approver_email    TEXT;
+ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS cover_weeks       INT;
+ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS approver_feedback TEXT;
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS real_am_inv       INT;
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS mother_inv        INT;
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS weekly_velocity   NUMERIC(10,2);
 
 CREATE INDEX IF NOT EXISTS idx_plan_batches_account_status
     ON plan_batches (account, status);
@@ -139,6 +144,7 @@ def propose_plan(
     source_module: str | None = None,
     approver_email: str | None = None,
     as_draft: bool = False,
+    cover_weeks: int | None = None,
 ) -> str:
     """Snapshot the caller-provided rows into a new batch.
 
@@ -169,16 +175,28 @@ def propose_plan(
 
     batch_id = _new_batch_id()
     initial_status = "draft" if as_draft else "proposed"
+
+    def _int_or_none(v):
+        if v is None or v == "": return None
+        try: return int(round(float(v)))
+        except (TypeError, ValueError): return None
+
+    def _float_or_none(v):
+        if v is None or v == "": return None
+        try: return float(v)
+        except (TypeError, ValueError): return None
+
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO plan_batches
                     (batch_id, account, source_module, approver_email,
-                     week_tag, status, proposed_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                     week_tag, cover_weeks, status, proposed_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
-                (batch_id, account, source_module, approver_email, week_tag, initial_status, proposed_by),
+                (batch_id, account, source_module, approver_email, week_tag,
+                 _int_or_none(cover_weeks), initial_status, proposed_by),
             )
             for r in rows:
                 sku = str(r.get("sku", "")).strip().upper()
@@ -190,8 +208,9 @@ def propose_plan(
                     """
                     INSERT INTO plan_lines
                         (batch_id, sku, model, asin, destination_fc,
-                         ship_from_wh, qty, original_send_qty, added_by)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         ship_from_wh, qty, original_send_qty, added_by,
+                         real_am_inv, mother_inv, weekly_velocity)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (batch_id, sku, destination_fc) DO NOTHING
                     """,
                     (
@@ -201,6 +220,9 @@ def propose_plan(
                         fc,
                         str(r.get("ship_from_wh") or "").strip() or None,
                         qty, qty, proposed_by,
+                        _int_or_none(r.get("real_am_inv")),
+                        _int_or_none(r.get("mother_inv")),
+                        _float_or_none(r.get("weekly_velocity")),
                     ),
                 )
             cur.execute(
@@ -538,6 +560,56 @@ def delete_batch(batch_id: str, actor: str, actor_is_admin: bool = False) -> dic
             cur.execute("DELETE FROM plan_batches WHERE batch_id = %s", (batch_id,))
         conn.commit()
     return {"batch_id": batch_id, "prior_status": status, "deleted_by": actor}
+
+
+# ============================================================
+# REQUEST REWORK (proposed -> draft, w/ feedback)
+# ============================================================
+def request_rework(batch_id: str, actor: str, feedback: str,
+                   actor_is_admin: bool = False) -> dict:
+    """Approver flips proposed -> draft with a feedback note. Editor
+    (original proposer) can then edit + re-send. Only the assigned
+    approver (or admin) can request rework."""
+    actor = (actor or "").strip().lower()
+    feedback = (feedback or "").strip()
+    if not feedback:
+        raise ValueError("feedback text is required for a rework request")
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT status, approver_email FROM plan_batches WHERE batch_id = %s",
+                (batch_id,),
+            )
+            b = cur.fetchone()
+            if not b:
+                raise ValueError(f"batch not found: {batch_id}")
+            if b["status"] != "proposed":
+                raise ValueError(f"batch is {b['status']}; only 'proposed' can be sent for rework")
+            if not actor_is_admin:
+                target = (b.get("approver_email") or "").strip().lower()
+                if target and actor != target:
+                    raise ValueError(
+                        f"this batch is addressed to {target}; only they (or admin) can request rework"
+                    )
+            cur.execute(
+                """
+                UPDATE plan_batches
+                SET status = 'draft', approver_feedback = %s, updated_at = NOW()
+                WHERE batch_id = %s
+                RETURNING *
+                """,
+                (feedback, batch_id),
+            )
+            out = dict(cur.fetchone())
+            cur.execute(
+                """
+                INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                VALUES (%s, 'request_rework', %s, %s)
+                """,
+                (batch_id, actor, json.dumps({"feedback": feedback})),
+            )
+        conn.commit()
+    return out
 
 
 # ============================================================

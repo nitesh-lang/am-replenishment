@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   listPlans, getPlan, editLine, addLine, deleteLine, approvePlan, pushPlan,
-  sendToApprover, deletePlan,
+  sendToApprover, deletePlan, requestRework,
 } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
@@ -213,15 +213,33 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
       <div style={{
         background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6,
         padding: 12, marginBottom: 12, display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)", gap: 12,
+        gridTemplateColumns: "repeat(5, 1fr)", gap: 12,
       }}>
         <Stat label="Total Units" value={s.total_units} />
         <Stat label="Unique SKUs" value={s.unique_skus} />
         <Stat label="Unique FCs" value={s.unique_fcs} />
+        <Stat label="Cover wks" value={batch.cover_weeks ?? "—"} />
         <Stat label="Δ vs original"
               value={(s.delta_units > 0 ? "+" : "") + s.delta_units}
               color={s.delta_units === 0 ? "#6b7280" : s.delta_units > 0 ? "#10b981" : "#ef4444"} />
       </div>
+
+      {/* Approver feedback — banner visible to everyone who has ever
+          worked on this batch. Editor sees this when they view their
+          draft after a rework request. */}
+      {batch.approver_feedback && (
+        <div style={{
+          background: "#fef3c7", border: "1px solid #f59e0b", borderRadius: 6,
+          padding: 12, marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 11, color: "#92400e", fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>
+            Approver Feedback {batch.status === "draft" ? "(rework requested)" : ""}
+          </div>
+          <div style={{ fontSize: 13, color: "#78350f", whiteSpace: "pre-wrap" }}>
+            {batch.approver_feedback}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         {canEdit && (
@@ -247,16 +265,35 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
           </button>
         )}
         {canApprove && (
-          <button
-            onClick={() => {
-              if (!confirm(`Approve batch ${batch.batch_id}? This freezes the plan.`)) return;
-              act(() => approvePlan(batch.batch_id));
-            }}
-            disabled={busy}
-            style={btnStyle("#10b981")}
-          >
-            ✓ Approve & Freeze
-          </button>
+          <>
+            <button
+              onClick={() => {
+                const fb = prompt(`Send back to ${batch.proposed_by} with feedback:\n\n(This flips status to 'draft'. Editor can revise + re-send.)`, "");
+                if (fb === null) return;
+                const trimmed = fb.trim();
+                if (!trimmed) {
+                  alert("Feedback required to request rework.");
+                  return;
+                }
+                act(() => requestRework(batch.batch_id, trimmed));
+              }}
+              disabled={busy}
+              style={btnStyle("#f59e0b")}
+              title="Send back to the proposer with a feedback note"
+            >
+              ✎ Request Rework
+            </button>
+            <button
+              onClick={() => {
+                if (!confirm(`Approve batch ${batch.batch_id}? This freezes the plan.`)) return;
+                act(() => approvePlan(batch.batch_id));
+              }}
+              disabled={busy}
+              style={btnStyle("#10b981")}
+            >
+              ✓ Approve & Freeze
+            </button>
+          </>
         )}
         {canPush && (
           <>
@@ -327,6 +364,9 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
             <tr style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
               <Th>SKU</Th><Th>Model</Th><Th>ASIN</Th><Th>FC</Th>
               <Th align="right">Qty</Th><Th align="right">Original</Th>
+              <Th align="right" title="Amazon FBA available at push time">Real AM Inv</Th>
+              <Th align="right" title="AMPM / Cambium warehouse stock at push time">Mother Inv</Th>
+              <Th align="right" title="Sales velocity Naresh's calc used (units/wk)">Vel/wk</Th>
               <Th>Remarks</Th>
               <Th>Added By</Th><Th>Edited By</Th>
               {canEdit && <Th>Actions</Th>}
@@ -426,6 +466,9 @@ function LineRow({ line, canEdit, batchId, onReload }) {
         )}
       </Td>
       <Td align="right"><span style={{ color: "#9ca3af" }}>{line.original_send_qty}</span></Td>
+      <Td align="right"><span style={{ color: "#6b7280" }}>{line.real_am_inv ?? "—"}</span></Td>
+      <Td align="right"><span style={{ color: "#6b7280" }}>{line.mother_inv ?? "—"}</span></Td>
+      <Td align="right"><span style={{ color: "#6b7280" }}>{line.weekly_velocity != null ? Number(line.weekly_velocity).toFixed(1) : "—"}</span></Td>
       <Td>
         {canEdit && !deleted ? (
           <input
