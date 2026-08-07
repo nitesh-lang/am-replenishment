@@ -498,8 +498,12 @@ export default function ReplenishmentV2() {
                   sku: r.sku,
                   model: r.model || "",
                   asin: r.asin || "",
-                  // Replenishment tab is per-SKU aggregate — no FC dimension
-                  destination_fc: "AGGREGATE",
+                  // Replenishment tab is per-SKU aggregate — no FC dimension.
+                  // Route all lines to ISK3 (Amazon India's default marketplace
+                  // FC). Operator-approved 2026-08-07: for SKU-level asks we
+                  // let ISK3 receive and Amazon distributes from there. For
+                  // per-FC control, use FC Allocation's Propose flow instead.
+                  destination_fc: "ISK3",
                   qty: Math.round(Number(r.replenishment_qty)),
                 }));
               const runSubmit = async (kind) => {
