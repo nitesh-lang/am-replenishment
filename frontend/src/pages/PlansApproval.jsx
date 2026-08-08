@@ -213,12 +213,14 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
       <div style={{
         background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6,
         padding: 12, marginBottom: 12, display: "grid",
-        gridTemplateColumns: "repeat(5, 1fr)", gap: 12,
+        gridTemplateColumns: "repeat(6, 1fr)", gap: 12,
       }}>
         <Stat label="Total Units" value={s.total_units} />
         <Stat label="Unique SKUs" value={s.unique_skus} />
         <Stat label="Unique FCs" value={s.unique_fcs} />
         <Stat label="Cover wks" value={batch.cover_weeks ?? "—"} />
+        <Stat label="OrderPilot ships" value={_shipmentBuckets(batch.lines || [])}
+              color="#8b5cf6" />
         <Stat label="Δ vs original"
               value={(s.delta_units > 0 ? "+" : "") + s.delta_units}
               color={s.delta_units === 0 ? "#6b7280" : s.delta_units > 0 ? "#10b981" : "#ef4444"} />
@@ -363,6 +365,7 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
           <thead>
             <tr style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
               <Th>SKU</Th><Th>Model</Th><Th>ASIN</Th><Th>FC</Th>
+              <Th title="Amazon FBA split key: Hazmat × IXD determines which shipment this line goes to">Split</Th>
               <Th align="right">Qty</Th><Th align="right">Original</Th>
               <Th align="right" title="Amazon FBA available at push time">Real AM Inv</Th>
               <Th align="right" title="AMPM / Cambium warehouse stock at push time">Mother Inv</Th>
@@ -455,6 +458,18 @@ function LineRow({ line, canEdit, batchId, onReload }) {
       <Td>{line.model || "—"}</Td>
       <Td>{line.asin || "—"}</Td>
       <Td>{line.destination_fc}</Td>
+      <Td>
+        <div style={{ display: "flex", gap: 3 }}>
+          <Badge color={line.hazmat ? "#ef4444" : "#10b981"}>
+            {line.hazmat ? "HZ" : "NH"}
+          </Badge>
+          {line.ixd_flag && (
+            <Badge color={line.ixd_flag === "IXD" ? "#3b82f6" : "#6b7280"}>
+              {line.ixd_flag === "NON IXD" ? "N-IXD" : "IXD"}
+            </Badge>
+          )}
+        </div>
+      </Td>
       <Td align="right">
         {canEdit && !deleted ? (
           <input
@@ -537,6 +552,18 @@ function AddRowForm({ batch, onDone }) {
 }
 
 // ────────────────────────────── small style helpers
+// Bucket by (fc, hazmat, ixd) to preview how many shipments OrderPilot will create.
+// Amazon FBA rejects mixed hazmat/non-hazmat AND mixed IXD/non-IXD shipments,
+// so each unique triple = one distinct shipment.
+function _shipmentBuckets(lines) {
+  const active = (lines || []).filter((l) => !l.is_deleted);
+  if (!active.length) return 0;
+  const keys = new Set(active.map((l) =>
+    `${l.destination_fc}|${l.hazmat ? "H" : "N"}|${l.ixd_flag || "?"}`
+  ));
+  return keys.size;
+}
+
 const Stat = ({ label, value, color }) => (
   <div>
     <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase" }}>{label}</div>

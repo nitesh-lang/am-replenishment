@@ -493,23 +493,35 @@ export default function ReplenishmentV2() {
                 ? "kanwal@cambiumretail.com"
                 : "sagar@cambiumretail.com";
               const buildRows = () => (rows || [])
-                .filter((r) => Number(r.replenishment_qty) > 0)
-                .map((r) => ({
-                  sku: r.sku,
-                  model: r.model || "",
-                  asin: r.asin || "",
-                  // Replenishment tab is per-SKU aggregate — no FC dimension.
-                  // Route all lines to ISK3 (Amazon India's default marketplace
-                  // FC). Operator-approved 2026-08-07: for SKU-level asks we
-                  // let ISK3 receive and Amazon distributes from there. For
-                  // per-FC control, use FC Allocation's Propose flow instead.
-                  destination_fc: "ISK3",
-                  qty: Math.round(Number(r.replenishment_qty)),
-                  // Snapshot planning context so approver sees the numbers
-                  real_am_inv:     r.real_am_inv_available ?? null,
-                  mother_inv:      r.ampm_inventory ?? null,
-                  weekly_velocity: r.weekly_velocity ?? r.sales_velocity ?? null,
-                }));
+                .map((r) => {
+                  // Prefer Naresh's Working Value override if he entered one;
+                  // else fall back to the calc engine's replenishment_qty.
+                  const wv = workingValues[r.sku];
+                  const finalQty = Math.round(Number(
+                    (wv !== undefined && wv !== "" && wv !== null) ? wv : r.replenishment_qty
+                  ) || 0);
+                  return {
+                    sku: r.sku,
+                    model: r.model || "",
+                    asin: r.asin || "",
+                    // Replenishment tab is per-SKU aggregate — no FC dimension.
+                    // Route all lines to ISK3 (Amazon India's default marketplace
+                    // FC). Operator-approved 2026-08-07: for SKU-level asks we
+                    // let ISK3 receive and Amazon distributes from there. For
+                    // per-FC control, use FC Allocation's Propose flow instead.
+                    destination_fc: "ISK3",
+                    qty: finalQty,
+                    // Snapshot planning context so approver sees the numbers
+                    real_am_inv:     r.real_am_inv_available ?? null,
+                    mother_inv:      r.ampm_inventory ?? null,
+                    weekly_velocity: r.weekly_velocity ?? r.sales_velocity ?? null,
+                    // Amazon FBA split keys
+                    hazmat:   String(r["Hazmat/non-Hazmat"] || r.hazmat_type || "").toLowerCase().includes("hazmat")
+                              && !String(r["Hazmat/non-Hazmat"] || "").toLowerCase().includes("non"),
+                    ixd_flag: r.ixd_flag || (String(r["Hazmat Type"] || r.hazmat_type || "").toUpperCase().includes("NON IXD") ? "NON IXD" : "IXD"),
+                  };
+                })
+                .filter((r) => r.qty > 0);
               const runSubmit = async (kind) => {
                 const toSend = buildRows();
                 if (toSend.length === 0) {

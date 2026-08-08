@@ -375,6 +375,9 @@ export default function FossilReplenishmentV2() {
                   real_am_inv:     r["Total Inventory"] ?? null,
                   mother_inv:      r["Cambium SOH"] ?? null,
                   weekly_velocity: r["Fossil Weekly Sales"] ?? null,
+                  // Vendor Central doesn't split by hazmat/IXD — send null
+                  hazmat:   null,
+                  ixd_flag: null,
                 }));
               const runSubmit = async (kind) => {
                 const toSend = buildRows();

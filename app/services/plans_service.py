@@ -70,6 +70,11 @@ ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS approver_feedback TEXT;
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS real_am_inv       INT;
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS mother_inv        INT;
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS weekly_velocity   NUMERIC(10,2);
+-- Amazon FBA rejects mixed shipments — OrderPilot must split each per-FC
+-- group into 4 buckets (Hazmat × IXD). AM_Replen snapshots these flags
+-- per line at propose time so the split key travels with the payload.
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS hazmat            BOOLEAN;
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS ixd_flag          TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_plan_batches_account_status
     ON plan_batches (account, status);
@@ -204,13 +209,34 @@ def propose_plan(
                 qty = int(round(float(r.get("qty") or r.get("send_qty") or 0)))
                 if not sku or not fc or qty <= 0:
                     continue
+                # Hazmat / IXD split keys — bool + text. Frontend may
+                # send booleans or strings; normalize here.
+                hz_raw = r.get("hazmat")
+                if isinstance(hz_raw, bool):
+                    hazmat = hz_raw
+                elif hz_raw is None or hz_raw == "":
+                    hazmat = None
+                else:
+                    hazmat = "hazmat" in str(hz_raw).lower() and "non" not in str(hz_raw).lower()
+                ixd_raw = str(r.get("ixd_flag") or "").strip().upper()
+                # Canonicalize to "IXD" / "NON IXD" / None. "NON IXD Hazmat" → "NON IXD"
+                if not ixd_raw:
+                    ixd_flag = None
+                elif "NON IXD" in ixd_raw or "NON-IXD" in ixd_raw:
+                    ixd_flag = "NON IXD"
+                elif "IXD" in ixd_raw:
+                    ixd_flag = "IXD"
+                else:
+                    ixd_flag = ixd_raw  # keep as-is if unrecognized
+
                 cur.execute(
                     """
                     INSERT INTO plan_lines
                         (batch_id, sku, model, asin, destination_fc,
                          ship_from_wh, qty, original_send_qty, added_by,
-                         real_am_inv, mother_inv, weekly_velocity)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         real_am_inv, mother_inv, weekly_velocity,
+                         hazmat, ixd_flag)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (batch_id, sku, destination_fc) DO NOTHING
                     """,
                     (
@@ -223,6 +249,7 @@ def propose_plan(
                         _int_or_none(r.get("real_am_inv")),
                         _int_or_none(r.get("mother_inv")),
                         _float_or_none(r.get("weekly_velocity")),
+                        hazmat, ixd_flag,
                     ),
                 )
             cur.execute(
@@ -797,6 +824,11 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
                 "ship_from_wh":    l.get("ship_from_wh"),
                 "qty":             int(l["qty"]),
                 "notes":           l.get("notes"),
+                # Split keys — OrderPilot MUST bucket by (destination_fc,
+                # hazmat, ixd_flag) since Amazon FBA rejects mixed shipments.
+                # Both null on Fossil / VENDOR path (1P Vendor Central).
+                "hazmat":          l.get("hazmat"),
+                "ixd_flag":        l.get("ixd_flag"),
             }
             for l in lines
         ],

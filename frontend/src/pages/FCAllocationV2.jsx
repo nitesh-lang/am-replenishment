@@ -627,6 +627,9 @@ export default function FCAllocationV2() {
                   real_am_inv:     r.fc_inventory ?? null,
                   mother_inv:      r.ampm_inventory ?? null,
                   weekly_velocity: r.weekly_velocity ?? null,
+                  // Amazon FBA split keys — OrderPilot buckets by (fc, hazmat, ixd)
+                  hazmat:   String(r.hazmat_type || "").toLowerCase().includes("hazmat"),
+                  ixd_flag: r.ixd_flag || (String(r.hazmat_type || "").toUpperCase().includes("NON IXD") ? "NON IXD" : "IXD"),
                 }));
               const runSubmit = async (kind) => {
                 const toSend = buildRows();
