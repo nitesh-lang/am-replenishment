@@ -627,9 +627,20 @@ export default function FCAllocationV2() {
                   real_am_inv:     r.fc_inventory ?? null,
                   mother_inv:      r.ampm_inventory ?? null,
                   weekly_velocity: r.weekly_velocity ?? null,
-                  // Amazon FBA split keys — OrderPilot buckets by (fc, hazmat, ixd)
-                  hazmat:   String(r.hazmat_type || "").toLowerCase().includes("hazmat"),
-                  ixd_flag: r.ixd_flag || (String(r.hazmat_type || "").toUpperCase().includes("NON IXD") ? "NON IXD" : "IXD"),
+                  // Amazon FBA split keys — OrderPilot buckets by (fc, hazmat, ixd).
+                  // hazmat_type values: "IXD Hazmat" | "IXD Non-Hazmat" |
+                  //                     "Non-IXD Hazmat" | "Non-IXD Non Hazmat"
+                  hazmat: (() => {
+                    const t = String(r.hazmat_type || "").toLowerCase();
+                    // Substring "hazmat" matches "non-hazmat" too; exclude via regex
+                    return t.includes("hazmat") && !/non[- ]hazmat/.test(t);
+                  })(),
+                  ixd_flag: r.ixd_flag || (() => {
+                    const t = String(r.hazmat_type || "").toUpperCase().replace(/-/g, " ");
+                    if (t.includes("NON IXD")) return "NON IXD";
+                    if (t.includes("IXD"))     return "IXD";
+                    return null;
+                  })(),
                 }));
               const runSubmit = async (kind) => {
                 const toSend = buildRows();

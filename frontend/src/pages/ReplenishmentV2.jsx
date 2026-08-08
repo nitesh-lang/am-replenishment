@@ -515,10 +515,21 @@ export default function ReplenishmentV2() {
                     real_am_inv:     r.real_am_inv_available ?? null,
                     mother_inv:      r.ampm_inventory ?? null,
                     weekly_velocity: r.weekly_velocity ?? r.sales_velocity ?? null,
-                    // Amazon FBA split keys
-                    hazmat:   String(r["Hazmat/non-Hazmat"] || r.hazmat_type || "").toLowerCase().includes("hazmat")
-                              && !String(r["Hazmat/non-Hazmat"] || "").toLowerCase().includes("non"),
-                    ixd_flag: r.ixd_flag || (String(r["Hazmat Type"] || r.hazmat_type || "").toUpperCase().includes("NON IXD") ? "NON IXD" : "IXD"),
+                    // Amazon FBA split keys.
+                    // API sends r.hazmat_type = "IXD Hazmat" | "IXD Non-Hazmat" |
+                    //                          "Non-IXD Hazmat" | "Non-IXD Non Hazmat"
+                    // and r.ixd_type = "IXD" | "NON IXD" (backend already canonicalized).
+                    hazmat: (() => {
+                      const t = String(r.hazmat_type || "").toLowerCase();
+                      // Substring "hazmat" matches "non-hazmat" too, so exclude via regex
+                      return t.includes("hazmat") && !/non[- ]hazmat/.test(t);
+                    })(),
+                    ixd_flag: r.ixd_type || (() => {
+                      const t = String(r.hazmat_type || "").toUpperCase().replace(/-/g, " ");
+                      if (t.includes("NON IXD")) return "NON IXD";
+                      if (t.includes("IXD"))     return "IXD";
+                      return null;
+                    })(),
                   };
                 })
                 .filter((r) => r.qty > 0);
