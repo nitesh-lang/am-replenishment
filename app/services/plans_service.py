@@ -882,7 +882,19 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
             return {"status": "ok", "dry_run": True, "batch_id": batch_id,
                     "preview_shipment_ids": shipment_ids}
 
-        # Real push — flip status and store shipment IDs per line
+        # Real push — flip status and store shipment IDs per line.
+        # OrderPilot returns bucketed keys like "DEL4|H|IXD" (fc|H/N|IXD/N-IXD).
+        # Fall back to bare fc key for Fossil VENDOR path or older receivers.
+        def _bucket_key(l):
+            fc = l["destination_fc"]
+            hz = l.get("hazmat")
+            ix = l.get("ixd_flag")
+            if hz is None and ix is None:
+                return fc  # Fossil VENDOR — never bucketed
+            hz_c = "H" if hz else "N"
+            ix_c = "N-IXD" if (ix or "").upper() == "NON IXD" else "IXD"
+            return f"{fc}|{hz_c}|{ix_c}"
+
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -892,7 +904,8 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
                     (batch_id,),
                 )
                 for l in lines:
-                    sid = shipment_ids.get(l["destination_fc"])
+                    # Try bucketed key first, then bare fc for backward compat
+                    sid = shipment_ids.get(_bucket_key(l)) or shipment_ids.get(l["destination_fc"])
                     if sid:
                         cur.execute(
                             """UPDATE plan_lines
