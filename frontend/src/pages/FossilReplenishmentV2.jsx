@@ -397,6 +397,13 @@ export default function FossilReplenishmentV2() {
                     source_module: "fossil-replenishment",
                     approver_email: APPROVER,
                     cover_weeks: Number(coverWeeks) || null,
+                    filter_context: {
+                      brand:           brand   || "All",
+                      sales_from_week: fromWeek ?? null,
+                      sales_to_week:   toWeek   ?? null,
+                      view:            view    || "all",
+                      search:          search  || null,
+                    },
                   });
                   setProposeMsg(`${kind === "draft" ? "Draft saved" : "Proposed"} → ${j.batch_id}`);
                 } catch (e) {

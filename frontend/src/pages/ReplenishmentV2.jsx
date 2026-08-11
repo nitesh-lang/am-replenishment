@@ -595,6 +595,14 @@ export default function ReplenishmentV2() {
                     source_module: "replenishment",
                     approver_email: APPROVER,
                     cover_weeks: Number(replenishWeeks) || null,
+                    filter_context: {
+                      sales_from_week: fromWeek ?? null,
+                      sales_to_week:   toWeek   ?? null,
+                      view:            view    || "all",
+                      search:          search  || null,
+                      selected_categories: selectedCategories || [],
+                      selected_statuses:   selectedStatuses   || [],
+                    },
                   });
                   setProposeMsg(`${kind === "draft" ? "Draft saved" : "Proposed"} → ${j.batch_id}`);
                 } catch (e) {

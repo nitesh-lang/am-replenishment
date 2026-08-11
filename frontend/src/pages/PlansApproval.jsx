@@ -226,6 +226,36 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
               color={s.delta_units === 0 ? "#6b7280" : s.delta_units > 0 ? "#10b981" : "#ef4444"} />
       </div>
 
+      {/* Filter context — what Naresh had selected when he proposed */}
+      {batch.filter_context && Object.keys(batch.filter_context).length > 0 && (
+        <div style={{
+          background: "#eef2ff", border: "1px solid #c7d2fe", borderRadius: 6,
+          padding: 8, marginBottom: 12, display: "flex", flexWrap: "wrap", gap: 6,
+          alignItems: "center",
+        }}>
+          <span style={{ fontSize: 10, color: "#4338ca", fontWeight: 600, textTransform: "uppercase", marginRight: 4 }}>
+            Proposer's filters:
+          </span>
+          {Object.entries(batch.filter_context).map(([k, v]) => {
+            const label = k.replace(/_/g, " ");
+            const val =
+              v === null || v === undefined || v === "" ? "—" :
+              Array.isArray(v) ? (v.length === 0 ? "—" : v.join(", ")) :
+              String(v);
+            if (val === "—" || val === "all" || val === "All") return null;
+            return (
+              <span key={k} style={{
+                fontSize: 11, background: "white", border: "1px solid #c7d2fe",
+                borderRadius: 4, padding: "2px 6px", color: "#312e81",
+              }}>
+                <span style={{ color: "#6366f1", marginRight: 4 }}>{label}:</span>
+                <b>{val}</b>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
       {/* Approver feedback — banner visible to everyone who has ever
           worked on this batch. Editor sees this when they view their
           draft after a rework request. */}

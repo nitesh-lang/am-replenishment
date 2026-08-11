@@ -82,7 +82,9 @@ async def propose(request: Request):
     """Snapshot rows into a batch. Body may include `as_draft=true` to
     park in the draft state (editor-editable, not yet sent to approver).
     Optional `cover_weeks` — the N-wk cover selector the editor used;
-    stored on the batch so the approver sees the planning context."""
+    stored on the batch so the approver sees the planning context.
+    Optional `filter_context` — dict of channel/from_week/to_week/view
+    filters Naresh had active at propose time; approver renders as chips."""
     actor = _editor(request)
     body = await request.json()
     try:
@@ -95,6 +97,7 @@ async def propose(request: Request):
             approver_email=body.get("approver_email"),
             as_draft=bool(body.get("as_draft")),
             cover_weeks=body.get("cover_weeks"),
+            filter_context=body.get("filter_context"),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -115,6 +118,7 @@ async def save_draft(request: Request):
             source_module=body.get("source_module"),
             approver_email=body.get("approver_email"),
             cover_weeks=body.get("cover_weeks"),
+            filter_context=body.get("filter_context"),
             as_draft=True,
         )
     except ValueError as e:

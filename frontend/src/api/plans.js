@@ -37,15 +37,15 @@ async function req(method, path, body) {
   return j;
 }
 
-export function proposePlan({ account, week_tag, rows, source_module, approver_email, as_draft, cover_weeks }) {
+export function proposePlan({ account, week_tag, rows, source_module, approver_email, as_draft, cover_weeks, filter_context }) {
   return req("POST", `${P}/propose`, {
-    account, week_tag, rows, source_module, approver_email, as_draft, cover_weeks,
+    account, week_tag, rows, source_module, approver_email, as_draft, cover_weeks, filter_context,
   });
 }
 
-export function saveDraft({ account, week_tag, rows, source_module, approver_email, cover_weeks }) {
+export function saveDraft({ account, week_tag, rows, source_module, approver_email, cover_weeks, filter_context }) {
   return req("POST", `${P}/save-draft`, {
-    account, week_tag, rows, source_module, approver_email, cover_weeks,
+    account, week_tag, rows, source_module, approver_email, cover_weeks, filter_context,
   });
 }
 

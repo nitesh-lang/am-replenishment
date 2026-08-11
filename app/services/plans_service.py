@@ -75,6 +75,10 @@ ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS weekly_velocity   NUMERIC(10,2
 -- per line at propose time so the split key travels with the payload.
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS hazmat            BOOLEAN;
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS ixd_flag          TEXT;
+-- Snapshot of the filter/selector state Naresh had when he proposed:
+-- channel, sales-window from/to week, view filter, replenish_weeks cover.
+-- Approver renders these as chips so they know what generated the plan.
+ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS filter_context    JSONB;
 
 CREATE INDEX IF NOT EXISTS idx_plan_batches_account_status
     ON plan_batches (account, status);
@@ -150,6 +154,7 @@ def propose_plan(
     approver_email: str | None = None,
     as_draft: bool = False,
     cover_weeks: int | None = None,
+    filter_context: dict | None = None,
 ) -> str:
     """Snapshot the caller-provided rows into a new batch.
 
@@ -193,15 +198,16 @@ def propose_plan(
 
     with get_conn() as conn:
         with conn.cursor() as cur:
+            fc_json = json.dumps(filter_context) if isinstance(filter_context, dict) and filter_context else None
             cur.execute(
                 """
                 INSERT INTO plan_batches
                     (batch_id, account, source_module, approver_email,
-                     week_tag, cover_weeks, status, proposed_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                     week_tag, cover_weeks, filter_context, status, proposed_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
                 """,
                 (batch_id, account, source_module, approver_email, week_tag,
-                 _int_or_none(cover_weeks), initial_status, proposed_by),
+                 _int_or_none(cover_weeks), fc_json, initial_status, proposed_by),
             )
             for r in rows:
                 sku = str(r.get("sku", "")).strip().upper()
