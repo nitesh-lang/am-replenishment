@@ -662,15 +662,16 @@ export default function FCAllocationV2() {
               const APPROVER = "sagar@cambiumretail.com";
               const buildRows = () => rows
                 .map((r) => {
-                  // qty = LITERAL Working Value Naresh typed (falls back to
-                  // calc's send_qty ONLY if he never touched the row). If he
-                  // explicitly set 0 with a remark, keep the row (approver
-                  // reads the note). Matches the Replenishment tab rule.
+                  // qty = LITERAL Working Value Naresh typed. Blank Working
+                  // → 0 (does NOT fall back to calc's send_qty — approver
+                  // reviews Naresh's choices, not the system's defaults).
+                  // Rows Naresh never touched are dropped by the filter below.
+                  // Matches the Replenishment tab rule exactly.
                   const key = `${r.sku}|${r.fulfillment_center}`;
                   const wv  = workingValues[key];
                   const calcQty = Math.round(r.send_qty || 0);
                   const workingSet = wv !== undefined && wv !== "" && wv !== null;
-                  const finalQty = workingSet ? Math.round(Number(wv) || 0) : calcQty;
+                  const finalQty = workingSet ? Math.round(Number(wv) || 0) : 0;
                   const notes = (remarksMap[key] ?? r.remarks ?? "").trim();
                   return {
                   sku: r.sku,
@@ -703,10 +704,12 @@ export default function FCAllocationV2() {
                   })(),
                   };
                 })
-                // Include a row if there's a qty > 0, OR if Naresh
-                // explicitly set Working (even to 0) and left a remark
-                // explaining why. Otherwise skip (he didn't touch this row).
-                .filter((r) => r.qty > 0 || (r._working_set && r._has_notes));
+                // Only rows Naresh actually worked on:
+                //   - Working set to any value (including 0), OR
+                //   - Remark added (even without touching Working)
+                // Untouched rows are dropped — approver reviews Naresh's
+                // curated set, not the raw calc dump.
+                .filter((r) => r._working_set || r._has_notes);
               const runSubmit = async (kind) => {
                 const toSend = buildRows();
                 if (toSend.length === 0) {
