@@ -527,9 +527,10 @@ export default function ReplenishmentV2() {
                   // Prefer Naresh's Working Value override if he entered one;
                   // else fall back to the calc engine's replenishment_qty.
                   const wv = workingValues[r.sku];
-                  const finalQty = Math.round(Number(
-                    (wv !== undefined && wv !== "" && wv !== null) ? wv : r.replenishment_qty
-                  ) || 0);
+                  const calcQty = Math.round(Number(r.replenishment_qty) || 0);
+                  const finalQty = (wv !== undefined && wv !== "" && wv !== null)
+                    ? Math.round(Number(wv) || 0)
+                    : calcQty;
                   return {
                     sku: r.sku,
                     model: r.model || "",
@@ -541,6 +542,12 @@ export default function ReplenishmentV2() {
                     // per-FC control, use FC Allocation's Propose flow instead.
                     destination_fc: "ISK3",
                     qty: finalQty,
+                    // Keep the calc's original qty separate so the approver
+                    // can see what the system suggested vs what Naresh set.
+                    original_send_qty: calcQty,
+                    // Naresh's per-row remarks flow to plan_lines.notes so the
+                    // approver reads them in the Plans Approval Remarks column.
+                    notes: remarksMap[r.sku] ?? r.remarks ?? null,
                     // Snapshot planning context so approver sees the numbers
                     real_am_inv:     r.real_am_inv_available ?? null,
                     mother_inv:      r.ampm_inventory ?? null,

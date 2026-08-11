@@ -229,14 +229,24 @@ def propose_plan(
                 else:
                     ixd_flag = ixd_raw  # keep as-is if unrecognized
 
+                # If caller sent original_send_qty explicitly (Replenishment
+                # tab does this to preserve the calc engine's suggestion),
+                # respect it. Otherwise mirror qty (current behaviour).
+                orig_qty = _int_or_none(r.get("original_send_qty"))
+                if orig_qty is None:
+                    orig_qty = qty
+                notes = r.get("notes")
+                if notes is not None:
+                    notes = str(notes).strip() or None
+
                 cur.execute(
                     """
                     INSERT INTO plan_lines
                         (batch_id, sku, model, asin, destination_fc,
                          ship_from_wh, qty, original_send_qty, added_by,
                          real_am_inv, mother_inv, weekly_velocity,
-                         hazmat, ixd_flag)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         hazmat, ixd_flag, notes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (batch_id, sku, destination_fc) DO NOTHING
                     """,
                     (
@@ -245,11 +255,12 @@ def propose_plan(
                         str(r.get("asin")  or "").strip() or None,
                         fc,
                         str(r.get("ship_from_wh") or "").strip() or None,
-                        qty, qty, proposed_by,
+                        qty, orig_qty, proposed_by,
                         _int_or_none(r.get("real_am_inv")),
                         _int_or_none(r.get("mother_inv")),
                         _float_or_none(r.get("weekly_velocity")),
                         hazmat, ixd_flag,
+                        notes,
                     ),
                 )
             cur.execute(
