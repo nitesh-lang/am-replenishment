@@ -207,7 +207,14 @@ def propose_plan(
                 sku = str(r.get("sku", "")).strip().upper()
                 fc  = str(r.get("destination_fc") or r.get("fulfillment_center") or "").strip().upper()
                 qty = int(round(float(r.get("qty") or r.get("send_qty") or 0)))
-                if not sku or not fc or qty <= 0:
+                if not sku or not fc:
+                    continue
+                # Zero-qty rows are kept ONLY when the caller included a
+                # non-empty note — Naresh may have looked at a SKU, set
+                # Working=0/blank on purpose, and left a remark explaining
+                # why. Approver needs to see that row + note.
+                _notes = str(r.get("notes") or "").strip()
+                if qty <= 0 and not _notes:
                     continue
                 # Hazmat / IXD split keys — bool + text. Frontend may
                 # send booleans or strings; normalize here.

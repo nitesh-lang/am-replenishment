@@ -524,13 +524,15 @@ export default function ReplenishmentV2() {
                 : "sagar@cambiumretail.com";
               const buildRows = () => (rows || [])
                 .map((r) => {
-                  // Prefer Naresh's Working Value override if he entered one;
-                  // else fall back to the calc engine's replenishment_qty.
+                  // qty = LITERAL Working Value Naresh typed. Never fall
+                  // back to rec_qty — the approver reviews Naresh's choice,
+                  // not the system's suggestion. Blank Working → 0.
                   const wv = workingValues[r.sku];
+                  const workingQty = (wv === undefined || wv === "" || wv === null)
+                    ? 0
+                    : Math.round(Number(wv) || 0);
                   const calcQty = Math.round(Number(r.replenishment_qty) || 0);
-                  const finalQty = (wv !== undefined && wv !== "" && wv !== null)
-                    ? Math.round(Number(wv) || 0)
-                    : calcQty;
+                  const notes = (remarksMap[r.sku] ?? r.remarks ?? "").trim();
                   return {
                     sku: r.sku,
                     model: r.model || "",
@@ -541,13 +543,16 @@ export default function ReplenishmentV2() {
                     // let ISK3 receive and Amazon distributes from there. For
                     // per-FC control, use FC Allocation's Propose flow instead.
                     destination_fc: "ISK3",
-                    qty: finalQty,
+                    qty: workingQty,
                     // Keep the calc's original qty separate so the approver
                     // can see what the system suggested vs what Naresh set.
                     original_send_qty: calcQty,
                     // Naresh's per-row remarks flow to plan_lines.notes so the
                     // approver reads them in the Plans Approval Remarks column.
-                    notes: remarksMap[r.sku] ?? r.remarks ?? null,
+                    notes: notes || null,
+                    // Marker so the backend keeps rows with qty=0 when
+                    // there's a remark — approver needs to see the note.
+                    _has_notes: !!notes,
                     // Snapshot planning context so approver sees the numbers
                     real_am_inv:     r.real_am_inv_available ?? null,
                     mother_inv:      r.ampm_inventory ?? null,
@@ -569,7 +574,9 @@ export default function ReplenishmentV2() {
                     })(),
                   };
                 })
-                .filter((r) => r.qty > 0);
+                // Keep the row if Naresh set a qty > 0 OR left a remark
+                // (blank+no-remark = he didn't touch this SKU, skip).
+                .filter((r) => r.qty > 0 || r._has_notes);
               const runSubmit = async (kind) => {
                 const toSend = buildRows();
                 if (toSend.length === 0) {
