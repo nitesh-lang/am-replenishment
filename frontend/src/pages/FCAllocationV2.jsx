@@ -659,7 +659,11 @@ export default function FCAllocationV2() {
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
             {canPropose && (() => {
-              const APPROVER = "sagar@cambiumretail.com";
+              // Kanwal owns Audio Array + Fossil (1P-heavy brands);
+              // Sagar covers Nex / Viomi / WM / Tonor.
+              const APPROVER = ["FOSSIL", "AUDIOARRAY", "AUDIO ARRAY"].includes(String(account).toUpperCase())
+                ? "kanwal@cambiumretail.com"
+                : "sagar@cambiumretail.com";
               const buildRows = () => rows
                 .map((r) => {
                   // qty = LITERAL Working Value Naresh typed. Blank Working

@@ -519,7 +519,9 @@ export default function ReplenishmentV2() {
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
             {canPropose && (() => {
-              const APPROVER = String(account).toUpperCase() === "FOSSIL"
+              // Kanwal owns Audio Array + Fossil (both 1P-heavy brands);
+              // Sagar covers the 3P accounts (Nex / Viomi / WM / Tonor).
+              const APPROVER = ["FOSSIL", "AUDIOARRAY", "AUDIO ARRAY"].includes(String(account).toUpperCase())
                 ? "kanwal@cambiumretail.com"
                 : "sagar@cambiumretail.com";
               const buildRows = () => (rows || [])
