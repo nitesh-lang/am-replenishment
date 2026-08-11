@@ -113,7 +113,8 @@ def get_replenishment(
             "carton_break_flag": bool(row.get("carton_break_flag", False)),
             "cartons_needed": int(row.get("cartons_needed", 0)),
             "excess_units": int(row.get("excess_units", 0)),
-            "working_value": saved_map.get(sku, ""),
+            "working_value": (saved_map.get(sku) or {}).get("working_value", ""),
+            "remarks":       (saved_map.get(sku) or {}).get("remarks", ""),
             "weekly_sales":  list(row.get("weekly_sales", []) or []),
             "weekly_window": list(row.get("weekly_window", []) or []),
         })

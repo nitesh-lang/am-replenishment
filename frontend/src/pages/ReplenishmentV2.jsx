@@ -65,11 +65,35 @@ export default function ReplenishmentV2() {
   const [pastWeekMeta, setPastWeekMeta] = useState(null);
   const [savedWeeks, setSavedWeeks] = useState([]);
   const [workingValues, setWorkingValues] = useState({});
+  const [remarksMap, setRemarksMap] = useState({});
   const [masterCartons, setMasterCartons] = useState({});
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [autoSavingSku, setAutoSavingSku] = useState(null);
   const isReadOnly = weekStart !== null;
+
+  /* Auto-save a single row (working_value + remarks) on blur.
+     Uses the same /replenishment/save endpoint — sends just that one row
+     so downstream logic (locked-week guard, upsert) all works unchanged. */
+  async function autoSaveRow(row) {
+    if (isReadOnly || currentWeekMeta?.locked) return;
+    if (!row?.sku) return;
+    setAutoSavingSku(row.sku);
+    try {
+      const payload = {
+        ...row,
+        working_value: workingValues[row.sku] ?? row.working_value ?? "",
+        remarks:       remarksMap[row.sku]    ?? row.remarks       ?? "",
+      };
+      await fetch(`${BASE}/replenishment/save`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account, rows: [payload] }),
+      });
+    } catch { /* silent — UI still shows the value */ }
+    finally { setAutoSavingSku(null); }
+  }
 
   /* ─────────── range-select ─────────── */
   const [selRange, setSelRange] = useState(null);
@@ -104,9 +128,13 @@ export default function ReplenishmentV2() {
       const data = Array.isArray(replRes) ? replRes : [];
       data.forEach(r => { r.master_carton = masterCartons[r.model] ?? r.master_carton ?? ""; });
       setRows(data);
-      const wv = {};
-      data.forEach(r => { if (r.sku && r.working_value) wv[r.sku] = r.working_value; });
+      const wv = {}, rk = {};
+      data.forEach(r => {
+        if (r.sku && r.working_value) wv[r.sku] = r.working_value;
+        if (r.sku && r.remarks)       rk[r.sku] = r.remarks;
+      });
       setWorkingValues(wv);
+      setRemarksMap(rk);
       setDirty(false);
     });
 
@@ -116,8 +144,12 @@ export default function ReplenishmentV2() {
       const data = Array.isArray(j.rows) ? j.rows : [];
       setRows(data);
       setPastWeekMeta({ week_start: j.week_start, week_end: j.week_end, label: j.label });
-      const wv = {};
-      data.forEach(r => { if (r.sku && r.working_value) wv[r.sku] = r.working_value; });
+      const wv = {}, rk = {};
+      data.forEach(r => {
+        if (r.sku && r.working_value) wv[r.sku] = r.working_value;
+        if (r.sku && r.remarks)       rk[r.sku] = r.remarks;
+      });
+      setRemarksMap(rk);
       setWorkingValues(wv);
       setDirty(false);
       setKpis(null);
@@ -137,6 +169,7 @@ export default function ReplenishmentV2() {
       const payload = rows.map(r => ({
         ...r,
         working_value: workingValues[r.sku] ?? r.working_value ?? "",
+        remarks:       remarksMap[r.sku]    ?? r.remarks       ?? "",
       }));
       const res = await fetch(`${BASE}/replenishment/save`, {
         method: "POST",
@@ -241,13 +274,10 @@ export default function ReplenishmentV2() {
     { id: "warehouse_shortfall", accessorKey: "warehouse_shortfall", header: "Shortfall", size: 85, meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "replenishment_qty",accessorKey: "replenishment_qty",header: "Replen Qty",size: 90,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "buffer_note",      accessorKey: "buffer_note",      header: "Buffer",    size: 100, meta: { group: "rep" } },
-    { id: "oos_weeks_3m",     accessorKey: "oos_weeks_3m",     header: "OOS 3m",    size: 70, meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "thin_weeks_3m",    accessorKey: "thin_weeks_3m",    header: "Thin 3m",   size: 70, meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "lost_units_3m",    accessorKey: "lost_units_3m",    header: "Lost Est",  size: 80, meta: { group: "rep", numeric: true, sortDescFirst: true } },
-    { id: "momentum_flag",    accessorKey: "momentum_flag",    header: "Momentum",  size: 95, meta: { group: "rep" } },
     { id: "recommended_qty",  accessorKey: "recommended_qty",  header: "Rec Qty",   size: 80,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "cartons_needed",   accessorKey: "cartons_needed",   header: "Cartons",   size: 80,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "working_value",    accessorKey: "working_value",    header: "Working",   size: 85,  meta: { group: "rep" } },
+    { id: "remarks",          accessorKey: "remarks",          header: "Remarks",   size: 220, meta: { group: "rep" } },
     { id: "ixd_type",         accessorKey: "ixd_type",         header: "IXD",       size: 65,  meta: { group: "log" } },
     { id: "hazmat_type",      accessorKey: "hazmat_type",      header: "Hazmat",    size: 90,  meta: { group: "log" } },
     { id: "master_carton",    accessorKey: "master_carton",    header: "MC",        size: 55,  meta: { group: "log" } },
@@ -873,44 +903,6 @@ export default function ReplenishmentV2() {
                             );
                           } else if (colId === "replenishment_qty") {
                             content = <span className="font-bold tabular-nums text-slate-900">{r.replenishment_qty}</span>;
-                          } else if (colId === "oos_weeks_3m") {
-                            const n = r.oos_weeks_3m || 0;
-                            content = n === 0 ? <span className="text-slate-300">—</span> : (
-                              <span className={cn("tabular-nums font-semibold",
-                                n >= 4 ? "text-red-700" : n >= 2 ? "text-red-600" : "text-amber-700")}>
-                                {n}
-                              </span>
-                            );
-                          } else if (colId === "thin_weeks_3m") {
-                            const n = r.thin_weeks_3m || 0;
-                            content = n === 0 ? <span className="text-slate-300">—</span> : (
-                              <span className={cn("tabular-nums font-semibold",
-                                n >= 4 ? "text-red-600" : n >= 2 ? "text-amber-700" : "text-slate-600")}>
-                                {n}
-                              </span>
-                            );
-                          } else if (colId === "lost_units_3m") {
-                            const v = r.lost_units_3m || 0;
-                            content = v === 0 ? <span className="text-slate-300">—</span> : (
-                              <span className="tabular-nums text-slate-700 font-medium">{v.toLocaleString("en-IN")}</span>
-                            );
-                          } else if (colId === "momentum_flag") {
-                            const flag = r.momentum_flag || "";
-                            const oos = r.oos_weeks_3m || 0;
-                            const thin = r.thin_weeks_3m || 0;
-                            // RED sub-label: prefer "Bleeding" (OOS) if applicable, else "Starving" (thin)
-                            const redLabel = oos >= 2 ? "Bleeding" : "Starving";
-                            if (flag === "RED") content = (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase bg-red-100 text-red-800 ring-1 ring-red-300">
-                                {redLabel}
-                              </span>
-                            );
-                            else if (flag === "AMBER") content = (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase bg-amber-100 text-amber-800 ring-1 ring-amber-300">
-                                At risk
-                              </span>
-                            );
-                            else content = <span className="text-slate-300">—</span>;
                           } else if (colId === "recommended_qty") {
                             const recQty     = r.recommended_qty ?? r.replenishment_qty ?? 0;
                             const rawQty     = r.replenishment_qty ?? 0;
@@ -955,17 +947,37 @@ export default function ReplenishmentV2() {
                               : <span className="text-slate-500 text-xs">{r.hazmat_type || "—"}</span>;
                           } else if (colId === "working_value") {
                             content = (
+                              <span className="inline-flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  value={workingValues[r.sku] ?? r.working_value ?? ""}
+                                  disabled={isReadOnly}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => {
+                                    setWorkingValues(p => ({ ...p, [r.sku]: e.target.value }));
+                                    setDirty(true);
+                                  }}
+                                  onBlur={() => autoSaveRow(r)}
+                                  className="w-16 text-right px-1.5 py-1 border border-amber-300 rounded text-xs font-mono bg-amber-50/60 disabled:bg-amber-50/40 font-semibold"
+                                  placeholder="—"
+                                />
+                                {autoSavingSku === r.sku && <span className="text-[9px] text-amber-600">…</span>}
+                              </span>
+                            );
+                          } else if (colId === "remarks") {
+                            content = (
                               <input
                                 type="text"
-                                value={workingValues[r.sku] ?? r.working_value ?? ""}
+                                value={remarksMap[r.sku] ?? r.remarks ?? ""}
                                 disabled={isReadOnly}
                                 onClick={e => e.stopPropagation()}
                                 onChange={e => {
-                                  setWorkingValues(p => ({ ...p, [r.sku]: e.target.value }));
+                                  setRemarksMap(p => ({ ...p, [r.sku]: e.target.value }));
                                   setDirty(true);
                                 }}
-                                className="w-16 text-right px-1.5 py-1 border border-amber-300 rounded text-xs font-mono bg-amber-50/60 disabled:bg-amber-50/40 font-semibold"
-                                placeholder="—"
+                                onBlur={() => autoSaveRow(r)}
+                                placeholder="add remarks…"
+                                className="w-full px-1.5 py-1 border border-slate-200 rounded text-xs bg-white disabled:bg-slate-50"
                               />
                             );
                           } else if (colId === "master_carton") {
