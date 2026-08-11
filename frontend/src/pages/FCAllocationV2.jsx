@@ -72,6 +72,33 @@ export default function FCAllocationV2() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
 
+  /* Non-Fossil per-(SKU,FC) Working + Remarks — keyed "sku|fc". Auto-saved on blur. */
+  const [workingValues, setWorkingValues] = useState({});
+  const [remarksMap, setRemarksMap] = useState({});
+  const [autoSavingKey, setAutoSavingKey] = useState(null);
+
+  /* Auto-save a single (SKU,FC) row's Working + Remarks. Silent failure —
+     the value stays in local state; approver still sees it on refresh once
+     the network recovers. */
+  async function autoSaveInput(row) {
+    if (!row?.sku || !row?.fulfillment_center) return;
+    if (String(account).toLowerCase() === "fossil") return;
+    const key = `${row.sku}|${row.fulfillment_center}`;
+    setAutoSavingKey(key);
+    try {
+      await fetch(`${BASE}/fc-final-allocation/save-inputs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([{
+          account, sku: row.sku, fulfillment_center: row.fulfillment_center,
+          working_value: workingValues[key] ?? row.working_value ?? "",
+          remarks:       remarksMap[key]    ?? row.remarks       ?? "",
+        }]),
+      });
+    } catch { /* silent */ }
+    finally { setAutoSavingKey(null); }
+  }
+
   /* Range-select */
   const [selRange, setSelRange] = useState(null);
   const draggingRef = useRef(null);
@@ -128,6 +155,18 @@ export default function FCAllocationV2() {
           if (toWeek   == null || !availList.includes(Number(toWeek)))   setToWeek(hi);
         }
         setRows(list);
+
+        // Non-Fossil: seed workingValues + remarksMap from saved server values
+        if (account !== "Fossil") {
+          const wv = {}, rk = {};
+          list.forEach((r) => {
+            const key = `${r.sku}|${r.fulfillment_center}`;
+            if (r.working_value) wv[key] = r.working_value;
+            if (r.remarks)       rk[key] = r.remarks;
+          });
+          setWorkingValues(wv);
+          setRemarksMap(rk);
+        }
 
         // Preload Fossil edits from API values
         if (account === "Fossil" && list.length > 0) {
@@ -348,7 +387,7 @@ export default function FCAllocationV2() {
     }
 
     base.push(
-      { id: "send_qty", accessorKey: "send_qty", header: isFossil ? "PO Req" : "To Send", size: 90, meta: { group: "plan", numeric: true, sortDescFirst: true, editable: isFossil } },
+      { id: "send_qty", accessorKey: "send_qty", header: isFossil ? "PO Req" : "Original", size: 90, meta: { group: "plan", numeric: true, sortDescFirst: true, editable: isFossil } },
       { id: "buffer_note", accessorKey: "buffer_note", header: "Buffer", size: 120, meta: { group: "plan" } },
     );
 
@@ -358,9 +397,12 @@ export default function FCAllocationV2() {
         { id: "cluster_in_transit", accessorKey: "cluster_in_transit", header: "Clstr IT",   size: 85, meta: { group: "plan", numeric: true } },
       );
     } else {
+      // Non-Fossil accounts get editable Working + Remarks per (SKU, FC)
+      // — same contract as Replenishment V2. Auto-saved on blur.
       base.push(
-        { id: "fill_pct",      accessorKey: "fill_pct",      header: "Fill %",        size: 75, meta: { group: "plan", numeric: true, sortDescFirst: true } },
-        { id: "velocity_flag", accessorKey: "velocity_flag", header: "Vel Flag",      size: 95, meta: { group: "plan" } },
+        { id: "working_value", accessorKey: "working_value", header: "Working", size: 85, meta: { group: "plan" } },
+        { id: "fill_pct",      accessorKey: "fill_pct",      header: "Fill %",   size: 75, meta: { group: "plan", numeric: true, sortDescFirst: true } },
+        { id: "velocity_flag", accessorKey: "velocity_flag", header: "Vel Flag", size: 95, meta: { group: "plan" } },
       );
     }
 
@@ -371,7 +413,10 @@ export default function FCAllocationV2() {
     if (isFossil) {
       base.push({ id: "remarks", accessorKey: "remarks", header: "Remarks", size: 140, meta: { group: "log", editable: true } });
     } else {
-      base.push({ id: "hazmat_type", accessorKey: "hazmat_type", header: "Hazmat", size: 90, meta: { group: "log" } });
+      base.push(
+        { id: "remarks",     accessorKey: "remarks",     header: "Remarks", size: 200, meta: { group: "log" } },
+        { id: "hazmat_type", accessorKey: "hazmat_type", header: "Hazmat",  size: 90,  meta: { group: "log" } },
+      );
     }
 
     return base;
@@ -616,13 +661,28 @@ export default function FCAllocationV2() {
             {canPropose && (() => {
               const APPROVER = "sagar@cambiumretail.com";
               const buildRows = () => rows
-                .filter((r) => (r.send_qty || 0) > 0)
-                .map((r) => ({
+                .map((r) => {
+                  // qty = LITERAL Working Value Naresh typed (falls back to
+                  // calc's send_qty ONLY if he never touched the row). If he
+                  // explicitly set 0 with a remark, keep the row (approver
+                  // reads the note). Matches the Replenishment tab rule.
+                  const key = `${r.sku}|${r.fulfillment_center}`;
+                  const wv  = workingValues[key];
+                  const calcQty = Math.round(r.send_qty || 0);
+                  const workingSet = wv !== undefined && wv !== "" && wv !== null;
+                  const finalQty = workingSet ? Math.round(Number(wv) || 0) : calcQty;
+                  const notes = (remarksMap[key] ?? r.remarks ?? "").trim();
+                  return {
                   sku: r.sku,
                   model: r.model,
                   asin: r.asin,
                   destination_fc: r.fulfillment_center,
-                  qty: Math.round(r.send_qty || 0),
+                  qty: finalQty,
+                  // Calc's suggestion preserved for approver's Original column
+                  original_send_qty: calcQty,
+                  notes: notes || null,
+                  _has_notes: !!notes,
+                  _working_set: workingSet,
                   // Snapshot planning context so approver sees Naresh's numbers
                   real_am_inv:     r.fc_inventory ?? null,
                   mother_inv:      r.ampm_inventory ?? null,
@@ -641,7 +701,12 @@ export default function FCAllocationV2() {
                     if (t.includes("IXD"))     return "IXD";
                     return null;
                   })(),
-                }));
+                  };
+                })
+                // Include a row if there's a qty > 0, OR if Naresh
+                // explicitly set Working (even to 0) and left a remark
+                // explaining why. Otherwise skip (he didn't touch this row).
+                .filter((r) => r.qty > 0 || (r._working_set && r._has_notes));
               const runSubmit = async (kind) => {
                 const toSend = buildRows();
                 if (toSend.length === 0) {
@@ -1018,6 +1083,35 @@ export default function FCAllocationV2() {
                                 onChange={e => setFossilField(r, "remarks", e.target.value)}
                                 className="w-32 px-1.5 py-1 border border-slate-200 rounded text-xs"
                                 placeholder="—"
+                              />
+                            );
+                          } else if (colId === "working_value" && !isFossil) {
+                            const key = `${r.sku}|${r.fulfillment_center}`;
+                            content = (
+                              <span className="inline-flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  value={workingValues[key] ?? r.working_value ?? ""}
+                                  onClick={e => e.stopPropagation()}
+                                  onChange={e => setWorkingValues(p => ({ ...p, [key]: e.target.value }))}
+                                  onBlur={() => autoSaveInput(r)}
+                                  className="w-16 text-right px-1.5 py-1 border border-amber-300 rounded text-xs font-mono bg-amber-50/60 font-semibold"
+                                  placeholder="—"
+                                />
+                                {autoSavingKey === key && <span className="text-[9px] text-amber-600">…</span>}
+                              </span>
+                            );
+                          } else if (colId === "remarks" && !isFossil) {
+                            const key = `${r.sku}|${r.fulfillment_center}`;
+                            content = (
+                              <input
+                                type="text"
+                                value={remarksMap[key] ?? r.remarks ?? ""}
+                                onClick={e => e.stopPropagation()}
+                                onChange={e => setRemarksMap(p => ({ ...p, [key]: e.target.value }))}
+                                onBlur={() => autoSaveInput(r)}
+                                placeholder="add remarks…"
+                                className="w-full px-1.5 py-1 border border-slate-200 rounded text-xs bg-white"
                               />
                             );
                           } else if (colId === "fill_pct") {

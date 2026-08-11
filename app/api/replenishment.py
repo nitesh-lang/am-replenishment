@@ -363,6 +363,56 @@ def get_fc_final(
         df.loc[df["_rank"] > 0, "cluster_in_transit"] = "BLANK"
         df.drop(columns=["_rank"], inplace=True)
 
+    # ── Non-Fossil accounts: merge saved per-row Working Value + Remarks
+    # from fc_allocation_inputs (parallel to Fossil's fossil_fc_inputs).
+    # Keyed on (account, sku, fulfillment_center). Naresh types these in
+    # the UI; auto-saves on blur.
+    if account.lower() != "fossil":
+        try:
+            with get_conn() as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS fc_allocation_inputs (
+                            account TEXT NOT NULL,
+                            sku TEXT NOT NULL,
+                            fulfillment_center TEXT NOT NULL,
+                            working_value TEXT DEFAULT '',
+                            remarks TEXT DEFAULT '',
+                            saved_at TIMESTAMPTZ DEFAULT NOW(),
+                            saved_by TEXT,
+                            PRIMARY KEY (account, sku, fulfillment_center)
+                        )
+                    """)
+                    cursor.execute(
+                        "SELECT sku, fulfillment_center, working_value, remarks FROM fc_allocation_inputs WHERE account = %s",
+                        (account.strip().upper(),),
+                    )
+                    saved = {(s, fc): (wv or "", rk or "") for s, fc, wv, rk in cursor.fetchall()}
+            if saved:
+                df["working_value"] = df.apply(
+                    lambda r: saved.get(
+                        (str(r["sku"]).strip().upper(), str(r["fulfillment_center"]).strip().upper()),
+                        ("", ""),
+                    )[0],
+                    axis=1,
+                )
+                df["remarks"] = df.apply(
+                    lambda r: saved.get(
+                        (str(r["sku"]).strip().upper(), str(r["fulfillment_center"]).strip().upper()),
+                        ("", ""),
+                    )[1],
+                    axis=1,
+                )
+            else:
+                df["working_value"] = ""
+                if "remarks" not in df.columns:
+                    df["remarks"] = ""
+        except Exception as _e:
+            print(f"⚠️ fc_allocation_inputs merge failed: {_e}")
+            df["working_value"] = ""
+            if "remarks" not in df.columns:
+                df["remarks"] = ""
+
     # Replace NaN/inf with safe defaults before JSON serialization
     df = df.fillna("").replace([float("inf"), float("-inf")], 0)
     # Integer columns — quantities that should render whole numbers on the UI
@@ -451,6 +501,62 @@ async def save_fossil_fc_inputs(request: Request):
 
     except Exception as e:
         print("⚠️ Fossil FC save error:", e)
+        return {"status": "error", "error": str(e)}
+
+
+# =================================================
+# FC ALLOCATION per-row inputs — non-Fossil accounts
+# (Nex / Viomi / AA / WM). Naresh types Working Value and Remarks;
+# auto-saves on blur. Same pattern as fossil_fc_inputs but keyed on
+# (account, sku, fc) so multiple accounts share the table cleanly.
+# =================================================
+@router.post("/fc-final-allocation/save-inputs")
+async def save_fc_alloc_inputs(request: Request):
+    try:
+        data = await request.json()
+        if isinstance(data, dict):
+            data = [data]
+        if not isinstance(data, list):
+            return {"status": "error", "error": "expected list of rows"}
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS fc_allocation_inputs (
+                        account TEXT NOT NULL,
+                        sku TEXT NOT NULL,
+                        fulfillment_center TEXT NOT NULL,
+                        working_value TEXT DEFAULT '',
+                        remarks TEXT DEFAULT '',
+                        saved_at TIMESTAMPTZ DEFAULT NOW(),
+                        saved_by TEXT,
+                        PRIMARY KEY (account, sku, fulfillment_center)
+                    )
+                """)
+                for row in data:
+                    account = str(row.get("account", "")).strip().upper()
+                    sku     = str(row.get("sku", "")).strip().upper()
+                    fc      = str(row.get("fulfillment_center", "")).strip().upper()
+                    if not account or not sku or not fc:
+                        continue
+                    wv = row.get("working_value")
+                    working_value = "" if wv is None else str(wv)
+                    rk = row.get("remarks")
+                    remarks = "" if rk is None else str(rk)
+                    saved_by = str(row.get("saved_by", ""))
+                    cursor.execute("""
+                        INSERT INTO fc_allocation_inputs
+                            (account, sku, fulfillment_center, working_value, remarks, saved_at, saved_by)
+                        VALUES (%s, %s, %s, %s, %s, NOW(), %s)
+                        ON CONFLICT (account, sku, fulfillment_center) DO UPDATE SET
+                            working_value = EXCLUDED.working_value,
+                            remarks       = EXCLUDED.remarks,
+                            saved_at      = NOW(),
+                            saved_by      = EXCLUDED.saved_by
+                    """, (account, sku, fc, working_value, remarks, saved_by))
+            conn.commit()
+        return {"status": "saved", "rows": len(data)}
+    except Exception as e:
+        print("⚠️ FC alloc save-inputs error:", e)
         return {"status": "error", "error": str(e)}
 
 
