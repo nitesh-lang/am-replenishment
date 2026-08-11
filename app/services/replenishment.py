@@ -973,4 +973,40 @@ def calculate_replenishment(
         df["lost_units_3m"] = 0
         df["momentum_flag"] = ""
 
+    # CB EOL filter (AUDIO ARRAY only) — CB Replenishment Master carries
+    # a "CB" column (Yes/No) per ASIN. "No" = Cambium has EOL'd this SKU,
+    # so it should NOT appear in AA replenishment or FC allocation views
+    # (operator rule 2026-08-11). Same list gates FC Allocation too — see
+    # fc_final_allocation._filter_cb_eol_for_aa.
+    if account.upper() == "AUDIO ARRAY":
+        try:
+            eol = _cb_eol_asin_set()
+            if eol and "asin" in df.columns:
+                _asin_norm = df["asin"].astype(str).str.strip().str.upper()
+                before = len(df)
+                df = df[~_asin_norm.isin(eol)].reset_index(drop=True)
+                dropped = before - len(df)
+                if dropped:
+                    print(f"[AA CB-EOL] hid {dropped} SKUs (CB=No in CB Replenishment_Master)")
+        except Exception as _e:
+            print(f"⚠️ AA CB-EOL filter skipped: {_e}")
+
     return df
+
+
+# =================================================
+# CB EOL helper — shared by AA Replenishment + FC Allocation
+# =================================================
+def _cb_eol_asin_set() -> set:
+    """Read CB Replenishment_Master.xlsx and return the set of ASINs
+    where the "CB" column value is "No" (Cambium has EOL'd this SKU)."""
+    try:
+        m = get("CB Replenishment_Master.xlsx")
+    except Exception:
+        return set()
+    m = m.copy()
+    m.columns = m.columns.str.lower().str.strip()
+    if "cb" not in m.columns or "asin" not in m.columns:
+        return set()
+    mask = m["cb"].astype(str).str.strip().str.lower() == "no"
+    return set(m.loc[mask, "asin"].astype(str).str.strip().str.upper())

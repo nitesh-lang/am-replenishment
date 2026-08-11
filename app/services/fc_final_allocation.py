@@ -1244,6 +1244,23 @@ def calculate_final_allocation(
         "velocity_basis",
     ] = "2wk"
 
+    # CB EOL filter (AUDIO ARRAY only) — mirrors the Replenishment view.
+    # CB Replenishment Master's "CB" column (Yes/No) per ASIN gates
+    # visibility; SKUs where CB=No are Cambium-EOL and shouldn't appear.
+    if account.upper() == "AUDIO ARRAY":
+        try:
+            from app.services.replenishment import _cb_eol_asin_set
+            eol = _cb_eol_asin_set()
+            if eol and "asin" in final_df.columns:
+                _asin_norm = final_df["asin"].astype(str).str.strip().str.upper()
+                before = len(final_df)
+                final_df = final_df[~_asin_norm.isin(eol)].reset_index(drop=True)
+                dropped = before - len(final_df)
+                if dropped:
+                    print(f"[AA FC-Alloc CB-EOL] hid {dropped} rows (CB=No)")
+        except Exception as _e:
+            print(f"⚠️ AA FC-Alloc CB-EOL filter skipped: {_e}")
+
     return final_df
 
 
