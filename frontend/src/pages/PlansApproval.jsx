@@ -771,15 +771,25 @@ function CalcBreakdownModal({ line, coverWeeks, accountLabel, onClose }) {
   const vel   = Number(line.weekly_velocity ?? 0);
   const cover = Number(coverWeeks ?? 0);
   const required = Math.round(vel * cover);
-  const realAm = Number(line.real_am_inv ?? 0);
-  const mother = Number(line.mother_inv ?? 0);
+  // Distinguish "was null at propose time" (renders "—") from actual 0.
+  const realAmRaw = line.real_am_inv;
+  const realAm    = realAmRaw == null ? 0 : Number(realAmRaw);
+  const motherRaw = line.mother_inv;
+  const mother    = motherRaw == null ? 0 : Number(motherRaw);
   const cbSoh  = line.cb_soh == null ? null : Number(line.cb_soh);
   const shortage = Math.max(0, required - realAm);
-  const suggested = Math.min(shortage, mother);  // = calc's replenishment_qty
+  const suggestedPre = Math.min(shortage, mother);  // pre-buffer/carton
   const original  = Number(line.original_send_qty ?? 0);
   const working   = Number(line.qty ?? 0);
   const delta = working - original;
   const isAA = String(accountLabel || "").toUpperCase().includes("AUDIO");
+
+  // ESC key closes the modal — a11y polish.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
     <div
@@ -819,9 +829,9 @@ function CalcBreakdownModal({ line, coverWeeks, accountLabel, onClose }) {
         </CalcSection>
 
         <CalcSection title="Available">
-          <CalcRow label="Real AM Inv"        value={realAm}          unit="u"
+          <CalcRow label="Real AM Inv"        value={realAmRaw == null ? "—" : realAm} unit="u"
                    note="Amazon FBA + Inbound (ledger-adjusted)" />
-          <CalcRow label="Mother WH (AMPM)"   value={mother}          unit="u" />
+          <CalcRow label="Mother WH (AMPM)"   value={motherRaw == null ? "—" : mother} unit="u" />
           {isAA && (
             <CalcRow label="CB SOH (vendor)"  value={cbSoh ?? "—"}    unit="u"
                      note="Cambium 1P vendor warehouse — reference only, not netted" />
@@ -831,13 +841,14 @@ function CalcBreakdownModal({ line, coverWeeks, accountLabel, onClose }) {
         <CalcSection title="Calc engine">
           <CalcRow label="Amazon shortage"    value={shortage}        unit="u"
                    note={`max(0, required − Real AM Inv) = max(0, ${required} − ${realAm})`} />
-          <CalcRow label="Suggested" bold     value={suggested}       unit="u"
+          <CalcRow label="Pre-adjust suggested" bold value={suggestedPre} unit="u"
                    note={`min(shortage, Mother) = min(${shortage}, ${mother})`}
                    color="#6366f1" />
+          <CalcRow label="Original (as stored)" value={original} unit="u"
+                   note="Backend applies AMPM buffer gate (1–10 → 0) + carton rounding on top of the min above" />
         </CalcSection>
 
         <CalcSection title="Naresh's override">
-          <CalcRow label="Original (calc)"    value={original}        unit="u" />
           <CalcRow label="Working (Naresh)" bold value={working}      unit="u"
                    color="#10b981" />
           <CalcRow label="Δ vs original" bold value={(delta > 0 ? "+" : "") + delta} unit="u"

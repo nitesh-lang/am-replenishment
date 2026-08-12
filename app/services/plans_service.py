@@ -31,6 +31,7 @@ Edit permissions:
 import json
 import os
 import secrets
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -39,6 +40,28 @@ import requests
 from psycopg2.extras import RealDictCursor
 
 from app.services.db import get_conn
+
+
+# Cache for AA CB SOH lookup used by get_batch backfill. CB Rep load is
+# expensive (Excel + DB overlay); cache for 5 min so a burst of GETs
+# doesn't hammer it. Cleared naturally on process restart.
+_CB_SOH_CACHE: dict = {"map": None, "ts": 0.0}
+_CB_SOH_TTL_SEC = 300
+
+
+def _cached_cb_soh_map():
+    now = time.time()
+    if _CB_SOH_CACHE["map"] is not None and (now - _CB_SOH_CACHE["ts"]) < _CB_SOH_TTL_SEC:
+        return _CB_SOH_CACHE["map"]
+    try:
+        from app.services.replenishment import _cb_soh_by_model
+        m = _cb_soh_by_model("Audio Array") or {}
+    except Exception as e:
+        print(f"⚠️ CB SOH cache refresh failed: {e}")
+        m = _CB_SOH_CACHE["map"] or {}  # keep stale value on failure
+    _CB_SOH_CACHE["map"] = m
+    _CB_SOH_CACHE["ts"] = now
+    return m
 
 
 # ============================================================
@@ -346,17 +369,13 @@ def get_batch(batch_id: str, include_deleted: bool = True) -> dict:
     # New batches persist cb_soh at propose so this is a no-op for them.
     if str(b.get("account", "")).strip().lower() in ("audio array",) \
             and any(l.get("cb_soh") is None for l in lines):
-        try:
-            from app.services.replenishment import _cb_soh_by_model
-            cb_map = _cb_soh_by_model("Audio Array")
-            if cb_map:
-                for l in lines:
-                    if l.get("cb_soh") is None and l.get("model"):
-                        key = str(l["model"]).split("(")[0].strip().lower()
-                        if key in cb_map:
-                            l["cb_soh"] = int(cb_map[key])
-        except Exception as _e:
-            print(f"⚠️ CB SOH backfill on get_batch failed: {_e}")
+        cb_map = _cached_cb_soh_map()
+        if cb_map:
+            for l in lines:
+                if l.get("cb_soh") is None and l.get("model"):
+                    key = str(l["model"]).split("(")[0].strip().lower()
+                    if key in cb_map:
+                        l["cb_soh"] = int(cb_map[key])
     b["lines"] = lines
     b["events"] = events
     b["summary"] = _summarize(lines)
@@ -489,12 +508,18 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
             if exclude_from_push is not None and bool(exclude_from_push) != old_exclude:
                 evt_payload["exclude_from_push"] = bool(exclude_from_push)
             if evt_payload:
-                if "qty_to" in evt_payload:
-                    evt_type = "edit_qty"
-                elif "exclude_from_push" in evt_payload:
-                    evt_type = "toggle_exclude_from_push"
-                else:
-                    evt_type = "edit_notes"
+                # Compose event_type from EVERY change so combined edits
+                # (e.g., qty AND exclude_from_push in the same PATCH) show
+                # both signals. Prior version was a mutually-exclusive
+                # ladder that logged only "edit_qty" even when exclude
+                # also changed — payload_json still carried the truth but
+                # anyone filtering events by type would miss it.
+                parts = []
+                if "qty_to" in evt_payload:            parts.append("qty")
+                if "notes_changed" in evt_payload:     parts.append("notes")
+                if "approver_note" in evt_payload:     parts.append("approver_note")
+                if "exclude_from_push" in evt_payload: parts.append("exclude")
+                evt_type = "edit_" + "+".join(parts) if parts else "edit_line"
                 cur.execute(
                     """
                     INSERT INTO plan_line_events (batch_id, line_id, event_type, actor, payload_json)

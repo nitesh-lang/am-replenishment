@@ -743,7 +743,9 @@ def calculate_replenishment(
                         .transform("max")
                         .fillna(0))
         _ampm = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
-        df["ampm_inventory"] = _ampm.where(_ampm > 0, _model_max).astype(float)
+        # int (not float) so JSON emits 480 not 480.0 and downstream
+        # min/max comparisons with other int cols stay clean.
+        df["ampm_inventory"] = _ampm.where(_ampm > 0, _model_max).round(0).astype(int)
 
     # ---------------------------------------------
     # B2B INVENTORY (display only — does not feed required_units / replen)
