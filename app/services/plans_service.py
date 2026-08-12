@@ -843,6 +843,14 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
     def _iso(dt):
         return dt.isoformat() if dt else None
 
+    # OrderPilot's receiver enforces qty > 0. We deliberately store
+    # zero-qty lines with a note (approver reads why=0) but those are
+    # internal audit only — filter them out of the outbound payload.
+    push_lines = [l for l in lines if int(l["qty"]) > 0]
+    skipped_zero = len(lines) - len(push_lines)
+    if not push_lines:
+        raise ValueError("no lines with qty > 0 to push (all rows were zero-qty audit notes)")
+
     payload = {
         "source":         "am_replenishment",
         "batch_id":       b["batch_id"],
@@ -867,9 +875,11 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
                 "hazmat":          l.get("hazmat"),
                 "ixd_flag":        l.get("ixd_flag"),
             }
-            for l in lines
+            for l in push_lines
         ],
     }
+    if skipped_zero:
+        print(f"[push_plan] batch {batch_id}: skipped {skipped_zero} zero-qty lines (kept in DB for audit)")
 
     # ---------------- POST ----------------
     target_url = url + ("?dry_run=true" if dry_run else "")
@@ -940,7 +950,9 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
                        WHERE batch_id = %s""",
                     (batch_id,),
                 )
-                for l in lines:
+                # Only iterate the lines we actually pushed. Zero-qty
+                # audit lines stay in DB but don't get a shipment_id.
+                for l in push_lines:
                     # Try bucketed key first, then bare fc for backward compat
                     sid = shipment_ids.get(_bucket_key(l)) or shipment_ids.get(l["destination_fc"])
                     if sid:
