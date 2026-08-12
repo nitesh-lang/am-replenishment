@@ -69,10 +69,11 @@ export function getPlan(batchId, { includeDeleted = true } = {}) {
   return req("GET", `${P}/${encodeURIComponent(batchId)}?include_deleted=${includeDeleted}`);
 }
 
-export function editLine(batchId, lineId, { qty, notes, row_version }) {
+export function editLine(batchId, lineId, { qty, notes, approver_note, row_version }) {
   const body = { row_version };
-  if (qty !== undefined) body.qty = qty;
-  if (notes !== undefined) body.notes = notes;
+  if (qty !== undefined)           body.qty = qty;
+  if (notes !== undefined)         body.notes = notes;
+  if (approver_note !== undefined) body.approver_note = approver_note;
   return req("PATCH", `${P}/${encodeURIComponent(batchId)}/lines/${lineId}`, body);
 }
 

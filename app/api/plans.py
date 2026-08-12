@@ -163,17 +163,18 @@ def send(batch_id: str, request: Request):
 # ============================================================
 @router.patch("/plans/{batch_id}/lines/{line_id}")
 async def patch_line(batch_id: str, line_id: int, request: Request):
-    """Edit qty and/or notes on a line. Body may contain qty, notes, or both."""
+    """Edit qty, notes, and/or approver_note on a line. At least one required."""
     actor = _editor_or_approver(request)
     is_admin = auth_users.is_admin(actor)
     body = await request.json()
-    if "qty" not in body and "notes" not in body:
-        raise HTTPException(status_code=400, detail="qty and/or notes is required")
+    if "qty" not in body and "notes" not in body and "approver_note" not in body:
+        raise HTTPException(status_code=400, detail="qty, notes, and/or approver_note is required")
     try:
         out = plans_service.edit_line(
             batch_id=batch_id, line_id=line_id,
             new_qty=(int(body["qty"]) if "qty" in body else None),
             notes=body.get("notes"),
+            approver_note=body.get("approver_note"),
             actor=actor,
             row_version=body.get("row_version"),
             actor_is_admin=is_admin,

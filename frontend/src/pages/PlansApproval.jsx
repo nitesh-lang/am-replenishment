@@ -401,13 +401,15 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
               <Th align="right" title="AMPM / Cambium warehouse stock at push time">Mother Inv</Th>
               <Th align="right" title="Sales velocity Naresh's calc used (units/wk)">Vel/wk</Th>
               <Th>Remarks</Th>
+              <Th title="Approver's reason for changing qty — required whenever qty is edited so Naresh sees why">Approver Note</Th>
               <Th>Added By</Th><Th>Edited By</Th>
               {canEdit && <Th>Actions</Th>}
             </tr>
           </thead>
           <tbody>
             {(batch.lines || []).map((l) => (
-              <LineRow key={l.id} line={l} canEdit={canEdit} batchId={batch.batch_id} onReload={onReload} />
+              <LineRow key={l.id} line={l} canEdit={canEdit} batchId={batch.batch_id}
+                       onReload={onReload} isApprover={isApprover} />
             ))}
           </tbody>
         </table>
@@ -437,21 +439,39 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
   );
 }
 
-function LineRow({ line, canEdit, batchId, onReload }) {
+function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
   const [qty, setQty] = useState(String(line.qty));
   const [notes, setNotes] = useState(line.notes || "");
+  const [approverNote, setApproverNote] = useState(line.approver_note || "");
   const [busy, setBusy] = useState(false);
   const qtyDirty   = String(line.qty) !== qty;
   const notesDirty = (line.notes || "") !== notes;
-  const dirty = qtyDirty || notesDirty;
+  const apprNoteDirty = (line.approver_note || "") !== approverNote;
+  const dirty = qtyDirty || notesDirty || apprNoteDirty;
   const deleted = !!line.is_deleted;
 
   async function save() {
+    // If the approver changed qty, prompt for a reason and store it in
+    // approver_note. Naresh sees it in the "Approver Note" column when
+    // he opens the batch, so he understands why the qty changed.
+    let noteForQty = approverNote;
+    if (qtyDirty && isApprover) {
+      const reason = prompt(
+        `Reason for changing qty from ${line.qty} to ${qty}?\n\n(Required — Naresh will see this in the Approver Note column)`,
+        approverNote || ""
+      );
+      if (reason === null) { setQty(String(line.qty)); return; }  // cancel → revert
+      const trimmed = reason.trim();
+      if (!trimmed) { alert("Reason is required to change qty."); return; }
+      noteForQty = trimmed;
+      setApproverNote(trimmed);
+    }
     setBusy(true);
     try {
       await editLine(batchId, line.id, {
-        ...(qtyDirty ? { qty: Number(qty) } : {}),
+        ...(qtyDirty ? { qty: Number(qty), approver_note: noteForQty } : {}),
         ...(notesDirty ? { notes } : {}),
+        ...(apprNoteDirty && !qtyDirty ? { approver_note: approverNote } : {}),
         row_version: line.row_version,
       });
       await onReload();
@@ -464,6 +484,16 @@ function LineRow({ line, canEdit, batchId, onReload }) {
     setBusy(true);
     try {
       await editLine(batchId, line.id, { notes, row_version: line.row_version });
+      await onReload();
+    } catch (e) { alert(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function saveApproverNoteOnBlur() {
+    if (!apprNoteDirty) return;
+    setBusy(true);
+    try {
+      await editLine(batchId, line.id, { approver_note: approverNote, row_version: line.row_version });
       await onReload();
     } catch (e) { alert(e.message); }
     finally { setBusy(false); }
@@ -530,6 +560,26 @@ function LineRow({ line, canEdit, batchId, onReload }) {
           />
         ) : (
           <span style={{ fontSize: 12, color: "#6b7280" }}>{line.notes || "—"}</span>
+        )}
+      </Td>
+      <Td>
+        {isApprover && canEdit && !deleted ? (
+          <input
+            type="text"
+            value={approverNote}
+            onChange={(e) => setApproverNote(e.target.value)}
+            onBlur={saveApproverNoteOnBlur}
+            placeholder="reason for edit…"
+            style={{
+              width: 200, padding: 4, fontSize: 12,
+              border: apprNoteDirty ? "1px solid #8b5cf6" : "1px solid #d1d5db",
+              borderRadius: 3, background: "#faf5ff",
+            }}
+          />
+        ) : (
+          <span style={{ fontSize: 12, color: "#7c3aed", fontStyle: line.approver_note ? "normal" : "italic" }}>
+            {line.approver_note || "—"}
+          </span>
         )}
       </Td>
       <Td><Badge>{line.added_by}</Badge></Td>

@@ -75,6 +75,9 @@ ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS weekly_velocity   NUMERIC(10,2
 -- per line at propose time so the split key travels with the payload.
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS hazmat            BOOLEAN;
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS ixd_flag          TEXT;
+-- Approver's reason for changing qty (Sagar/Kanwal explaining edits so
+-- Naresh sees WHY). Separate from `notes` which is Naresh's remark.
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS approver_note     TEXT;
 -- Snapshot of the filter/selector state Naresh had when he proposed:
 -- channel, sales-window from/to week, view filter, replenish_weeks cover.
 -- Approver renders these as chips so they know what generated the plan.
@@ -392,12 +395,16 @@ def _assert_editable(cur, batch_id: str, actor: str, actor_is_admin: bool = Fals
 
 def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
               row_version: int | None = None, actor_is_admin: bool = False,
-              notes: str | None = None) -> dict:
-    """Edit qty and/or notes on a line. Pass None for either to leave
-    that field unchanged. At least one must be provided."""
+              notes: str | None = None, approver_note: str | None = None) -> dict:
+    """Edit qty and/or notes and/or approver_note on a line. Pass None
+    for a field to leave it unchanged. At least one must be provided.
+
+    approver_note is Sagar/Kanwal's reason for a qty change — required
+    (frontend-enforced) whenever qty is edited by the approver so
+    Naresh sees WHY when he opens the batch."""
     actor = (actor or "").strip().lower()
-    if new_qty is None and notes is None:
-        raise ValueError("must provide qty and/or notes")
+    if new_qty is None and notes is None and approver_note is None:
+        raise ValueError("must provide qty, notes, and/or approver_note")
     if new_qty is not None:
         new_qty = int(round(float(new_qty)))
         if new_qty < 0:
@@ -419,6 +426,7 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
                 )
             old_qty = int(line["qty"])
             old_notes = line.get("notes")
+            old_approver_note = line.get("approver_note")
             # Build a dynamic UPDATE that only touches the fields provided
             sets = ["edited_by = %s", "last_edited_at = NOW()", "row_version = row_version + 1"]
             vals: list = [actor]
@@ -428,6 +436,9 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
             if notes is not None:
                 sets.append("notes = %s")
                 vals.append(notes)
+            if approver_note is not None:
+                sets.append("approver_note = %s")
+                vals.append(approver_note or None)
             vals.append(line_id)
             cur.execute(
                 f"UPDATE plan_lines SET {', '.join(sets)} WHERE id = %s RETURNING *",
@@ -440,6 +451,8 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
                 evt_payload["qty_to"] = new_qty
             if notes is not None and notes != (old_notes or ""):
                 evt_payload["notes_changed"] = True
+            if approver_note is not None and approver_note != (old_approver_note or ""):
+                evt_payload["approver_note"] = approver_note
             if evt_payload:
                 cur.execute(
                     """
