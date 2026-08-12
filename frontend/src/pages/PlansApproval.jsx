@@ -317,8 +317,16 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
             </button>
             <button
               onClick={() => {
-                if (!confirm(`Approve batch ${batch.batch_id}? This freezes the plan.`)) return;
-                act(() => approvePlan(batch.batch_id));
+                // Nudge browser to fire blur on any focused input first
+                // (auto-save fires there). Small delay so pending PATCHes
+                // hit the server before freeze.
+                if (document.activeElement && document.activeElement.blur) {
+                  document.activeElement.blur();
+                }
+                setTimeout(() => {
+                  if (!confirm(`Approve batch ${batch.batch_id}?\n\nThis freezes the plan. Any unsaved qty edits must be typed + clicked away from first — otherwise they'll be lost.`)) return;
+                  act(() => approvePlan(batch.batch_id));
+                }, 250);
               }}
               disabled={busy}
               style={btnStyle("#10b981")}
@@ -534,7 +542,8 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
         {canEdit && !deleted ? (
           <input
             type="number" value={qty} onChange={(e) => setQty(e.target.value)} min={0}
-            style={{ width: 70, padding: 4, textAlign: "right", border: dirty ? "1px solid #f59e0b" : "1px solid #d1d5db" }}
+            onBlur={() => { if (qtyDirty) save(); }}
+            style={{ width: 70, padding: 4, textAlign: "right", border: qtyDirty ? "1px solid #f59e0b" : "1px solid #d1d5db" }}
           />
         ) : (
           <span>{line.qty}</span>
