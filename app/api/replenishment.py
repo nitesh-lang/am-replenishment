@@ -103,8 +103,10 @@ def get_replenishment(
             "model_ampm_inventory": int(row.get("model_ampm_inventory", row["ampm_inventory"]) or 0),
             # CB SOH — Cambium's vendor warehouse stock. AA only (populated
             # from CB Replenishment's final_cb_qty per model). None on
-            # accounts without 1P vendor inventory.
-            "cb_soh": (int(row["cb_soh"]) if row.get("cb_soh") == row.get("cb_soh") and row.get("cb_soh") is not None else None),
+            # accounts without 1P vendor inventory. Int64 dtype → pd.NA
+            # on missing → use pd.isna() (row[..]==row[..] trick fails for
+            # pd.NA because bool(pd.NA) raises).
+            "cb_soh": (None if pd.isna(row.get("cb_soh")) else int(row["cb_soh"])),
             "b2b_inventory":  int(row.get("b2b_inventory", 0)),
             "required_units": int(row["required_units"]),
             "replenishment_qty": int(row["replenishment_qty"]),
