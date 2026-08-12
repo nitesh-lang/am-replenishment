@@ -726,6 +726,26 @@ def calculate_replenishment(
     df["ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
 
     # ---------------------------------------------
+    # AA-ONLY: AMPM pool is fungible across ASINs of the same Model.
+    # If one ASIN has stock and its sibling has 0, treat the sibling as
+    # able to draw from the sibling's stock for FBA replenishment.
+    # Operator rule (2026-08-12): "only where one model has 2 asin and
+    # 1 asin has got [stock and the] 2nd one none". Fill blanks only —
+    # stocked ASINs keep their own value; never sums (would double-count).
+    #
+    # CRITICAL: must run BEFORE the shortfall calc AND before the CB-EOL
+    # filter — the sibling carrying the stock is often the one that gets
+    # CB-EOL'd (e.g. AM-C47: B0FF9R3GKK has 480 AMPM but is CB=No; the
+    # live ASIN B0FJS57732 needs to see that 480). Without this the
+    # requirement falls to warehouse_shortfall even though stock exists.
+    if account.upper() == "AUDIO ARRAY" and "Model" in df.columns:
+        _model_max = (df.groupby(df["Model"].astype(str))["ampm_inventory"]
+                        .transform("max")
+                        .fillna(0))
+        _ampm = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
+        df["ampm_inventory"] = _ampm.where(_ampm > 0, _model_max).astype(float)
+
+    # ---------------------------------------------
     # B2B INVENTORY (display only — does not feed required_units / replen)
     # Same ASIN→SKU→Model exclusive cascade as AMPM, filtered to
     # Channel == "B2B - AMPM" in the inventory snapshot.
@@ -973,31 +993,12 @@ def calculate_replenishment(
         df["lost_units_3m"] = 0
         df["momentum_flag"] = ""
 
-    # Duplicate-model Mother WH — AA Replenishment ONLY, per operator
-    # rule 2026-08-12: "only where one model has 2 asin and 1 asin has
-    # got [stock and the] 2nd one none". Fill zero-AMPM ASINs from a
-    # stocked sibling; stocked rows unchanged. Never sums (would
-    # double-count).
-    #
-    # CRITICAL: this must run BEFORE the CB-EOL filter below. Often the
-    # AA sibling that carries the physical stock is itself CB=No (EOL),
-    # so after filtering it out the empty ASIN has no sibling to inherit
-    # from. Example (2026-08-12): model AM-C47 — ASIN B0FF9R3GKK has
-    # 480 AMPM but is CB-EOL, ASIN B0FJS57732 is CB=Yes but has 0 AMPM.
-    # Compute fill-blank first so B0FJS57732 sees 480; then drop
-    # B0FF9R3GKK.
-    if account.upper() == "AUDIO ARRAY" and "model" in df.columns and "ampm_inventory" in df.columns:
-        _model_max = (df.groupby(df["model"].astype(str))["ampm_inventory"]
-                        .transform("max")
-                        .fillna(0))
-        _ampm = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
-        df["model_ampm_inventory"] = _ampm.where(_ampm > 0, _model_max).astype(int)
-    else:
-        # Non-AA + AA rows without model info: mirror ampm_inventory so
-        # the frontend column has a stable field to read and shows
-        # exactly the same number as before.
-        if "ampm_inventory" in df.columns:
-            df["model_ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0).astype(int)
+    # model_ampm_inventory — alias for ampm_inventory (the AA fill-blank
+    # pool is already applied upstream, before the shortfall calc, so
+    # this column just mirrors ampm_inventory as a stable API field for
+    # the "Mother Inv" display column on the frontend).
+    if "ampm_inventory" in df.columns:
+        df["model_ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0).astype(int)
 
     # CB EOL filter (AUDIO ARRAY only) — CB Replenishment Master carries
     # a "CB" column (Yes/No) per ASIN. "No" = Cambium has EOL'd this SKU,
