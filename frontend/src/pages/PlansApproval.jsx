@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   listPlans, getPlan, editLine, addLine, deleteLine, approvePlan, pushPlan,
   sendToApprover, deletePlan, requestRework,
@@ -190,6 +190,42 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  // Track pending in-flight save Promises from LineRow (qty/notes/exclude
+  // auto-saves). Approve and Push must await these before firing so the
+  // server sees the fresh qty. Without this, Sagar can edit qty → click
+  // Approve immediately; the blur triggers the PATCH but the setTimeout
+  // wins the race, approve lands first, PATCH errors out with "batch is
+  // approved; not open for edits", and OrderPilot ships the ORIGINAL qty.
+  const pendingSavesRef = useRef([]);
+  function trackSave(promise) {
+    pendingSavesRef.current.push(promise);
+    // Prune on settle so the array doesn't grow forever. The .catch on
+    // the tail keeps the finally-chain from surfacing as an unhandled
+    // rejection — the caller (LineRow) already handles the error via
+    // its own try/catch + alert.
+    promise
+      .finally(() => {
+        pendingSavesRef.current = pendingSavesRef.current.filter((p) => p !== promise);
+      })
+      .catch(() => {});
+    return promise;
+  }
+  async function flushPendingSaves() {
+    if (document.activeElement && document.activeElement.blur) {
+      document.activeElement.blur();
+    }
+    // Yield twice — first tick lets the blur event handler run
+    // (LineRow.onBlur → save() → editLine → trackSave), second tick lets
+    // the pushed Promise land in pendingSavesRef.current.
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    if (pendingSavesRef.current.length) {
+      // allSettled — one failed save shouldn't block approve. The user
+      // would have seen the alert from the failing save.
+      await Promise.allSettled(pendingSavesRef.current.slice());
+    }
+  }
+
   async function act(fn) {
     setBusy(true); setErr("");
     try { await fn(); await onReload(); }
@@ -321,17 +357,20 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
               ✎ Request Rework
             </button>
             <button
-              onClick={() => {
-                // Nudge browser to fire blur on any focused input first
-                // (auto-save fires there). Small delay so pending PATCHes
-                // hit the server before freeze.
-                if (document.activeElement && document.activeElement.blur) {
-                  document.activeElement.blur();
+              onClick={async () => {
+                // Await any in-flight qty/notes/exclude PATCHes before
+                // showing the confirm — otherwise the approve request
+                // can win the race against a pending edit and OrderPilot
+                // ends up with the pre-edit qty.
+                setBusy(true);
+                try {
+                  await flushPendingSaves();
+                  await onReload();
+                } finally {
+                  setBusy(false);
                 }
-                setTimeout(() => {
-                  if (!confirm(`Approve batch ${batch.batch_id}?\n\nThis freezes the plan. Any unsaved qty edits must be typed + clicked away from first — otherwise they'll be lost.`)) return;
-                  act(() => approvePlan(batch.batch_id));
-                }, 250);
+                if (!confirm(`Approve batch ${batch.batch_id}?\n\nThis freezes the plan. All pending edits have been flushed.`)) return;
+                act(() => approvePlan(batch.batch_id));
               }}
               disabled={busy}
               style={btnStyle("#10b981")}
@@ -343,14 +382,19 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
         {canPush && (
           <>
             <button
-              onClick={() => act(() =>
-                pushPlan(batch.batch_id, { dryRun: true }).then((r) => {
-                  const preview = r.preview_shipment_ids
-                    ? Object.entries(r.preview_shipment_ids).map(([fc, id]) => `  ${fc}: ${id}`).join("\n")
-                    : "(no preview_shipment_ids in response)";
-                  alert(`DRY RUN — no data written to OrderPilot\n\npreview shipment_ids:\n${preview}`);
-                })
-              )}
+              onClick={async () => {
+                setBusy(true);
+                try { await flushPendingSaves(); await onReload(); }
+                finally { setBusy(false); }
+                act(() =>
+                  pushPlan(batch.batch_id, { dryRun: true }).then((r) => {
+                    const preview = r.preview_shipment_ids
+                      ? Object.entries(r.preview_shipment_ids).map(([fc, id]) => `  ${fc}: ${id}`).join("\n")
+                      : "(no preview_shipment_ids in response)";
+                    alert(`DRY RUN — no data written to OrderPilot\n\npreview shipment_ids:\n${preview}`);
+                  })
+                );
+              }}
               disabled={busy}
               style={btnStyle("#6b7280")}
               title="Preview shipment_ids from OrderPilot without persisting"
@@ -358,7 +402,16 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
               ⓘ Dry-run Push
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
+                // Flush pending edits (exclude-toggle, approver-note,
+                // etc.) BEFORE building the push confirmation — approved
+                // batches shouldn't be push-editable but exclude_from_push
+                // is toggleable on approved batches via edit_line (server
+                // gates on 'draft' or 'proposed' only, so this is really
+                // just belt-and-suspenders for edits made just before).
+                setBusy(true);
+                try { await flushPendingSaves(); await onReload(); }
+                finally { setBusy(false); }
                 if (!confirm(`Push batch ${batch.batch_id} to OrderPilot for real?\n\nThis creates shipment records in OrderPilot's 3P Shipments tab.`)) return;
                 act(() =>
                   pushPlan(batch.batch_id).then((r) => {
@@ -423,7 +476,8 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
           <tbody>
             {(batch.lines || []).map((l) => (
               <LineRow key={l.id} line={l} canEdit={canEdit} batchId={batch.batch_id}
-                       onReload={onReload} isApprover={isApprover} />
+                       onReload={onReload} isApprover={isApprover}
+                       trackSave={trackSave} />
             ))}
           </tbody>
         </table>
@@ -453,7 +507,8 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
   );
 }
 
-function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
+function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave }) {
+  const track = trackSave || ((p) => p);
   const [qty, setQty] = useState(String(line.qty));
   const [notes, setNotes] = useState(line.notes || "");
   const [approverNote, setApproverNote] = useState(line.approver_note || "");
@@ -483,12 +538,12 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
     }
     setBusy(true);
     try {
-      await editLine(batchId, line.id, {
+      await track(editLine(batchId, line.id, {
         ...(qtyDirty ? { qty: Number(qty), approver_note: noteForQty } : {}),
         ...(notesDirty ? { notes } : {}),
         ...(apprNoteDirty && !qtyDirty ? { approver_note: approverNote } : {}),
         row_version: line.row_version,
-      });
+      }));
       await onReload();
     } catch (e) { alert(e.message); }
     finally { setBusy(false); }
@@ -498,7 +553,7 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
     if (!notesDirty) return;
     setBusy(true);
     try {
-      await editLine(batchId, line.id, { notes, row_version: line.row_version });
+      await track(editLine(batchId, line.id, { notes, row_version: line.row_version }));
       await onReload();
     } catch (e) { alert(e.message); }
     finally { setBusy(false); }
@@ -508,7 +563,7 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
     if (!apprNoteDirty) return;
     setBusy(true);
     try {
-      await editLine(batchId, line.id, { approver_note: approverNote, row_version: line.row_version });
+      await track(editLine(batchId, line.id, { approver_note: approverNote, row_version: line.row_version }));
       await onReload();
     } catch (e) { alert(e.message); }
     finally { setBusy(false); }
@@ -517,10 +572,10 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
   async function toggleExclude(nextValue) {
     setBusy(true);
     try {
-      await editLine(batchId, line.id, {
+      await track(editLine(batchId, line.id, {
         exclude_from_push: nextValue,
         row_version: line.row_version,
-      });
+      }));
       await onReload();
     } catch (e) { alert(e.message); }
     finally { setBusy(false); }
