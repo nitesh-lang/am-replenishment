@@ -96,6 +96,15 @@ def get_replenishment(
             "ledger_at_fc": int(row.get("ledger_at_fc", 0) or 0),
             "ledger_in_transit": int(row.get("ledger_in_transit", 0) or 0),
             "ampm_inventory": int(row["ampm_inventory"]),
+            # Model-level Mother WH sum — same for every ASIN of a shared
+            # model so approver sees the actual pool. Calc still uses
+            # per-ASIN ampm_inventory. AA-focused but populated for all
+            # accounts (safe: single-ASIN models see identical numbers).
+            "model_ampm_inventory": int(row.get("model_ampm_inventory", row["ampm_inventory"]) or 0),
+            # CB SOH — Cambium's vendor warehouse stock. AA only (populated
+            # from CB Replenishment's final_cb_qty per model). None on
+            # accounts without 1P vendor inventory.
+            "cb_soh": (int(row["cb_soh"]) if row.get("cb_soh") == row.get("cb_soh") and row.get("cb_soh") is not None else None),
             "b2b_inventory":  int(row.get("b2b_inventory", 0)),
             "required_units": int(row["required_units"]),
             "replenishment_qty": int(row["replenishment_qty"]),

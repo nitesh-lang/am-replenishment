@@ -991,6 +991,32 @@ def calculate_replenishment(
         except Exception as _e:
             print(f"⚠️ AA CB-EOL filter skipped: {_e}")
 
+    # Duplicate-model AMPM aggregate (display-only) + CB SOH for AA.
+    # Operator ask 2026-08-12: same Model with multiple ASINs shares the
+    # physical Mother WH pool, but per-ASIN AMPM only appears on whichever
+    # ASIN the operator recorded. Add a model-level sum so BOTH duplicate
+    # rows show the shared pool. Calc pipeline still uses per-ASIN
+    # ampm_inventory (no double-consumption); UI reads model_ampm_inventory.
+    if "model" in df.columns and "ampm_inventory" in df.columns:
+        _model_sum = (df.groupby(df["model"].astype(str))["ampm_inventory"]
+                        .transform("sum")
+                        .fillna(0))
+        df["model_ampm_inventory"] = _model_sum.astype(int)
+
+    # CB SOH (Cambium warehouse stock at CB vendor) — AA only.
+    # Sourced from CB Replenishment's final_cb_qty per model. Same brand
+    # + model key that CB Rep itself uses. Non-AA accounts get cb_soh=None
+    # so the frontend column stays empty for them.
+    df["cb_soh"] = None
+    if account.upper() == "AUDIO ARRAY":
+        try:
+            cb_map = _cb_soh_by_model("Audio Array")
+            if cb_map and "model" in df.columns:
+                _mk = df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
+                df["cb_soh"] = _mk.map(cb_map).astype("Int64")
+        except Exception as _e:
+            print(f"⚠️ AA CB SOH merge skipped: {_e}")
+
     return df
 
 
@@ -1010,3 +1036,36 @@ def _cb_eol_asin_set() -> set:
         return set()
     mask = m["cb"].astype(str).str.strip().str.lower() == "no"
     return set(m.loc[mask, "asin"].astype(str).str.strip().str.upper())
+
+
+def _cb_soh_by_model(brand: str) -> dict:
+    """Run CB Replenishment once and return {model_key_lower: final_cb_qty}
+    for rows of the given brand. model_key strips bundle descriptions
+    (matches CB Rep's own model_join normalization: "UB-01 (...)"→"UB-01").
+    Called by AA replenishment/FC alloc to surface CB warehouse stock."""
+    try:
+        from app.services.cb_replenishment import load_cb_replenishment
+        recs = load_cb_replenishment()
+    except Exception as e:
+        print(f"⚠️ CB Rep load failed for cb_soh lookup: {e}")
+        return {}
+    import pandas as _pd
+    if not isinstance(recs, _pd.DataFrame):
+        try: recs = _pd.DataFrame(recs)
+        except Exception: return {}
+    if "brand" not in recs.columns or "final_cb_qty" not in recs.columns:
+        return {}
+    brand_norm = str(brand).strip().lower()
+    df = recs[recs["brand"].astype(str).str.strip().str.lower() == brand_norm].copy()
+    if df.empty:
+        return {}
+    key = df.get("model_join")
+    if key is None:
+        key = df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
+    else:
+        key = key.astype(str).str.strip().str.lower()
+    df["_k"] = key
+    df["final_cb_qty"] = _pd.to_numeric(df["final_cb_qty"], errors="coerce").fillna(0)
+    # Same model may repeat across (brand, model) rows in CB Rep — take max
+    # so a single "yes there's stock" reading wins over any 0 rows.
+    return df.groupby("_k")["final_cb_qty"].max().astype(int).to_dict()
