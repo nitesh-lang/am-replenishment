@@ -478,7 +478,9 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
             {(batch.lines || []).map((l) => (
               <LineRow key={l.id} line={l} canEdit={canEdit} batchId={batch.batch_id}
                        onReload={onReload} isApprover={isApprover}
-                       trackSave={trackSave} />
+                       trackSave={trackSave}
+                       coverWeeks={batch.cover_weeks}
+                       accountLabel={batch.account} />
             ))}
           </tbody>
         </table>
@@ -508,8 +510,9 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
   );
 }
 
-function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave }) {
+function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave, coverWeeks, accountLabel }) {
   const track = trackSave || ((p) => p);
+  const [showCalc, setShowCalc] = useState(false);
   const [qty, setQty] = useState(String(line.qty));
   const [notes, setNotes] = useState(line.notes || "");
   const [approverNote, setApproverNote] = useState(line.approver_note || "");
@@ -598,7 +601,29 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave }) {
       textDecoration: deleted ? "line-through" : "none",
       fontStyle: excluded && !deleted ? "italic" : "normal",
     }}>
-      <Td>{line.sku}</Td>
+      <Td>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button
+            onClick={() => setShowCalc(true)}
+            title="Show Naresh's calc breakdown — velocity × cover_weeks, Amazon inv, Mother WH, CB SOH, suggested vs Working"
+            style={{
+              border: "none", background: "transparent", cursor: "pointer",
+              fontSize: 12, padding: "2px 4px", color: "#6366f1", lineHeight: 1,
+            }}
+          >
+            🧮
+          </button>
+          <span>{line.sku}</span>
+        </div>
+        {showCalc && (
+          <CalcBreakdownModal
+            line={line}
+            coverWeeks={coverWeeks}
+            accountLabel={accountLabel}
+            onClose={() => setShowCalc(false)}
+          />
+        )}
+      </Td>
       <Td>{line.model || "—"}</Td>
       <Td>{line.asin || "—"}</Td>
       <Td>{line.destination_fc}</Td>
@@ -735,6 +760,145 @@ function AddRowForm({ batch, onDone }) {
     </form>
   );
 }
+
+// ────────────────────────────── Calc breakdown popup
+// Reconstructs the Replenishment calc from the snapshot fields plan_lines
+// captured at propose time. Lets the approver audit: what velocity did
+// Naresh use, what cover_weeks, what stock did the calc net against,
+// and how does his Working (qty) compare to the calc's suggestion
+// (original_send_qty)?
+function CalcBreakdownModal({ line, coverWeeks, accountLabel, onClose }) {
+  const vel   = Number(line.weekly_velocity ?? 0);
+  const cover = Number(coverWeeks ?? 0);
+  const required = Math.round(vel * cover);
+  const realAm = Number(line.real_am_inv ?? 0);
+  const mother = Number(line.mother_inv ?? 0);
+  const cbSoh  = line.cb_soh == null ? null : Number(line.cb_soh);
+  const shortage = Math.max(0, required - realAm);
+  const suggested = Math.min(shortage, mother);  // = calc's replenishment_qty
+  const original  = Number(line.original_send_qty ?? 0);
+  const working   = Number(line.qty ?? 0);
+  const delta = working - original;
+  const isAA = String(accountLabel || "").toUpperCase().includes("AUDIO");
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 1000,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "white", borderRadius: 8, padding: 20, minWidth: 420,
+          maxWidth: 560, boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+          fontFamily: "Poppins, sans-serif",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 16 }}>
+            Calc Breakdown — <span style={{ color: "#6366f1" }}>{line.sku}</span>
+          </h3>
+          <button onClick={onClose} style={{
+            border: "none", background: "transparent", cursor: "pointer",
+            fontSize: 18, color: "#6b7280", lineHeight: 1,
+          }}>✕</button>
+        </div>
+        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 12 }}>
+          {line.model || "—"} · {line.destination_fc} · reconstructed from snapshot fields captured at propose time
+        </div>
+
+        <CalcSection title="Demand">
+          <CalcRow label="Weekly velocity"    value={vel.toFixed(1)}  unit="u/wk" />
+          <CalcRow label="Cover weeks"        value={cover || "—"}    unit="wks" />
+          <CalcRow label="Required" bold      value={required}        unit="u"
+                   note={`= ${vel.toFixed(1)} × ${cover || "?"}`} />
+        </CalcSection>
+
+        <CalcSection title="Available">
+          <CalcRow label="Real AM Inv"        value={realAm}          unit="u"
+                   note="Amazon FBA + Inbound (ledger-adjusted)" />
+          <CalcRow label="Mother WH (AMPM)"   value={mother}          unit="u" />
+          {isAA && (
+            <CalcRow label="CB SOH (vendor)"  value={cbSoh ?? "—"}    unit="u"
+                     note="Cambium 1P vendor warehouse — reference only, not netted" />
+          )}
+        </CalcSection>
+
+        <CalcSection title="Calc engine">
+          <CalcRow label="Amazon shortage"    value={shortage}        unit="u"
+                   note={`max(0, required − Real AM Inv) = max(0, ${required} − ${realAm})`} />
+          <CalcRow label="Suggested" bold     value={suggested}       unit="u"
+                   note={`min(shortage, Mother) = min(${shortage}, ${mother})`}
+                   color="#6366f1" />
+        </CalcSection>
+
+        <CalcSection title="Naresh's override">
+          <CalcRow label="Original (calc)"    value={original}        unit="u" />
+          <CalcRow label="Working (Naresh)" bold value={working}      unit="u"
+                   color="#10b981" />
+          <CalcRow label="Δ vs original" bold value={(delta > 0 ? "+" : "") + delta} unit="u"
+                   color={delta === 0 ? "#6b7280" : delta > 0 ? "#10b981" : "#ef4444"} />
+          {line.notes && (
+            <div style={{
+              marginTop: 8, padding: 8, background: "#fef3c7",
+              border: "1px solid #fde68a", borderRadius: 4, fontSize: 12,
+            }}>
+              <b style={{ color: "#92400e" }}>Naresh's remark: </b>
+              <span style={{ color: "#78350f", whiteSpace: "pre-wrap" }}>{line.notes}</span>
+            </div>
+          )}
+          {line.approver_note && (
+            <div style={{
+              marginTop: 8, padding: 8, background: "#faf5ff",
+              border: "1px solid #e9d5ff", borderRadius: 4, fontSize: 12,
+            }}>
+              <b style={{ color: "#7c3aed" }}>Approver's note: </b>
+              <span style={{ color: "#5b21b6", whiteSpace: "pre-wrap" }}>{line.approver_note}</span>
+            </div>
+          )}
+        </CalcSection>
+
+        <div style={{ marginTop: 12, fontSize: 10, color: "#9ca3af", lineHeight: 1.5 }}>
+          Snapshot captured when the plan was proposed. Live source-tab
+          numbers may differ (SP-API pull refreshes, AMPM edits).
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const CalcSection = ({ title, children }) => (
+  <div style={{ marginBottom: 14 }}>
+    <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", marginBottom: 6, letterSpacing: 0.5 }}>
+      {title}
+    </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {children}
+    </div>
+  </div>
+);
+
+const CalcRow = ({ label, value, unit, note, bold, color }) => (
+  <div style={{
+    display: "flex", justifyContent: "space-between", alignItems: "baseline",
+    padding: "3px 0", borderBottom: "1px dashed #f3f4f6",
+  }}>
+    <div style={{ fontSize: 12, color: "#374151", fontWeight: bold ? 600 : 400 }}>
+      {label}
+      {note && <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400 }}>{note}</div>}
+    </div>
+    <div style={{
+      fontSize: 13, fontWeight: bold ? 700 : 500, color: color || "inherit",
+      textAlign: "right", whiteSpace: "nowrap",
+    }}>
+      {value} <span style={{ fontSize: 10, color: "#9ca3af" }}>{unit}</span>
+    </div>
+  </div>
+);
 
 // ────────────────────────────── small style helpers
 // Bucket by (fc, hazmat, ixd) to preview how many shipments OrderPilot will create.
