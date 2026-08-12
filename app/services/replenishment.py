@@ -973,11 +973,36 @@ def calculate_replenishment(
         df["lost_units_3m"] = 0
         df["momentum_flag"] = ""
 
+    # Duplicate-model Mother WH — AA Replenishment ONLY, per operator
+    # rule 2026-08-12: "only where one model has 2 asin and 1 asin has
+    # got [stock and the] 2nd one none". Fill zero-AMPM ASINs from a
+    # stocked sibling; stocked rows unchanged. Never sums (would
+    # double-count).
+    #
+    # CRITICAL: this must run BEFORE the CB-EOL filter below. Often the
+    # AA sibling that carries the physical stock is itself CB=No (EOL),
+    # so after filtering it out the empty ASIN has no sibling to inherit
+    # from. Example (2026-08-12): model AM-C47 — ASIN B0FF9R3GKK has
+    # 480 AMPM but is CB-EOL, ASIN B0FJS57732 is CB=Yes but has 0 AMPM.
+    # Compute fill-blank first so B0FJS57732 sees 480; then drop
+    # B0FF9R3GKK.
+    if account.upper() == "AUDIO ARRAY" and "model" in df.columns and "ampm_inventory" in df.columns:
+        _model_max = (df.groupby(df["model"].astype(str))["ampm_inventory"]
+                        .transform("max")
+                        .fillna(0))
+        _ampm = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
+        df["model_ampm_inventory"] = _ampm.where(_ampm > 0, _model_max).astype(int)
+    else:
+        # Non-AA + AA rows without model info: mirror ampm_inventory so
+        # the frontend column has a stable field to read and shows
+        # exactly the same number as before.
+        if "ampm_inventory" in df.columns:
+            df["model_ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0).astype(int)
+
     # CB EOL filter (AUDIO ARRAY only) — CB Replenishment Master carries
     # a "CB" column (Yes/No) per ASIN. "No" = Cambium has EOL'd this SKU,
     # so it should NOT appear in AA replenishment or FC allocation views
-    # (operator rule 2026-08-11). Same list gates FC Allocation too — see
-    # fc_final_allocation._filter_cb_eol_for_aa.
+    # (operator rule 2026-08-11).
     if account.upper() == "AUDIO ARRAY":
         try:
             eol = _cb_eol_asin_set()
@@ -990,27 +1015,6 @@ def calculate_replenishment(
                     print(f"[AA CB-EOL] hid {dropped} SKUs (CB=No in CB Replenishment_Master)")
         except Exception as _e:
             print(f"⚠️ AA CB-EOL filter skipped: {_e}")
-
-    # Duplicate-model Mother WH — AA Replenishment ONLY, per operator
-    # rule 2026-08-12: "only where one model has 2 asin and 1 asin has
-    # got [stock and the] 2nd one none". Don't sum across all rows
-    # (that double-counts when operator records the pool separately per
-    # ASIN) — just fill zero-AMPM ASINs from a stocked sibling's row.
-    # Stocked rows are left untouched.
-    if account.upper() == "AUDIO ARRAY" and "model" in df.columns and "ampm_inventory" in df.columns:
-        _model_max = (df.groupby(df["model"].astype(str))["ampm_inventory"]
-                        .transform("max")
-                        .fillna(0))
-        _ampm = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
-        # Only override where the ASIN has zero AMPM but a sibling ASIN
-        # (same model) has non-zero. Otherwise keep the per-ASIN value.
-        df["model_ampm_inventory"] = _ampm.where(_ampm > 0, _model_max).astype(int)
-    else:
-        # Non-AA accounts + AA rows without model info: mirror
-        # ampm_inventory so the frontend column has a stable field to
-        # read and shows exactly the same number as before.
-        if "ampm_inventory" in df.columns:
-            df["model_ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0).astype(int)
 
     # CB SOH (Cambium warehouse stock at CB vendor) — AA only.
     # Sourced from CB Replenishment's final_cb_qty per model. Same brand
