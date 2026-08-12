@@ -339,6 +339,24 @@ def get_batch(batch_id: str, include_deleted: bool = True) -> dict:
             )
             events = [dict(r) for r in cur.fetchall()]
     b = dict(b)
+    # Backfill cb_soh for AA batches that were proposed before the
+    # cb_soh column was wired (9303390 2026-08-12). Look up from live
+    # CB Rep and fill in-memory only — don't mutate the snapshot, since
+    # historical batches should reflect what Naresh saw at propose time.
+    # New batches persist cb_soh at propose so this is a no-op for them.
+    if str(b.get("account", "")).strip().lower() in ("audio array",) \
+            and any(l.get("cb_soh") is None for l in lines):
+        try:
+            from app.services.replenishment import _cb_soh_by_model
+            cb_map = _cb_soh_by_model("Audio Array")
+            if cb_map:
+                for l in lines:
+                    if l.get("cb_soh") is None and l.get("model"):
+                        key = str(l["model"]).split("(")[0].strip().lower()
+                        if key in cb_map:
+                            l["cb_soh"] = int(cb_map[key])
+        except Exception as _e:
+            print(f"⚠️ CB SOH backfill on get_batch failed: {_e}")
     b["lines"] = lines
     b["events"] = events
     b["summary"] = _summarize(lines)
