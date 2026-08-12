@@ -70,6 +70,10 @@ ALTER TABLE plan_batches ADD COLUMN IF NOT EXISTS approver_feedback TEXT;
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS real_am_inv       INT;
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS mother_inv        INT;
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS weekly_velocity   NUMERIC(10,2);
+-- Cambium vendor warehouse stock at propose time — AA-only for now
+-- (sourced from CB Replenishment.final_cb_qty per model). NULL on
+-- accounts without 1P vendor inventory so the approver column renders "—".
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS cb_soh            INT;
 -- Amazon FBA rejects mixed shipments — OrderPilot must split each per-FC
 -- group into 4 buckets (Hazmat × IXD). AM_Replen snapshots these flags
 -- per line at propose time so the split key travels with the payload.
@@ -264,9 +268,9 @@ def propose_plan(
                     INSERT INTO plan_lines
                         (batch_id, sku, model, asin, destination_fc,
                          ship_from_wh, qty, original_send_qty, added_by,
-                         real_am_inv, mother_inv, weekly_velocity,
+                         real_am_inv, mother_inv, weekly_velocity, cb_soh,
                          hazmat, ixd_flag, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (batch_id, sku, destination_fc) DO NOTHING
                     """,
                     (
@@ -279,6 +283,7 @@ def propose_plan(
                         _int_or_none(r.get("real_am_inv")),
                         _int_or_none(r.get("mother_inv")),
                         _float_or_none(r.get("weekly_velocity")),
+                        _int_or_none(r.get("cb_soh")),
                         hazmat, ixd_flag,
                         notes,
                     ),

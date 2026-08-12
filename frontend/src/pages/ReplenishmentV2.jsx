@@ -560,6 +560,9 @@ export default function ReplenishmentV2() {
                     real_am_inv:     r.real_am_inv_available ?? null,
                     mother_inv:      r.ampm_inventory ?? null,
                     weekly_velocity: r.weekly_velocity ?? r.sales_velocity ?? null,
+                    // Cambium vendor SOH — AA only (backend returns null for
+                    // other accounts, so it lands in DB as NULL and renders "—").
+                    cb_soh:          r.cb_soh ?? null,
                     // Amazon FBA split keys.
                     // API sends r.hazmat_type = "IXD Hazmat" | "IXD Non-Hazmat" |
                     //                          "Non-IXD Hazmat" | "Non-IXD Non Hazmat"

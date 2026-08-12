@@ -465,6 +465,7 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
               <Th align="right">Qty</Th><Th align="right">Original</Th>
               <Th align="right" title="Amazon FBA available at push time">Real AM Inv</Th>
               <Th align="right" title="AMPM / Cambium warehouse stock at push time">Mother Inv</Th>
+              <Th align="right" title="Cambium vendor SOH at CB warehouse (AA only)">CB SOH</Th>
               <Th align="right" title="Sales velocity Naresh's calc used (units/wk)">Vel/wk</Th>
               <Th>Remarks</Th>
               <Th title="Approver's reason for changing qty — required whenever qty is edited so Naresh sees why">Approver Note</Th>
@@ -627,6 +628,7 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave }) {
       <Td align="right"><span style={{ color: "#9ca3af" }}>{line.original_send_qty}</span></Td>
       <Td align="right"><span style={{ color: "#6b7280" }}>{line.real_am_inv ?? "—"}</span></Td>
       <Td align="right"><span style={{ color: "#6b7280" }}>{line.mother_inv ?? "—"}</span></Td>
+      <Td align="right"><span style={{ color: "#6b7280" }}>{line.cb_soh ?? "—"}</span></Td>
       <Td align="right"><span style={{ color: "#6b7280" }}>{line.weekly_velocity != null ? Number(line.weekly_velocity).toFixed(1) : "—"}</span></Td>
       <Td>
         {canEdit && !deleted ? (
