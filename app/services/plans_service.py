@@ -78,6 +78,10 @@ ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS ixd_flag          TEXT;
 -- Approver's reason for changing qty (Sagar/Kanwal explaining edits so
 -- Naresh sees WHY). Separate from `notes` which is Naresh's remark.
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS approver_note     TEXT;
+-- Approver toggle: keep the line in the batch (audit + visibility) but
+-- SKIP it when pushing to OrderPilot. Used for stock at non-default
+-- warehouses (e.g. MR-01 at Turbhe) that need their own dispatch flow.
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS exclude_from_push BOOLEAN NOT NULL DEFAULT FALSE;
 -- Snapshot of the filter/selector state Naresh had when he proposed:
 -- channel, sales-window from/to week, view filter, replenish_weeks cover.
 -- Approver renders these as chips so they know what generated the plan.
@@ -395,16 +399,18 @@ def _assert_editable(cur, batch_id: str, actor: str, actor_is_admin: bool = Fals
 
 def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
               row_version: int | None = None, actor_is_admin: bool = False,
-              notes: str | None = None, approver_note: str | None = None) -> dict:
-    """Edit qty and/or notes and/or approver_note on a line. Pass None
-    for a field to leave it unchanged. At least one must be provided.
+              notes: str | None = None, approver_note: str | None = None,
+              exclude_from_push: bool | None = None) -> dict:
+    """Edit qty and/or notes and/or approver_note and/or exclude_from_push
+    on a line. Pass None for a field to leave it unchanged. At least
+    one must be provided.
 
-    approver_note is Sagar/Kanwal's reason for a qty change — required
-    (frontend-enforced) whenever qty is edited by the approver so
-    Naresh sees WHY when he opens the batch."""
+    exclude_from_push: when True, the line stays in the batch (audit
+    trail preserved) but push_plan() skips it. Used for stock at non-
+    default warehouses (e.g. Turbhe) that need their own dispatch."""
     actor = (actor or "").strip().lower()
-    if new_qty is None and notes is None and approver_note is None:
-        raise ValueError("must provide qty, notes, and/or approver_note")
+    if new_qty is None and notes is None and approver_note is None and exclude_from_push is None:
+        raise ValueError("must provide qty, notes, approver_note, and/or exclude_from_push")
     if new_qty is not None:
         new_qty = int(round(float(new_qty)))
         if new_qty < 0:
@@ -427,6 +433,7 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
             old_qty = int(line["qty"])
             old_notes = line.get("notes")
             old_approver_note = line.get("approver_note")
+            old_exclude = bool(line.get("exclude_from_push"))
             # Build a dynamic UPDATE that only touches the fields provided
             sets = ["edited_by = %s", "last_edited_at = NOW()", "row_version = row_version + 1"]
             vals: list = [actor]
@@ -439,6 +446,9 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
             if approver_note is not None:
                 sets.append("approver_note = %s")
                 vals.append(approver_note or None)
+            if exclude_from_push is not None:
+                sets.append("exclude_from_push = %s")
+                vals.append(bool(exclude_from_push))
             vals.append(line_id)
             cur.execute(
                 f"UPDATE plan_lines SET {', '.join(sets)} WHERE id = %s RETURNING *",
@@ -453,14 +463,21 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
                 evt_payload["notes_changed"] = True
             if approver_note is not None and approver_note != (old_approver_note or ""):
                 evt_payload["approver_note"] = approver_note
+            if exclude_from_push is not None and bool(exclude_from_push) != old_exclude:
+                evt_payload["exclude_from_push"] = bool(exclude_from_push)
             if evt_payload:
+                if "qty_to" in evt_payload:
+                    evt_type = "edit_qty"
+                elif "exclude_from_push" in evt_payload:
+                    evt_type = "toggle_exclude_from_push"
+                else:
+                    evt_type = "edit_notes"
                 cur.execute(
                     """
                     INSERT INTO plan_line_events (batch_id, line_id, event_type, actor, payload_json)
                     VALUES (%s, %s, %s, %s, %s)
                     """,
-                    (batch_id, line_id, "edit_qty" if "qty_to" in evt_payload else "edit_notes",
-                     actor, json.dumps(evt_payload)),
+                    (batch_id, line_id, evt_type, actor, json.dumps(evt_payload)),
                 )
         conn.commit()
     return updated
@@ -846,10 +863,13 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
     # OrderPilot's receiver enforces qty > 0. We deliberately store
     # zero-qty lines with a note (approver reads why=0) but those are
     # internal audit only — filter them out of the outbound payload.
-    push_lines = [l for l in lines if int(l["qty"]) > 0]
-    skipped_zero = len(lines) - len(push_lines)
+    # exclude_from_push lines (approver toggle) also skipped: stock at
+    # non-default warehouses like Turbhe that need their own dispatch.
+    push_lines = [l for l in lines if int(l["qty"]) > 0 and not l.get("exclude_from_push")]
+    skipped_zero = sum(1 for l in lines if int(l["qty"]) <= 0)
+    skipped_excluded = sum(1 for l in lines if int(l["qty"]) > 0 and l.get("exclude_from_push"))
     if not push_lines:
-        raise ValueError("no lines with qty > 0 to push (all rows were zero-qty audit notes)")
+        raise ValueError("no push-eligible lines (all rows zero-qty or excluded from push)")
 
     payload = {
         "source":         "am_replenishment",
@@ -880,6 +900,8 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
     }
     if skipped_zero:
         print(f"[push_plan] batch {batch_id}: skipped {skipped_zero} zero-qty lines (kept in DB for audit)")
+    if skipped_excluded:
+        print(f"[push_plan] batch {batch_id}: skipped {skipped_excluded} exclude_from_push lines (kept in DB for audit)")
 
     # ---------------- POST ----------------
     target_url = url + ("?dry_run=true" if dry_run else "")

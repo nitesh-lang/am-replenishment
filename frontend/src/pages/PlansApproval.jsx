@@ -221,9 +221,14 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
         <Stat label="Cover wks" value={batch.cover_weeks ?? "—"} />
         <Stat label="OrderPilot ships" value={_shipmentBuckets(batch.lines || [])}
               color="#8b5cf6" />
-        <Stat label="Δ vs original"
-              value={(s.delta_units > 0 ? "+" : "") + s.delta_units}
-              color={s.delta_units === 0 ? "#6b7280" : s.delta_units > 0 ? "#10b981" : "#ef4444"} />
+        <Stat
+          label={_skippedLineCount(batch.lines || []) > 0 ? "Skipped in push" : "Δ vs original"}
+          value={_skippedLineCount(batch.lines || []) > 0
+            ? `${_skippedLineCount(batch.lines || [])} rows`
+            : (s.delta_units > 0 ? "+" : "") + s.delta_units}
+          color={_skippedLineCount(batch.lines || []) > 0
+            ? "#ef4444"
+            : (s.delta_units === 0 ? "#6b7280" : s.delta_units > 0 ? "#10b981" : "#ef4444")} />
       </div>
 
       {/* Filter context — what Naresh had selected when he proposed */}
@@ -411,6 +416,7 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
               <Th>Remarks</Th>
               <Th title="Approver's reason for changing qty — required whenever qty is edited so Naresh sees why">Approver Note</Th>
               <Th>Added By</Th><Th>Edited By</Th>
+              <Th align="center" title="Uncheck to keep this line in the plan for audit but SKIP it when pushing to OrderPilot (e.g. MR-01 stock at Turbhe needs its own dispatch)">Push?</Th>
               {canEdit && <Th>Actions</Th>}
             </tr>
           </thead>
@@ -457,6 +463,7 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
   const apprNoteDirty = (line.approver_note || "") !== approverNote;
   const dirty = qtyDirty || notesDirty || apprNoteDirty;
   const deleted = !!line.is_deleted;
+  const excluded = !!line.exclude_from_push;
 
   async function save() {
     // If the approver changed qty, prompt for a reason and store it in
@@ -507,6 +514,18 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
     finally { setBusy(false); }
   }
 
+  async function toggleExclude(nextValue) {
+    setBusy(true);
+    try {
+      await editLine(batchId, line.id, {
+        exclude_from_push: nextValue,
+        row_version: line.row_version,
+      });
+      await onReload();
+    } catch (e) { alert(e.message); }
+    finally { setBusy(false); }
+  }
+
   async function del() {
     if (!confirm(`Delete ${line.sku} @ ${line.destination_fc}?`)) return;
     setBusy(true);
@@ -518,9 +537,10 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
   return (
     <tr style={{
       borderBottom: "1px solid #f3f4f6",
-      background: deleted ? "#fef2f2" : "white",
-      color: deleted ? "#9ca3af" : "inherit",
+      background: deleted ? "#fef2f2" : (excluded ? "#f3f4f6" : "white"),
+      color: deleted ? "#9ca3af" : (excluded ? "#6b7280" : "inherit"),
       textDecoration: deleted ? "line-through" : "none",
+      fontStyle: excluded && !deleted ? "italic" : "normal",
     }}>
       <Td>{line.sku}</Td>
       <Td>{line.model || "—"}</Td>
@@ -593,6 +613,25 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover }) {
       </Td>
       <Td><Badge>{line.added_by}</Badge></Td>
       <Td>{line.edited_by ? <Badge color="#f59e0b">{line.edited_by}</Badge> : "—"}</Td>
+      <Td align="center">
+        {deleted ? (
+          <span style={{ color: "#d1d5db" }}>—</span>
+        ) : canEdit ? (
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 4, cursor: busy ? "wait" : "pointer" }}
+                 title={excluded ? "Excluded — won't be sent to OrderPilot" : "Will be included in the OrderPilot push"}>
+            <input
+              type="checkbox"
+              checked={!excluded}
+              disabled={busy}
+              onChange={(e) => toggleExclude(!e.target.checked)}
+              style={{ cursor: busy ? "wait" : "pointer" }}
+            />
+            {excluded && <span style={{ fontSize: 10, color: "#ef4444", fontWeight: 600 }}>SKIP</span>}
+          </label>
+        ) : (
+          excluded ? <Badge color="#ef4444">SKIP</Badge> : <span style={{ color: "#10b981", fontSize: 12 }}>✓</span>
+        )}
+      </Td>
       {canEdit && (
         <Td>
           <div style={{ display: "flex", gap: 4 }}>
@@ -643,14 +682,21 @@ function AddRowForm({ batch, onDone }) {
 // ────────────────────────────── small style helpers
 // Bucket by (fc, hazmat, ixd) to preview how many shipments OrderPilot will create.
 // Amazon FBA rejects mixed hazmat/non-hazmat AND mixed IXD/non-IXD shipments,
-// so each unique triple = one distinct shipment.
+// so each unique triple = one distinct shipment. Match push_plan's filter:
+// exclude soft-deleted, zero-qty, and exclude_from_push rows.
 function _shipmentBuckets(lines) {
-  const active = (lines || []).filter((l) => !l.is_deleted);
-  if (!active.length) return 0;
-  const keys = new Set(active.map((l) =>
+  const pushable = (lines || []).filter(
+    (l) => !l.is_deleted && Number(l.qty) > 0 && !l.exclude_from_push
+  );
+  if (!pushable.length) return 0;
+  const keys = new Set(pushable.map((l) =>
     `${l.destination_fc}|${l.hazmat ? "H" : "N"}|${l.ixd_flag || "?"}`
   ));
   return keys.size;
+}
+
+function _skippedLineCount(lines) {
+  return (lines || []).filter((l) => !l.is_deleted && l.exclude_from_push).length;
 }
 
 const Stat = ({ label, value, color }) => (
