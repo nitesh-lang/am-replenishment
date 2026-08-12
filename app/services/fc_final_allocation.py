@@ -1261,25 +1261,9 @@ def calculate_final_allocation(
         except Exception as _e:
             print(f"⚠️ AA FC-Alloc CB-EOL filter skipped: {_e}")
 
-    # Duplicate-model Mother WH sum (display) + CB SOH per model — AA only.
-    # Same rules as Replenishment tab; frontend renders both alongside the
-    # per-SKU/FC ampm_inventory column.
-    if "model" in final_df.columns and "ampm_inventory" in final_df.columns:
-        _model_sum = (final_df.groupby(final_df["model"].astype(str))["ampm_inventory"]
-                              .transform("sum")
-                              .fillna(0))
-        final_df["model_ampm_inventory"] = _model_sum.astype(int)
-
-    final_df["cb_soh"] = None
-    if account.upper() == "AUDIO ARRAY":
-        try:
-            from app.services.replenishment import _cb_soh_by_model
-            cb_map = _cb_soh_by_model("Audio Array")
-            if cb_map and "model" in final_df.columns:
-                _mk = final_df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
-                final_df["cb_soh"] = _mk.map(cb_map).astype("Int64")
-        except Exception as _e:
-            print(f"⚠️ AA FC-Alloc CB SOH merge skipped: {_e}")
+    # NOTE: model-level Mother WH + CB SOH are Replenishment-tab-only per
+    # operator rule 2026-08-12. FC Allocation stays on per-(SKU, FC)
+    # ampm_inventory as before.
 
     return final_df
 

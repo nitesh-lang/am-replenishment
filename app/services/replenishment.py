@@ -991,17 +991,26 @@ def calculate_replenishment(
         except Exception as _e:
             print(f"⚠️ AA CB-EOL filter skipped: {_e}")
 
-    # Duplicate-model AMPM aggregate (display-only) + CB SOH for AA.
-    # Operator ask 2026-08-12: same Model with multiple ASINs shares the
-    # physical Mother WH pool, but per-ASIN AMPM only appears on whichever
-    # ASIN the operator recorded. Add a model-level sum so BOTH duplicate
-    # rows show the shared pool. Calc pipeline still uses per-ASIN
-    # ampm_inventory (no double-consumption); UI reads model_ampm_inventory.
-    if "model" in df.columns and "ampm_inventory" in df.columns:
-        _model_sum = (df.groupby(df["model"].astype(str))["ampm_inventory"]
-                        .transform("sum")
+    # Duplicate-model Mother WH — AA Replenishment ONLY, per operator
+    # rule 2026-08-12: "only where one model has 2 asin and 1 asin has
+    # got [stock and the] 2nd one none". Don't sum across all rows
+    # (that double-counts when operator records the pool separately per
+    # ASIN) — just fill zero-AMPM ASINs from a stocked sibling's row.
+    # Stocked rows are left untouched.
+    if account.upper() == "AUDIO ARRAY" and "model" in df.columns and "ampm_inventory" in df.columns:
+        _model_max = (df.groupby(df["model"].astype(str))["ampm_inventory"]
+                        .transform("max")
                         .fillna(0))
-        df["model_ampm_inventory"] = _model_sum.astype(int)
+        _ampm = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0)
+        # Only override where the ASIN has zero AMPM but a sibling ASIN
+        # (same model) has non-zero. Otherwise keep the per-ASIN value.
+        df["model_ampm_inventory"] = _ampm.where(_ampm > 0, _model_max).astype(int)
+    else:
+        # Non-AA accounts + AA rows without model info: mirror
+        # ampm_inventory so the frontend column has a stable field to
+        # read and shows exactly the same number as before.
+        if "ampm_inventory" in df.columns:
+            df["model_ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0).astype(int)
 
     # CB SOH (Cambium warehouse stock at CB vendor) — AA only.
     # Sourced from CB Replenishment's final_cb_qty per model. Same brand
