@@ -168,11 +168,16 @@ export default function PlansApproval() {
 
 function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
   const s = batch.summary || {};
-  const ownDraft = batch.status === "draft" &&
-                   ((batch.proposed_by || "").toLowerCase() === currentEmail || isApprover);
-  // Editors edit their own drafts; approvers edit proposed batches assigned
-  // to them. Admin bypasses via isApprover being true.
+  const isProposer = (batch.proposed_by || "").toLowerCase() === currentEmail;
+  const ownDraft = batch.status === "draft" && (isProposer || isApprover);
+  // Edit rules (2026-08-13 broaden):
+  //  Draft    → proposer (editor role) OR admin
+  //  Proposed → proposer (editor role) OR assigned approver OR admin
+  //             Naresh gets to fix small things directly in Plans
+  //             without recalling to draft or re-proposing.
+  //  Approved / Pushed → nobody
   const canEdit = (isEditor && ownDraft) ||
+                  (isEditor && isProposer && batch.status === "proposed") ||
                   (isApprover && batch.status === "proposed");
   const canSend = isEditor && ownDraft;
   const canApprove = isApprover && batch.status === "proposed";

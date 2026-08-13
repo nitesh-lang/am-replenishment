@@ -409,8 +409,16 @@ def _summarize(lines: list[dict]) -> dict:
 # ============================================================
 def _assert_editable(cur, batch_id: str, actor: str, actor_is_admin: bool = False) -> dict:
     """Ensure the batch is in an editable state AND the actor is allowed
-    to edit it (proposer for drafts, assigned approver for proposed).
-    Admin bypasses both checks. Returns the batch row (dict).
+    to edit it.
+
+    Draft:    proposer only.
+    Proposed: proposer OR assigned approver (operator directive
+              2026-08-13 — Naresh can patch minor things directly in
+              Plans without recalling to Draft or re-proposing).
+              row_version optimistic locking keeps concurrent edits safe.
+    Approved / Pushed: nobody (create a new batch instead).
+
+    Admin bypasses all checks. Returns the batch row (dict).
     """
     cur.execute(
         "SELECT batch_id, status, proposed_by, approver_email FROM plan_batches WHERE batch_id = %s",
@@ -426,15 +434,19 @@ def _assert_editable(cur, batch_id: str, actor: str, actor_is_admin: bool = Fals
     if actor_is_admin:
         return b
     actor = (actor or "").strip().lower()
+    proposer = (b.get("proposed_by") or "").strip().lower()
     if status == "draft":
         # Only the proposer can edit their own draft
-        if (b.get("proposed_by") or "").strip().lower() != actor:
+        if proposer != actor:
             raise ValueError("only the draft's proposer (or an admin) can edit it")
     else:  # proposed
         target = (b.get("approver_email") or "").strip().lower()
-        if target and actor != target:
+        # Proposer can still edit their own proposed batch (small fixes
+        # without recalling to draft). Assigned approver can edit too.
+        if actor != proposer and target and actor != target:
             raise ValueError(
-                f"this batch is addressed to {target}; only they (or an admin) can edit"
+                f"this batch is addressed to {target} (or the proposer); "
+                f"only they (or an admin) can edit"
             )
     return b
 
