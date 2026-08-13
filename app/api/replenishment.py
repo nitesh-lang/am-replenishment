@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, HTTPException
 from app.services.replenishment import calculate_replenishment
 from app.services.fc_final_allocation import calculate_final_allocation
 from app.services.fc_planning import calculate_fc_plan, load_fc_data, count_available_fba_weeks, list_available_fba_weeks
 from app.services.validation_engine import run_full_validation
 from app.services import replenishment_saved
+from app.services import amazon_sync
 from app.services.week_helper import (
     current_working_week_start,
     week_end,
@@ -612,6 +613,31 @@ async def save_fossil_cluster_po(request: Request):
     except Exception as e:
         print("⚠️ Fossil cluster PO save error:", e)
         return {"status": "error", "error": str(e)}
+
+
+# =================================================
+# AMAZON SYNC — on-demand SP-API pull (FBA inv + ledger)
+# Triggered by the 🔄 Sync button in Replenishment / FC Allocation.
+# Blocking; typical latency 30-90s (ledger REPORT queue is the slow bit).
+# Concurrent calls per-account are deduped via amazon_sync's thread lock.
+# =================================================
+@router.post("/sync/inventory")
+def sync_inventory(account: str = Query(...)):
+    try:
+        out = amazon_sync.sync_inventory(account)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if out.get("status") == "error":
+        # 502-ish: SP-API talked back but we couldn't finish. Surface
+        # the tail of stderr so the frontend can show why.
+        return out  # HTTP 200 with status=error so JSON body reaches UI
+    return out
+
+
+@router.get("/sync/inventory/status")
+def sync_inventory_status(account: str = Query(...)):
+    return {"account": account.strip().upper(),
+            **amazon_sync.get_status(account)}
 
 
 # =================================================

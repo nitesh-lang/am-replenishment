@@ -74,3 +74,29 @@ export async function getOverstock(weeks) {
     `${BASE}/dashboard/overstock?weeks=${weeks}`
   );
 }
+
+/* =========================================================
+   AMAZON SYNC — on-demand SP-API pull for a given account.
+   Blocking; ~30-90s typical (ledger REPORT queue is the long tail).
+   Backend serializes concurrent syncs per account; second click
+   returns status='already_running' with the current progress.
+   ========================================================= */
+export async function syncAmazonInventory(account) {
+  const url = `${BASE}/sync/inventory?account=${encodeURIComponent(account)}`;
+  // Longer timeout via AbortController — some browsers cap fetch at
+  // 5 min anyway; 5 min > worst-case ledger-report poll (~3 min).
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 5 * 60 * 1000);
+  try {
+    const res = await fetch(url, { method: "POST", signal: ctrl.signal });
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+export async function getSyncStatus(account) {
+  return fetchJSON(
+    `${BASE}/sync/inventory/status?account=${encodeURIComponent(account)}`
+  );
+}

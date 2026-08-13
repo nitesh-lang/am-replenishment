@@ -10,7 +10,7 @@ import {
   Settings2, Truck, RotateCcw,
 } from "lucide-react";
 
-import { getFCFinal } from "../api/replenishment";
+import { getFCFinal, syncAmazonInventory, getSyncStatus } from "../api/replenishment";
 import { proposePlan, saveDraft } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 import { CommandPalette } from "../components/CommandPalette";
@@ -56,6 +56,12 @@ export default function FCAllocationV2() {
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  /* ─────────── Amazon sync ─────────── */
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [syncNonce, setSyncNonce] = useState(0);
 
   const [search, setSearch] = useState("");
   const [view, setView] = useState("all");
@@ -189,7 +195,41 @@ export default function FCAllocationV2() {
         }
       })
       .finally(() => setLoading(false));
-  }, [replenishWeeks, channel, account, fromWeek, toWeek]);
+  }, [replenishWeeks, channel, account, fromWeek, toWeek, syncNonce]);
+
+  /* ─────────── Amazon sync: initial status per account ─────────── */
+  useEffect(() => {
+    setLastSyncAt(null);
+    getSyncStatus(account).then((s) => {
+      if (s?.last_sync_at) setLastSyncAt(s.last_sync_at);
+    }).catch(() => {});
+  }, [account]);
+
+  async function runSync() {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncMsg("Syncing FBA inventory + ledger from Amazon SP-API… (30–90s)");
+    try {
+      const r = await syncAmazonInventory(account);
+      if (r?.status === "ok") {
+        setLastSyncAt(r.last_sync_at);
+        setSyncMsg("✓ Synced. Refreshing table…");
+        setSyncNonce((n) => n + 1);
+        setTimeout(() => setSyncMsg(""), 4000);
+      } else if (r?.status === "already_running") {
+        setSyncMsg("Another sync is already in progress for this account.");
+        setTimeout(() => setSyncMsg(""), 5000);
+      } else {
+        setSyncMsg(`Sync failed: ${r?.error || "unknown"}`);
+        setTimeout(() => setSyncMsg(""), 8000);
+      }
+    } catch (e) {
+      setSyncMsg(`Sync error: ${e.message}`);
+      setTimeout(() => setSyncMsg(""), 8000);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   /* ============================================================
      FOSSIL SAVE
@@ -655,6 +695,33 @@ export default function FCAllocationV2() {
               <span className="text-xs text-indigo-700 mr-2">{saveMsg}</span>
             )}
             <SOPButton onClick={() => setSopOpen(true)} />
+            {syncMsg && (
+              <span className="text-xs text-sky-700 mr-2">{syncMsg}</span>
+            )}
+            <button
+              onClick={runSync}
+              disabled={syncing}
+              title={
+                (lastSyncAt
+                  ? `Last synced ${new Date(lastSyncAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: false })}`
+                  : "Never synced this session") +
+                "\n\nRuns SP-API FBA inventory + ledger pulls, then refreshes the table."
+              }
+              className={cn(
+                "px-3 py-2 rounded-md border text-sm font-medium inline-flex items-center gap-1.5",
+                syncing
+                  ? "border-indigo-300 bg-indigo-50 text-indigo-700 cursor-wait"
+                  : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
+              )}
+            >
+              <span className={cn("inline-block", syncing && "animate-spin")}>🔄</span>
+              {syncing ? "Syncing…" : "Sync Amazon"}
+              {!syncing && lastSyncAt && (
+                <span className="text-[10px] text-slate-400 ml-1">
+                  {new Date(lastSyncAt).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: false, hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </button>
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>

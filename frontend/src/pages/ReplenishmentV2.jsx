@@ -9,7 +9,7 @@ import {
   Search, Download, Save, ChevronDown, ChevronRight, Settings2,
 } from "lucide-react";
 
-import { getReplenishment, getKPIs } from "../api/replenishment";
+import { getReplenishment, getKPIs, syncAmazonInventory, getSyncStatus } from "../api/replenishment";
 import { proposePlan, saveDraft } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 import { logUsage } from "../auth/usage";
@@ -49,6 +49,13 @@ export default function ReplenishmentV2() {
   const [kpis, setKpis] = useState(null);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  /* ─────────── Amazon sync ─────────── */
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  // Bump to force the loadCurrent useEffect to re-fetch after a sync.
+  const [syncNonce, setSyncNonce] = useState(0);
 
   /* ─────────── ui state ─────────── */
   const [search, setSearch] = useState("");
@@ -156,7 +163,41 @@ export default function ReplenishmentV2() {
     });
 
     (weekStart ? loadPast(weekStart) : loadCurrent()).finally(() => setLoading(false));
-  }, [fromWeek, toWeek, replenishWeeks, account, weekStart]);
+  }, [fromWeek, toWeek, replenishWeeks, account, weekStart, syncNonce]);
+
+  /* ─────────── Amazon sync: fetch initial status when account changes ─────────── */
+  useEffect(() => {
+    setLastSyncAt(null);
+    getSyncStatus(account).then((s) => {
+      if (s?.last_sync_at) setLastSyncAt(s.last_sync_at);
+    }).catch(() => {});
+  }, [account]);
+
+  async function runSync() {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncMsg("Syncing FBA inventory + ledger from Amazon SP-API… (30–90s)");
+    try {
+      const r = await syncAmazonInventory(account);
+      if (r?.status === "ok") {
+        setLastSyncAt(r.last_sync_at);
+        setSyncMsg("✓ Synced. Refreshing data…");
+        setSyncNonce((n) => n + 1);
+        setTimeout(() => setSyncMsg(""), 4000);
+      } else if (r?.status === "already_running") {
+        setSyncMsg("Another sync is already in progress for this account.");
+        setTimeout(() => setSyncMsg(""), 5000);
+      } else {
+        setSyncMsg(`Sync failed: ${r?.error || "unknown"}`);
+        setTimeout(() => setSyncMsg(""), 8000);
+      }
+    } catch (e) {
+      setSyncMsg(`Sync error: ${e.message}`);
+      setTimeout(() => setSyncMsg(""), 8000);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   /* ============================================================
      SAVE WEEK
@@ -516,6 +557,30 @@ export default function ReplenishmentV2() {
               </span>
             </div>
             <SOPButton onClick={() => setSopOpen(true)} />
+            <button
+              onClick={runSync}
+              disabled={syncing}
+              title={
+                (lastSyncAt
+                  ? `Last synced ${new Date(lastSyncAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: false })}`
+                  : "Never synced this session") +
+                "\n\nRuns SP-API FBA inventory + ledger pulls, then refreshes the table."
+              }
+              className={cn(
+                "px-3 py-2 rounded-md border text-sm font-medium inline-flex items-center gap-1.5",
+                syncing
+                  ? "border-indigo-300 bg-indigo-50 text-indigo-700 cursor-wait"
+                  : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
+              )}
+            >
+              <span className={cn("inline-block", syncing && "animate-spin")}>🔄</span>
+              {syncing ? "Syncing…" : "Sync Amazon"}
+              {!syncing && lastSyncAt && (
+                <span className="text-[10px] text-slate-400 ml-1">
+                  {new Date(lastSyncAt).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour12: false, hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </button>
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
@@ -741,6 +806,7 @@ export default function ReplenishmentV2() {
                 {loading ? "Loading…" : `${filteredRows.length} of ${rows.length} rows`}
               </div>
               {saveMsg && <div className="text-xs text-indigo-700 mt-1">{saveMsg}</div>}
+              {syncMsg && <div className="text-xs text-sky-700 mt-1">{syncMsg}</div>}
             </div>
 
             <div className="col-span-2 flex items-center gap-2 justify-end">
