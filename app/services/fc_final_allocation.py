@@ -660,6 +660,23 @@ def calculate_final_allocation(
 
         repl_master["category"] = repl_master.get("category", pd.Series(dtype=str)).fillna("-")
 
+        # AA-only: swap the AA sheet's coarse Category ("Microphone",
+        # "Speaker") for sku_master's more accurate category_l1 ("Studio
+        # Monitor Speaker", "Wireless Conference Microphone"). Matched
+        # on ASIN. Tonor SKUs live in the AA account too so we pull
+        # both brands. Missing lookups leave the original category
+        # untouched. Operator directive 2026-08-13.
+        if account.lower() == "audio array" and "asin" in repl_master.columns:
+            try:
+                from app.services.replenishment import _sku_master_category_l1_map
+                cat_map = _sku_master_category_l1_map(["Audio Array", "Tonor"])
+                if cat_map:
+                    _asin_key = repl_master["asin"].astype(str).str.strip().str.upper()
+                    _override = _asin_key.map(cat_map)
+                    repl_master["category"] = _override.where(_override.notna(), repl_master["category"])
+            except Exception as _e:
+                print(f"⚠️ FC alloc AA sku_master category_l1 override skipped: {_e}")
+
         if "listing_status" not in repl_master.columns:
             repl_master["listing_status"] = "-"
 

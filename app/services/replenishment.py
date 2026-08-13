@@ -357,6 +357,23 @@ def calculate_replenishment(
     master["ASIN"] = master["ASIN"].astype(str).str.strip()
     amazon_inventory["asin"] = amazon_inventory["asin"].astype(str).str.strip()
 
+    # AA-only: swap the AA sheet's coarse Category ("Microphone",
+    # "Speaker") for sku_master's more accurate category_l1 ("Studio
+    # Monitor Speaker", "USB Microphone Kit - Boomarm"). Matched on
+    # ASIN. Tonor SKUs live in the AA account too, so we pull both
+    # brands. Missing lookups leave the original Category untouched.
+    if account.upper() == "AUDIO ARRAY":
+        try:
+            cat_map = _sku_master_category_l1_map(["Audio Array", "Tonor"])
+            if cat_map:
+                _asin_key = master["ASIN"].astype(str).str.strip().str.upper()
+                _override = _asin_key.map(cat_map)
+                if "Category" not in master.columns:
+                    master["Category"] = "-"
+                master["Category"] = _override.where(_override.notna(), master["Category"])
+        except Exception as _e:
+            print(f"⚠️ AA sku_master category_l1 override skipped: {_e}")
+
     validate_columns(inventory, ["Model", "Channel", "Qty"], "inventory snapshot")
     validate_columns(sales, ["model", "units_sold", "week"], "sales snapshot")
 
@@ -1052,6 +1069,38 @@ def _cb_eol_asin_set() -> set:
         return set()
     mask = m["cb"].astype(str).str.strip().str.lower() == "no"
     return set(m.loc[mask, "asin"].astype(str).str.strip().str.upper())
+
+
+def _sku_master_category_l1_map(brands: list[str]) -> dict:
+    """Read sku_master.xlsx and return {ASIN_upper: category_l1} filtered
+    to the requested brand list. AA account uses this to override the
+    stale AA-sheet 'Category' column with the more accurate category_l1
+    from the canonical sku_master (operator directive 2026-08-13:
+    "sku master's l1 as its accurate").
+
+    Falls back silently to an empty dict on any load / column error —
+    caller then keeps the original master's Category value.
+    """
+    try:
+        sm = get("sku_master.xlsx")
+    except Exception as e:
+        print(f"⚠️ sku_master load failed for category_l1 map: {e}")
+        return {}
+    sm = sm.copy()
+    sm.columns = sm.columns.str.strip()
+    if "ASIN" not in sm.columns or "category_l1" not in sm.columns:
+        return {}
+    brands_lower = {str(b).strip().lower() for b in brands}
+    if "Brand" in sm.columns:
+        sm = sm[sm["Brand"].astype(str).str.strip().str.lower().isin(brands_lower)]
+    if sm.empty:
+        return {}
+    sm["_asin"] = sm["ASIN"].astype(str).str.strip().str.upper()
+    sm["_cat"]  = sm["category_l1"].astype(str).str.strip()
+    sm = sm[(sm["_asin"] != "") & (sm["_asin"] != "NAN")
+            & (sm["_cat"]  != "") & (sm["_cat"]  != "nan")]
+    # Same ASIN may appear once per brand — first non-blank wins.
+    return sm.drop_duplicates(subset=["_asin"]).set_index("_asin")["_cat"].to_dict()
 
 
 def _cb_soh_by_model(brand: str) -> dict:
