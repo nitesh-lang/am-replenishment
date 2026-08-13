@@ -73,13 +73,12 @@ export function getPlan(batchId, { includeDeleted = true } = {}) {
   return req("GET", `${P}/${encodeURIComponent(batchId)}?include_deleted=${includeDeleted}`);
 }
 
-export function editLine(batchId, lineId, { qty, notes, approver_note, exclude_from_push, isolate_shipment, row_version }) {
+export function editLine(batchId, lineId, { qty, notes, approver_note, exclude_from_push, row_version }) {
   const body = { row_version };
   if (qty !== undefined)                body.qty = qty;
   if (notes !== undefined)              body.notes = notes;
   if (approver_note !== undefined)      body.approver_note = approver_note;
   if (exclude_from_push !== undefined)  body.exclude_from_push = exclude_from_push;
-  if (isolate_shipment !== undefined)   body.isolate_shipment = isolate_shipment;
   return req("PATCH", `${P}/${encodeURIComponent(batchId)}/lines/${lineId}`, body);
 }
 

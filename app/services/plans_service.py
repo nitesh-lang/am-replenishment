@@ -30,27 +30,10 @@ Edit permissions:
 
 import json
 import os
-import re
 import secrets
 import time
 from datetime import datetime, timezone
 from typing import Any
-
-# Bundle SKUs — model contains parens with a '+' inside, e.g.
-# "GB-03 (AI-12 + AM-C43)" / "PB-15 (AH-50+AM-C2+AI-04)". These get
-# split into their own OrderPilot batch on push (see push_plan). Rule
-# supplied by OrderPilot team 2026-08-13 — Amazon India splits such
-# InboundPlans into 2 shipments post-creation, forcing operator to
-# handle 2 STN/E-Way/Tax Invoice for one truck; pre-splitting from
-# our side keeps 1 batch = 1 shipment.
-_BUNDLE_MODEL_RE = re.compile(r"\(.+\+.+\)")
-
-
-def _sanitize_batch_suffix_token(s: str, maxlen: int = 20) -> str:
-    """Short alphanumeric token safe for a batch_id suffix (OrderPilot
-    dedupes on (batch_id, account), so sub-batches need unique IDs)."""
-    t = re.sub(r"[^A-Za-z0-9]+", "", str(s or ""))[:maxlen]
-    return t or "x"
 
 import psycopg2
 import requests
@@ -126,14 +109,6 @@ ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS approver_note     TEXT;
 -- SKIP it when pushing to OrderPilot. Used for stock at non-default
 -- warehouses (e.g. MR-01 at Turbhe) that need their own dispatch flow.
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS exclude_from_push BOOLEAN NOT NULL DEFAULT FALSE;
--- Force this SKU into its own OrderPilot batch (single-line POST →
--- single InboundPlan → single Amazon shipment). Bundle SKUs like
--- "GB-03 (AI-12 + AM-C43)" are auto-detected via regex on model,
--- but approver can also flip this manually for SKUs Amazon has
--- flagged Non-Sortable / Oversize / SIOC that would otherwise get
--- split into 2 shipments post-plan-creation. Prompt from OrderPilot
--- team 2026-08-13.
-ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS isolate_shipment  BOOLEAN NOT NULL DEFAULT FALSE;
 -- Snapshot of the filter/selector state Naresh had when he proposed:
 -- channel, sales-window from/to week, view filter, replenish_weeks cover.
 -- Approver renders these as chips so they know what generated the plan.
@@ -479,25 +454,17 @@ def _assert_editable(cur, batch_id: str, actor: str, actor_is_admin: bool = Fals
 def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
               row_version: int | None = None, actor_is_admin: bool = False,
               notes: str | None = None, approver_note: str | None = None,
-              exclude_from_push: bool | None = None,
-              isolate_shipment: bool | None = None) -> dict:
+              exclude_from_push: bool | None = None) -> dict:
     """Edit qty and/or notes and/or approver_note and/or exclude_from_push
-    and/or isolate_shipment on a line. Pass None for a field to leave
-    it unchanged. At least one must be provided.
+    on a line. Pass None for a field to leave it unchanged. At least
+    one must be provided.
 
     exclude_from_push: when True, the line stays in the batch (audit
     trail preserved) but push_plan() skips it. Used for stock at non-
-    default warehouses (e.g. Turbhe) that need their own dispatch.
-
-    isolate_shipment: when True, forces this line into its own
-    OrderPilot batch on push (single-line POST → single InboundPlan →
-    single Amazon shipment). Bundle SKUs are auto-detected via regex;
-    this flag is the manual override for Non-Sortable / Oversize / SIOC
-    SKUs that Amazon would otherwise split after plan creation."""
+    default warehouses (e.g. Turbhe) that need their own dispatch."""
     actor = (actor or "").strip().lower()
-    if (new_qty is None and notes is None and approver_note is None
-            and exclude_from_push is None and isolate_shipment is None):
-        raise ValueError("must provide qty, notes, approver_note, exclude_from_push, and/or isolate_shipment")
+    if new_qty is None and notes is None and approver_note is None and exclude_from_push is None:
+        raise ValueError("must provide qty, notes, approver_note, and/or exclude_from_push")
     if new_qty is not None:
         new_qty = int(round(float(new_qty)))
         if new_qty < 0:
@@ -521,7 +488,6 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
             old_notes = line.get("notes")
             old_approver_note = line.get("approver_note")
             old_exclude = bool(line.get("exclude_from_push"))
-            old_isolate = bool(line.get("isolate_shipment"))
             # Build a dynamic UPDATE that only touches the fields provided
             sets = ["edited_by = %s", "last_edited_at = NOW()", "row_version = row_version + 1"]
             vals: list = [actor]
@@ -537,9 +503,6 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
             if exclude_from_push is not None:
                 sets.append("exclude_from_push = %s")
                 vals.append(bool(exclude_from_push))
-            if isolate_shipment is not None:
-                sets.append("isolate_shipment = %s")
-                vals.append(bool(isolate_shipment))
             vals.append(line_id)
             cur.execute(
                 f"UPDATE plan_lines SET {', '.join(sets)} WHERE id = %s RETURNING *",
@@ -556,8 +519,6 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
                 evt_payload["approver_note"] = approver_note
             if exclude_from_push is not None and bool(exclude_from_push) != old_exclude:
                 evt_payload["exclude_from_push"] = bool(exclude_from_push)
-            if isolate_shipment is not None and bool(isolate_shipment) != old_isolate:
-                evt_payload["isolate_shipment"] = bool(isolate_shipment)
             if evt_payload:
                 # Compose event_type from EVERY change so combined edits
                 # (e.g., qty AND exclude_from_push in the same PATCH) show
@@ -570,7 +531,6 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
                 if "notes_changed" in evt_payload:     parts.append("notes")
                 if "approver_note" in evt_payload:     parts.append("approver_note")
                 if "exclude_from_push" in evt_payload: parts.append("exclude")
-                if "isolate_shipment" in evt_payload:  parts.append("isolate")
                 evt_type = "edit_" + "+".join(parts) if parts else "edit_line"
                 cur.execute(
                     """
@@ -1054,7 +1014,7 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
     if not lines:
         raise ValueError("no active lines to push")
 
-    # ---------------- Filter push-eligible lines ----------------
+    # ---------------- Build payload ----------------
     def _iso(dt):
         return dt.isoformat() if dt else None
 
@@ -1069,206 +1029,141 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
     if not push_lines:
         raise ValueError("no push-eligible lines (all rows zero-qty or excluded from push)")
 
+    payload = {
+        "source":         "am_replenishment",
+        "batch_id":       b["batch_id"],
+        "account":        b["account"],
+        "source_module":  b.get("source_module"),
+        "proposed_by":    b["proposed_by"],
+        "approved_by":    b.get("approved_by"),
+        "approved_at":    _iso(b.get("approved_at")),
+        "lines": [
+            {
+                "line_id":         l["id"],
+                "sku":             l["sku"],
+                "model":           l.get("model"),
+                "asin":            l.get("asin"),
+                "destination_fc":  l["destination_fc"],
+                "ship_from_wh":    l.get("ship_from_wh"),
+                "qty":             int(l["qty"]),
+                "notes":           l.get("notes"),
+                # Split keys — OrderPilot MUST bucket by (destination_fc,
+                # hazmat, ixd_flag) since Amazon FBA rejects mixed shipments.
+                # Both null on Fossil / VENDOR path (1P Vendor Central).
+                "hazmat":          l.get("hazmat"),
+                "ixd_flag":        l.get("ixd_flag"),
+            }
+            for l in push_lines
+        ],
+    }
     if skipped_zero:
         print(f"[push_plan] batch {batch_id}: skipped {skipped_zero} zero-qty lines (kept in DB for audit)")
     if skipped_excluded:
         print(f"[push_plan] batch {batch_id}: skipped {skipped_excluded} exclude_from_push lines (kept in DB for audit)")
 
-    # ---------------- Split into isolation groups ----------------
-    # Rule (OrderPilot team 2026-08-13): "bundle" SKUs (model contains
-    # parens with a '+') get their own POST → own InboundPlan → own
-    # Amazon shipment. Approver can also toggle isolate_shipment=True
-    # per line as a fallback for other known-splittable SKUs. Every
-    # other line stays in the "main" group and rides the standard
-    # OrderPilot fc×hazmat×ixd bucketing inside a single POST.
-    def _isolation_group(l: dict) -> str:
-        if l.get("isolate_shipment"):
-            return "iso_" + _sanitize_batch_suffix_token(l.get("sku") or l.get("model") or "x")
-        model = str(l.get("model") or "")
-        if _BUNDLE_MODEL_RE.search(model):
-            return "bundle_" + _sanitize_batch_suffix_token(model.split("(")[0].strip() or l.get("sku") or "x")
-        return "main"
-
-    groups: dict[str, list] = {}
-    for l in push_lines:
-        groups.setdefault(_isolation_group(l), []).append(l)
-
-    # If everyone lands in "main" (no bundles, no manual isolation) we
-    # keep the batch_id as-is — zero behavioural change for the common
-    # case. Multi-group → one POST per group with suffixed batch_id
-    # (OrderPilot dedupes on (batch_id, account) so unique suffixes are
-    # required for concurrent creation; also safe for retry).
-    def _sub_batch_id(group_id: str) -> str:
-        if len(groups) == 1 and group_id == "main":
-            return b["batch_id"]
-        return f"{b['batch_id']}__{group_id}"
-
-    def _bucket_key(l):
-        fc = l["destination_fc"]
-        hz = l.get("hazmat")
-        ix = l.get("ixd_flag")
-        if hz is None and ix is None:
-            return fc  # Fossil VENDOR — never bucketed
-        hz_c = "H" if hz else "N"
-        ix_c = "N-IXD" if (ix or "").upper() == "NON IXD" else "IXD"
-        return f"{fc}|{hz_c}|{ix_c}"
-
-    headers = {"Authorization": f"Bearer {token}",
-               "Content-Type":  "application/json"}
+    # ---------------- POST ----------------
     target_url = url + ("?dry_run=true" if dry_run else "")
-
-    # ---------------- POST each group; short-circuit on first failure ----------------
-    per_group_results: list = []       # audit trail for events
-    all_shipment_ids: dict = {}        # merged across sub-batches
-    line_to_sub_batch: dict = {}       # line_id → sub_batch_id (for pushed-line updates)
-
-    for group_id in sorted(groups.keys()):
-        group_lines = groups[group_id]
-        sub_id = _sub_batch_id(group_id)
-        payload = {
-            "source":         "am_replenishment",
-            "batch_id":       sub_id,
-            "parent_batch_id": b["batch_id"] if sub_id != b["batch_id"] else None,
-            "account":        b["account"],
-            "source_module":  b.get("source_module"),
-            "proposed_by":    b["proposed_by"],
-            "approved_by":    b.get("approved_by"),
-            "approved_at":    _iso(b.get("approved_at")),
-            "lines": [
-                {
-                    "line_id":         l["id"],
-                    "sku":             l["sku"],
-                    "model":           l.get("model"),
-                    "asin":            l.get("asin"),
-                    "destination_fc":  l["destination_fc"],
-                    "ship_from_wh":    l.get("ship_from_wh"),
-                    "qty":             int(l["qty"]),
-                    "notes":           l.get("notes"),
-                    "hazmat":          l.get("hazmat"),
-                    "ixd_flag":        l.get("ixd_flag"),
-                    # Fallback flag for the receiving side (OrderPilot
-                    # team may honor it as an alt-path to splitting).
-                    "isolate_shipment": bool(l.get("isolate_shipment")),
-                }
-                for l in group_lines
-            ],
-        }
-        try:
-            resp = requests.post(target_url, json=payload, headers=headers, timeout=30)
-        except requests.RequestException as e:
-            err_msg = f"network error on {sub_id}: {type(e).__name__}: {e}"
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "UPDATE plan_batches SET push_error = %s, updated_at = NOW() WHERE batch_id = %s",
-                        (err_msg, batch_id),
-                    )
-                    cur.execute(
-                        """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
-                           VALUES (%s, 'push_failed', %s, %s)""",
-                        (batch_id, actor, json.dumps({
-                            "error": err_msg, "dry_run": dry_run,
-                            "sub_batch_id": sub_id,
-                            "prior_groups_ok": [g["sub_batch_id"] for g in per_group_results],
-                        })),
-                    )
-                conn.commit()
-            return {"status": "error", "batch_id": batch_id, "error": err_msg,
-                    "sub_results": per_group_results}
-
-        try: body = resp.json()
-        except ValueError: body = {"raw": resp.text[:500]}
-
-        if resp.status_code != 200 or body.get("status") != "ok":
-            err_msg = (
-                f"HTTP {resp.status_code} on {sub_id}: "
-                f"{body.get('detail') or body.get('raw') or json.dumps(body)[:200]}"
-            )
-            with get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "UPDATE plan_batches SET push_error = %s, updated_at = NOW() WHERE batch_id = %s",
-                        (err_msg, batch_id),
-                    )
-                    cur.execute(
-                        """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
-                           VALUES (%s, 'push_failed', %s, %s)""",
-                        (batch_id, actor, json.dumps({
-                            "status_code": resp.status_code, "response": body,
-                            "dry_run": dry_run, "sub_batch_id": sub_id,
-                            "prior_groups_ok": [g["sub_batch_id"] for g in per_group_results],
-                        })),
-                    )
-                conn.commit()
-            return {"status": "error", "batch_id": batch_id, "error": err_msg,
-                    "response": body, "sub_results": per_group_results}
-
-        sub_shipment_ids = body.get("shipment_ids") or {}
-        # Merge into the batch-level dict, prefixing keys with sub_batch_id
-        # so multiple sub-batches with the same fc-bucket key don't collide.
-        for k, v in sub_shipment_ids.items():
-            all_shipment_ids[f"{sub_id}::{k}" if len(groups) > 1 else k] = v
-        for l in group_lines:
-            line_to_sub_batch[l["id"]] = (sub_id, sub_shipment_ids)
-        per_group_results.append({
-            "sub_batch_id": sub_id,
-            "group_id": group_id,
-            "line_count": len(group_lines),
-            "shipment_ids": sub_shipment_ids,
-        })
-
-    # ---------------- All sub-POSTs succeeded ----------------
-    if dry_run:
+    try:
+        resp = requests.post(
+            target_url,
+            json=payload,
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type":  "application/json"},
+            timeout=30,
+        )
+    except requests.RequestException as e:
+        err_msg = f"network error: {type(e).__name__}: {e}"
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
+                    "UPDATE plan_batches SET push_error = %s, updated_at = NOW() WHERE batch_id = %s",
+                    (err_msg, batch_id),
+                )
+                cur.execute(
                     """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
-                       VALUES (%s, 'push_dry_run', %s, %s)""",
-                    (batch_id, actor, json.dumps({
-                        "sub_batches": [g["sub_batch_id"] for g in per_group_results],
-                        "shipment_ids": all_shipment_ids,
-                        "sub_results": per_group_results,
-                    })),
+                       VALUES (%s, 'push_failed', %s, %s)""",
+                    (batch_id, actor, json.dumps({"error": err_msg, "dry_run": dry_run})),
                 )
             conn.commit()
-        return {"status": "ok", "dry_run": True, "batch_id": batch_id,
-                "preview_shipment_ids": all_shipment_ids,
-                "sub_batches": [g["sub_batch_id"] for g in per_group_results]}
+        return {"status": "error", "batch_id": batch_id, "error": err_msg}
 
-    # Real push — flip status and store shipment_id per line. Each line
-    # gets the shipment_id from ITS sub-batch's response, keyed by
-    # (fc, hazmat, ixd) bucket within that sub-batch.
+    # ---------------- Handle response ----------------
+    try:
+        body = resp.json()
+    except ValueError:
+        body = {"raw": resp.text[:500]}
+
+    if resp.status_code == 200 and body.get("status") == "ok":
+        shipment_ids = body.get("shipment_ids") or {}
+        if dry_run:
+            # Verify-only run — DO NOT persist status or line ids
+            with get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                           VALUES (%s, 'push_dry_run', %s, %s)""",
+                        (batch_id, actor,
+                         json.dumps({"shipment_ids": shipment_ids, "response": body})),
+                    )
+                conn.commit()
+            return {"status": "ok", "dry_run": True, "batch_id": batch_id,
+                    "preview_shipment_ids": shipment_ids}
+
+        # Real push — flip status and store shipment IDs per line.
+        # OrderPilot returns bucketed keys like "DEL4|H|IXD" (fc|H/N|IXD/N-IXD).
+        # Fall back to bare fc key for Fossil VENDOR path or older receivers.
+        def _bucket_key(l):
+            fc = l["destination_fc"]
+            hz = l.get("hazmat")
+            ix = l.get("ixd_flag")
+            if hz is None and ix is None:
+                return fc  # Fossil VENDOR — never bucketed
+            hz_c = "H" if hz else "N"
+            ix_c = "N-IXD" if (ix or "").upper() == "NON IXD" else "IXD"
+            return f"{fc}|{hz_c}|{ix_c}"
+
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE plan_batches
+                       SET status = 'pushed', pushed_at = NOW(), push_error = NULL, updated_at = NOW()
+                       WHERE batch_id = %s""",
+                    (batch_id,),
+                )
+                # Only iterate the lines we actually pushed. Zero-qty
+                # audit lines stay in DB but don't get a shipment_id.
+                for l in push_lines:
+                    # Try bucketed key first, then bare fc for backward compat
+                    sid = shipment_ids.get(_bucket_key(l)) or shipment_ids.get(l["destination_fc"])
+                    if sid:
+                        cur.execute(
+                            """UPDATE plan_lines
+                               SET orderpilot_shipment_id = %s, pushed_at = NOW()
+                               WHERE id = %s""",
+                            (sid, l["id"]),
+                        )
+                cur.execute(
+                    """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                       VALUES (%s, 'push_success', %s, %s)""",
+                    (batch_id, actor,
+                     json.dumps({"shipment_ids": shipment_ids, "response": body})),
+                )
+            conn.commit()
+        return {"status": "ok", "batch_id": batch_id, "shipment_ids": shipment_ids}
+
+    # Non-200 or status != ok
+    err_msg = f"HTTP {resp.status_code}: {body.get('detail') or body.get('raw') or json.dumps(body)[:200]}"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """UPDATE plan_batches
-                   SET status = 'pushed', pushed_at = NOW(), push_error = NULL, updated_at = NOW()
-                   WHERE batch_id = %s""",
-                (batch_id,),
+                "UPDATE plan_batches SET push_error = %s, updated_at = NOW() WHERE batch_id = %s",
+                (err_msg, batch_id),
             )
-            for l in push_lines:
-                sub_info = line_to_sub_batch.get(l["id"])
-                if not sub_info:
-                    continue
-                sub_id, sub_ids = sub_info
-                sid = sub_ids.get(_bucket_key(l)) or sub_ids.get(l["destination_fc"])
-                if sid:
-                    cur.execute(
-                        """UPDATE plan_lines
-                           SET orderpilot_shipment_id = %s, pushed_at = NOW()
-                           WHERE id = %s""",
-                        (sid, l["id"]),
-                    )
             cur.execute(
                 """INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
-                   VALUES (%s, 'push_success', %s, %s)""",
-                (batch_id, actor, json.dumps({
-                    "sub_batches": [g["sub_batch_id"] for g in per_group_results],
-                    "shipment_ids": all_shipment_ids,
-                    "sub_results": per_group_results,
-                })),
+                   VALUES (%s, 'push_failed', %s, %s)""",
+                (batch_id, actor,
+                 json.dumps({"status_code": resp.status_code, "response": body, "dry_run": dry_run})),
             )
         conn.commit()
-    return {"status": "ok", "batch_id": batch_id,
-            "shipment_ids": all_shipment_ids,
-            "sub_batches": [g["sub_batch_id"] for g in per_group_results]}
+    return {"status": "error", "batch_id": batch_id, "error": err_msg, "response": body}

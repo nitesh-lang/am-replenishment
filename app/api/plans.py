@@ -189,16 +189,15 @@ def send(batch_id: str, request: Request):
 # ============================================================
 @router.patch("/plans/{batch_id}/lines/{line_id}")
 async def patch_line(batch_id: str, line_id: int, request: Request):
-    """Edit qty, notes, approver_note, exclude_from_push, and/or
-    isolate_shipment on a line. At least one required."""
+    """Edit qty, notes, approver_note, and/or exclude_from_push on a line.
+    At least one required."""
     actor = _editor_or_approver(request)
     is_admin = auth_users.is_admin(actor)
     body = await request.json()
     if ("qty" not in body and "notes" not in body
-            and "approver_note" not in body and "exclude_from_push" not in body
-            and "isolate_shipment" not in body):
+            and "approver_note" not in body and "exclude_from_push" not in body):
         raise HTTPException(status_code=400,
-                            detail="qty, notes, approver_note, exclude_from_push, and/or isolate_shipment is required")
+                            detail="qty, notes, approver_note, and/or exclude_from_push is required")
     try:
         out = plans_service.edit_line(
             batch_id=batch_id, line_id=line_id,
@@ -206,7 +205,6 @@ async def patch_line(batch_id: str, line_id: int, request: Request):
             notes=body.get("notes"),
             approver_note=body.get("approver_note"),
             exclude_from_push=(bool(body["exclude_from_push"]) if "exclude_from_push" in body else None),
-            isolate_shipment=(bool(body["isolate_shipment"]) if "isolate_shipment" in body else None),
             actor=actor,
             row_version=body.get("row_version"),
             actor_is_admin=is_admin,

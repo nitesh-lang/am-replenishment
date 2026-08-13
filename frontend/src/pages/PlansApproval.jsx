@@ -532,7 +532,6 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail, onSe
               <Th title="Approver's reason for changing qty — required whenever qty is edited so Naresh sees why">Approver Note</Th>
               <Th>Added By</Th><Th>Edited By</Th>
               <Th align="center" title="Uncheck to keep this line in the plan for audit but SKIP it when pushing to OrderPilot (e.g. MR-01 stock at Turbhe needs its own dispatch)">Push?</Th>
-              <Th align="center" title="Force this SKU into its own OrderPilot batch on push (1 batch → 1 InboundPlan → 1 Amazon shipment). Bundle SKUs like 'GB-03 (AI-12 + AM-C43)' auto-isolate; toggle this for Non-Sortable / Oversize / SIOC SKUs Amazon would otherwise split.">Isolate?</Th>
               {canEdit && <Th>Actions</Th>}
             </tr>
           </thead>
@@ -585,11 +584,6 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave, cove
   const dirty = qtyDirty || notesDirty || apprNoteDirty;
   const deleted = !!line.is_deleted;
   const excluded = !!line.exclude_from_push;
-  const isolated = !!line.isolate_shipment;
-  // Auto-detect bundle SKU from model — matches the backend regex
-  // (parens with a '+' inside). Bundles get pre-split on push whether
-  // isolated=true or not, so we show the badge either way.
-  const isBundleModel = /\(.+\+.+\)/.test(String(line.model || ""));
 
   async function save() {
     // If the approver changed qty, prompt for a reason and store it in
@@ -645,18 +639,6 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave, cove
     try {
       await track(editLine(batchId, line.id, {
         exclude_from_push: nextValue,
-        row_version: line.row_version,
-      }));
-      await onReload();
-    } catch (e) { alert(e.message); }
-    finally { setBusy(false); }
-  }
-
-  async function toggleIsolate(nextValue) {
-    setBusy(true);
-    try {
-      await track(editLine(batchId, line.id, {
-        isolate_shipment: nextValue,
         row_version: line.row_version,
       }));
       await onReload();
@@ -791,39 +773,6 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave, cove
           </label>
         ) : (
           excluded ? <Badge color="#ef4444">SKIP</Badge> : <span style={{ color: "#10b981", fontSize: 12 }}>✓</span>
-        )}
-      </Td>
-      <Td align="center">
-        {deleted ? (
-          <span style={{ color: "#d1d5db" }}>—</span>
-        ) : (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            {canEdit ? (
-              <input
-                type="checkbox"
-                checked={isolated || isBundleModel}
-                disabled={busy || isBundleModel}
-                title={isBundleModel
-                  ? "Auto-isolated (bundle SKU detected — model contains '(...+...)')"
-                  : (isolated ? "Isolated — own OrderPilot batch on push" : "Rides the main batch")}
-                onChange={(e) => toggleIsolate(e.target.checked)}
-                style={{ cursor: busy ? "wait" : (isBundleModel ? "not-allowed" : "pointer") }}
-              />
-            ) : (
-              (isolated || isBundleModel) ? <span style={{ color: "#f97316", fontSize: 12 }}>◈</span> : <span style={{ color: "#d1d5db" }}>—</span>
-            )}
-            {isBundleModel && (
-              <span
-                title="Bundle SKU auto-detected by regex — always isolated on push"
-                style={{ fontSize: 9, color: "#c2410c", fontWeight: 700, letterSpacing: 0.3 }}
-              >
-                BUNDLE
-              </span>
-            )}
-            {isolated && !isBundleModel && (
-              <span style={{ fontSize: 9, color: "#f97316", fontWeight: 700 }}>ISO</span>
-            )}
-          </div>
         )}
       </Td>
       {canEdit && (
@@ -1033,17 +982,9 @@ function _shipmentBuckets(lines) {
     (l) => !l.is_deleted && Number(l.qty) > 0 && !l.exclude_from_push
   );
   if (!pushable.length) return 0;
-  const keys = new Set();
-  const bundleRe = /\(.+\+.+\)/;
-  for (const l of pushable) {
-    const isolated = l.isolate_shipment || bundleRe.test(String(l.model || ""));
-    if (isolated) {
-      // Each isolated line becomes its own sub-batch → its own bucket key
-      keys.add(`iso:${l.id}|${l.destination_fc}|${l.hazmat ? "H" : "N"}|${l.ixd_flag || "?"}`);
-    } else {
-      keys.add(`main|${l.destination_fc}|${l.hazmat ? "H" : "N"}|${l.ixd_flag || "?"}`);
-    }
-  }
+  const keys = new Set(pushable.map((l) =>
+    `${l.destination_fc}|${l.hazmat ? "H" : "N"}|${l.ixd_flag || "?"}`
+  ));
   return keys.size;
 }
 
