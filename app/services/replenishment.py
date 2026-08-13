@@ -358,13 +358,14 @@ def calculate_replenishment(
     amazon_inventory["asin"] = amazon_inventory["asin"].astype(str).str.strip()
 
     # AA-only: swap the AA sheet's coarse Category ("Microphone",
-    # "Speaker") for sku_master's more accurate category_l1 ("Studio
-    # Monitor Speaker", "USB Microphone Kit - Boomarm"). Matched on
-    # ASIN. Tonor SKUs live in the AA account too, so we pull both
+    # "Speaker") for sku_master's category_l0 ("Monitor Speakers",
+    # "Headphone", "DJ Headphone", "Conference Microphone"). Matched
+    # on ASIN. Tonor SKUs live in the AA account too, so we pull both
     # brands. Missing lookups leave the original Category untouched.
+    # Was l1 briefly on 2026-08-13 morning; corrected to l0 same day.
     if account.upper() == "AUDIO ARRAY":
         try:
-            cat_map = _sku_master_category_l1_map(["Audio Array", "Tonor"])
+            cat_map = _sku_master_category_l0_map(["Audio Array", "Tonor"])
             if cat_map:
                 _asin_key = master["ASIN"].astype(str).str.strip().str.upper()
                 _override = _asin_key.map(cat_map)
@@ -1071,12 +1072,17 @@ def _cb_eol_asin_set() -> set:
     return set(m.loc[mask, "asin"].astype(str).str.strip().str.upper())
 
 
-def _sku_master_category_l1_map(brands: list[str]) -> dict:
-    """Read sku_master.xlsx and return {ASIN_upper: category_l1} filtered
+def _sku_master_category_l0_map(brands: list[str]) -> dict:
+    """Read sku_master.xlsx and return {ASIN_upper: category_l0} filtered
     to the requested brand list. AA account uses this to override the
-    stale AA-sheet 'Category' column with the more accurate category_l1
-    from the canonical sku_master (operator directive 2026-08-13:
-    "sku master's l1 as its accurate").
+    stale AA-sheet 'Category' column with the accurate category_l0
+    from the canonical sku_master.
+
+    Operator directive history:
+      2026-08-13 (morning): use category_l1 ("Studio Monitor Speaker" etc)
+      2026-08-13 (evening): correction — use category_l0 (broader:
+                            "Monitor Speakers", "Headphone", "DJ Headphone")
+                            since l0 is the operator's mental grouping.
 
     Falls back silently to an empty dict on any load / column error —
     caller then keeps the original master's Category value.
@@ -1084,11 +1090,11 @@ def _sku_master_category_l1_map(brands: list[str]) -> dict:
     try:
         sm = get("sku_master.xlsx")
     except Exception as e:
-        print(f"⚠️ sku_master load failed for category_l1 map: {e}")
+        print(f"⚠️ sku_master load failed for category_l0 map: {e}")
         return {}
     sm = sm.copy()
     sm.columns = sm.columns.str.strip()
-    if "ASIN" not in sm.columns or "category_l1" not in sm.columns:
+    if "ASIN" not in sm.columns or "category_l0" not in sm.columns:
         return {}
     brands_lower = {str(b).strip().lower() for b in brands}
     if "Brand" in sm.columns:
@@ -1096,7 +1102,7 @@ def _sku_master_category_l1_map(brands: list[str]) -> dict:
     if sm.empty:
         return {}
     sm["_asin"] = sm["ASIN"].astype(str).str.strip().str.upper()
-    sm["_cat"]  = sm["category_l1"].astype(str).str.strip()
+    sm["_cat"]  = sm["category_l0"].astype(str).str.strip()
     sm = sm[(sm["_asin"] != "") & (sm["_asin"] != "NAN")
             & (sm["_cat"]  != "") & (sm["_cat"]  != "nan")]
     # Same ASIN may appear once per brand — first non-blank wins.
