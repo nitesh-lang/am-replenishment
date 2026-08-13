@@ -704,6 +704,104 @@ def delete_batch(batch_id: str, actor: str, actor_is_admin: bool = False) -> dic
 
 
 # ============================================================
+# CLONE (create a new batch from an existing one)
+# ============================================================
+def clone_batch(source_batch_id: str, actor: str, as_draft: bool = False,
+                actor_is_admin: bool = False) -> str:
+    """Create a new batch that mirrors an existing one — same account,
+    same rows (qty, notes, approver_note, exclude_from_push, split
+    keys, snapshot context) but a fresh batch_id, cleared shipment ids,
+    reset added_by/edited_by, and parent_batch_id pointing back to the
+    source for audit.
+
+    Use case: Sagar pushed a plan to OrderPilot, then needs to send
+    another shipment with minor changes. Cloning avoids making Naresh
+    re-propose from Replenishment; approver just edits the clone,
+    approves, and pushes.
+
+    Permissions: approver of the source (or admin). Editor role only
+    can't clone an already-approved plan (they'd need to re-propose
+    from the source tab).
+
+    Returns the new batch_id.
+    """
+    actor = (actor or "").strip().lower()
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("SELECT * FROM plan_batches WHERE batch_id = %s", (source_batch_id,))
+            src = cur.fetchone()
+            if not src:
+                raise ValueError(f"source batch not found: {source_batch_id}")
+            src = dict(src)
+            # Any batch may be cloned (draft/proposed/approved/pushed/failed).
+            # Permission: approver_email of source OR admin. Falling back
+            # to proposed_by if source was addressed to "any approver".
+            target = (src.get("approver_email") or "").strip().lower()
+            proposer = (src.get("proposed_by") or "").strip().lower()
+            if not actor_is_admin and actor != target and actor != proposer:
+                raise ValueError(
+                    f"only the source batch's approver ({target or 'any'}) "
+                    f"or its proposer ({proposer}) or an admin can clone it"
+                )
+            new_id = _new_batch_id()
+            initial_status = "draft" if as_draft else "proposed"
+            fc_json = json.dumps(src.get("filter_context")) if src.get("filter_context") else None
+            cur.execute(
+                """
+                INSERT INTO plan_batches
+                    (batch_id, account, source_module, approver_email,
+                     week_tag, cover_weeks, filter_context, status,
+                     proposed_by, parent_batch_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s)
+                """,
+                (new_id, src["account"], src.get("source_module"),
+                 src.get("approver_email"), src.get("week_tag"),
+                 src.get("cover_weeks"), fc_json, initial_status,
+                 actor, source_batch_id),
+            )
+            # Copy every non-deleted line. Preserve qty, notes,
+            # approver_note, exclude_from_push, split keys, snapshot
+            # context (real_am_inv/mother_inv/weekly_velocity/cb_soh),
+            # AND original_send_qty — so a future audit can trace the
+            # clone back to the very first proposal's calc suggestion.
+            cur.execute(
+                """
+                INSERT INTO plan_lines
+                    (batch_id, sku, model, asin, destination_fc,
+                     ship_from_wh, qty, original_send_qty, added_by,
+                     real_am_inv, mother_inv, weekly_velocity, cb_soh,
+                     hazmat, ixd_flag, notes, approver_note,
+                     exclude_from_push)
+                SELECT
+                    %s, sku, model, asin, destination_fc,
+                    ship_from_wh, qty, original_send_qty, %s,
+                    real_am_inv, mother_inv, weekly_velocity, cb_soh,
+                    hazmat, ixd_flag, notes, approver_note,
+                    exclude_from_push
+                FROM plan_lines
+                WHERE batch_id = %s AND is_deleted = FALSE
+                """,
+                (new_id, actor, source_batch_id),
+            )
+            cur.execute("SELECT COUNT(*) AS n FROM plan_lines WHERE batch_id = %s", (new_id,))
+            n = int(cur.fetchone()["n"])
+            cur.execute(
+                """
+                INSERT INTO plan_line_events (batch_id, event_type, actor, payload_json)
+                VALUES (%s, 'clone', %s, %s)
+                """,
+                (new_id, actor, json.dumps({
+                    "source_batch_id": source_batch_id,
+                    "source_status":   src["status"],
+                    "row_count":       n,
+                    "as_draft":        as_draft,
+                })),
+            )
+        conn.commit()
+    return new_id
+
+
+# ============================================================
 # REQUEST REWORK (proposed -> draft, w/ feedback)
 # ============================================================
 def request_rework(batch_id: str, actor: str, feedback: str,

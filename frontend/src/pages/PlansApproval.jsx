@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   listPlans, getPlan, editLine, addLine, deleteLine, approvePlan, pushPlan,
-  sendToApprover, deletePlan, requestRework,
+  sendToApprover, deletePlan, requestRework, clonePlan,
 } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
@@ -159,14 +159,15 @@ export default function PlansApproval() {
           {loading && <div style={{ padding: 24 }}>Loading…</div>}
           {batch && <BatchDetail batch={batch} onReload={() => loadBatch(batch.batch_id)}
                                  isApprover={isApprover} isEditor={isEditor}
-                                 currentEmail={(user?.email || "").toLowerCase()} />}
+                                 currentEmail={(user?.email || "").toLowerCase()}
+                                 onSelectBatch={(newId) => { refreshList(); setSelectedId(newId); }} />}
         </div>
       </div>
     </div>
   );
 }
 
-function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
+function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail, onSelectBatch }) {
   const s = batch.summary || {};
   const isProposer = (batch.proposed_by || "").toLowerCase() === currentEmail;
   const ownDraft = batch.status === "draft" && (isProposer || isApprover);
@@ -190,6 +191,14 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
     (batch.status === "draft" && (ownDraft || currentEmail === (batch.proposed_by || "").toLowerCase())) ||
     (batch.status === "proposed" && isApprover) ||
     ((batch.status === "approved" || batch.status === "pushed") && isApprover /* admin has isApprover=true */);
+  // Clone → create a fresh batch from this one; use case is push a
+  // patched version of an already-approved/pushed plan without going
+  // back to the source Replenishment tab. Approver of the current
+  // batch (or proposer, or admin) can clone; any status is cloneable
+  // but the button only surfaces where it makes sense (post-approve
+  // + failed retries).
+  const canClone = isApprover
+    && (batch.status === "approved" || batch.status === "pushed" || batch.status === "failed");
 
   const [showAdd, setShowAdd] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -299,6 +308,29 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
               </span>
             );
           })}
+        </div>
+      )}
+
+      {/* Cloned-from pointer — quick jump back to the parent batch
+          so audit trails are traversable in one click. */}
+      {batch.parent_batch_id && (
+        <div style={{
+          background: "#e0f2fe", border: "1px solid #7dd3fc", borderRadius: 6,
+          padding: 8, marginBottom: 12, display: "flex", alignItems: "center", gap: 8,
+          fontSize: 12, color: "#075985",
+        }}>
+          <span>🔁 Cloned from</span>
+          <button
+            onClick={() => onSelectBatch && onSelectBatch(batch.parent_batch_id)}
+            style={{
+              border: "none", background: "transparent", cursor: "pointer",
+              color: "#0369a1", textDecoration: "underline", fontFamily: "inherit",
+              fontSize: 12, padding: 0,
+            }}
+            title="Open the source batch"
+          >
+            {batch.parent_batch_id}
+          </button>
         </div>
       )}
 
@@ -436,6 +468,30 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail }) {
               → Push to OrderPilot
             </button>
           </>
+        )}
+        {canClone && (
+          <button
+            onClick={async () => {
+              if (!confirm(
+                `Clone this batch into a new plan?\n\n` +
+                `A fresh batch will be created with all ${(batch.lines || []).filter(l => !l.is_deleted).length} active rows ` +
+                `(qty, notes, exclude toggles, split keys preserved). You can then tweak + approve + push again to OrderPilot.\n\n` +
+                `The original batch stays untouched for audit; the new one's parent_batch_id points back to it.`
+              )) return;
+              setBusy(true); setErr("");
+              try {
+                const r = await clonePlan(batch.batch_id);
+                if (onSelectBatch) onSelectBatch(r.batch_id);
+                alert(`Cloned → ${r.batch_id}\n\nNow open the new batch, apply your minor changes, then Approve + Push.`);
+              } catch (e) { setErr(e.message); }
+              finally { setBusy(false); }
+            }}
+            disabled={busy}
+            style={btnStyle("#0ea5e9")}
+            title="Duplicate this batch as a new proposed plan (parent linked). Approver can edit + re-push without re-proposing from Replenishment."
+          >
+            🔁 Clone as new plan
+          </button>
         )}
         {canDelete && (
           <button

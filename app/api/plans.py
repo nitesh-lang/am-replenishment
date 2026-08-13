@@ -146,6 +146,32 @@ async def request_rework(batch_id: str, request: Request):
     return _ok({"status": "ok", "batch": out})
 
 
+@router.post("/plans/{batch_id}/clone")
+async def clone(batch_id: str, request: Request):
+    """Duplicate a batch into a new one — same rows, fresh IDs, parent
+    link. Approver-only (or admin, or the original proposer). Used to
+    re-push a plan with minor changes to OrderPilot without going back
+    to the source Replenishment / FC Allocation tab."""
+    # Either editor or approver is allowed (service enforces the finer
+    # rule: approver of source OR the proposer OR admin).
+    actor = _either(request)
+    is_admin = auth_users.is_admin(actor)
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    try:
+        new_id = plans_service.clone_batch(
+            source_batch_id=batch_id, actor=actor,
+            as_draft=bool(body.get("as_draft")),
+            actor_is_admin=is_admin,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return _ok({"status": "ok", "batch_id": new_id, "parent_batch_id": batch_id}, status_code=201)
+
+
 @router.post("/plans/{batch_id}/send")
 def send(batch_id: str, request: Request):
     """Editor sends their draft to the assigned approver."""

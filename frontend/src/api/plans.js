@@ -57,6 +57,10 @@ export function sendToApprover(batchId) {
   return req("POST", `${P}/${encodeURIComponent(batchId)}/send`);
 }
 
+export function clonePlan(batchId, { asDraft = false } = {}) {
+  return req("POST", `${P}/${encodeURIComponent(batchId)}/clone`, { as_draft: asDraft });
+}
+
 export function listPlans({ account, status, limit = 50 } = {}) {
   const p = new URLSearchParams();
   if (account) p.set("account", account);
