@@ -49,6 +49,30 @@ _CB_SOH_CACHE: dict = {"map": None, "ts": 0.0}
 _CB_SOH_TTL_SEC = 300
 
 
+def _approver_set(approver_email: str | None) -> set:
+    """Parse a batch's approver_email field into a set of allowed
+    lowercase actor emails.
+
+    Multi-approver support (2026-08-13): approver_email may be a
+    comma-separated list — e.g. WM batches target both Tushar and
+    Sagar so either can approve/edit/rework/delete. Empty/None field
+    means "any approver" (no per-batch targeting; only role-level
+    plans-approver module check applies).
+    """
+    if not approver_email:
+        return set()
+    return {e.strip().lower() for e in str(approver_email).split(",") if e.strip()}
+
+
+def _actor_is_approver_of(approver_email: str | None, actor: str) -> bool:
+    """True if actor is one of the batch's assigned approvers, OR if the
+    batch has no per-batch targeting (empty approver_email)."""
+    allowed = _approver_set(approver_email)
+    if not allowed:
+        return True  # any plans-approver can act
+    return (actor or "").strip().lower() in allowed
+
+
 def _cached_cb_soh_map():
     now = time.time()
     if _CB_SOH_CACHE["map"] is not None and (now - _CB_SOH_CACHE["ts"]) < _CB_SOH_TTL_SEC:
@@ -210,7 +234,11 @@ def propose_plan(
     """
     account = (account or "").strip()
     proposed_by = (proposed_by or "").strip().lower()
-    approver_email = (approver_email or "").strip().lower() or None
+    # approver_email may be comma-separated (e.g. WM → "tushar@…,sagar@…")
+    # so either can act on the batch. Normalize whitespace + lowercase
+    # each token, drop blanks, re-join with a single comma.
+    _approvers = _approver_set(approver_email)
+    approver_email = ",".join(sorted(_approvers)) if _approvers else None
     source_module = (source_module or "").strip() or None
     if not account or not proposed_by:
         raise ValueError("account and proposed_by are required")
@@ -440,10 +468,11 @@ def _assert_editable(cur, batch_id: str, actor: str, actor_is_admin: bool = Fals
         if proposer != actor:
             raise ValueError("only the draft's proposer (or an admin) can edit it")
     else:  # proposed
-        target = (b.get("approver_email") or "").strip().lower()
+        target = b.get("approver_email") or ""
         # Proposer can still edit their own proposed batch (small fixes
-        # without recalling to draft). Assigned approver can edit too.
-        if actor != proposer and target and actor != target:
+        # without recalling to draft). Any listed approver can edit too
+        # (approver_email may be comma-separated: WM → Tushar+Sagar).
+        if actor != proposer and target and not _actor_is_approver_of(target, actor):
             raise ValueError(
                 f"this batch is addressed to {target} (or the proposer); "
                 f"only they (or an admin) can edit"
@@ -681,8 +710,8 @@ def delete_batch(batch_id: str, actor: str, actor_is_admin: bool = False) -> dic
                     if (b.get("proposed_by") or "").strip().lower() != actor:
                         raise ValueError("only the draft's proposer (or admin) can delete it")
                 elif status == "proposed":
-                    target = (b.get("approver_email") or "").strip().lower()
-                    if not target or actor != target:
+                    target = b.get("approver_email") or ""
+                    if not target or not _actor_is_approver_of(target, actor):
                         raise ValueError(
                             f"this batch is addressed to {target}; only they (or admin) can delete"
                         )
@@ -736,9 +765,11 @@ def clone_batch(source_batch_id: str, actor: str, as_draft: bool = False,
             # Any batch may be cloned (draft/proposed/approved/pushed/failed).
             # Permission: approver_email of source OR admin. Falling back
             # to proposed_by if source was addressed to "any approver".
-            target = (src.get("approver_email") or "").strip().lower()
+            target = src.get("approver_email") or ""
             proposer = (src.get("proposed_by") or "").strip().lower()
-            if not actor_is_admin and actor != target and actor != proposer:
+            if (not actor_is_admin
+                    and actor != proposer
+                    and not _actor_is_approver_of(target, actor)):
                 raise ValueError(
                     f"only the source batch's approver ({target or 'any'}) "
                     f"or its proposer ({proposer}) or an admin can clone it"
@@ -825,8 +856,8 @@ def request_rework(batch_id: str, actor: str, feedback: str,
             if b["status"] != "proposed":
                 raise ValueError(f"batch is {b['status']}; only 'proposed' can be sent for rework")
             if not actor_is_admin:
-                target = (b.get("approver_email") or "").strip().lower()
-                if target and actor != target:
+                target = b.get("approver_email") or ""
+                if target and not _actor_is_approver_of(target, actor):
                     raise ValueError(
                         f"this batch is addressed to {target}; only they (or admin) can request rework"
                     )
@@ -916,9 +947,10 @@ def approve_plan(batch_id: str, actor: str, actor_is_admin: bool = False) -> dic
             if b["status"] != "proposed":
                 raise ValueError(f"batch is {b['status']}; only 'proposed' can be approved")
             # Enforce approver targeting: if the batch was addressed to a
-            # specific approver, only that person (or an admin) may approve.
-            target = (b.get("approver_email") or "").strip().lower()
-            if target and not actor_is_admin and actor != target:
+            # specific approver (or list — comma-separated), only that
+            # person (or an admin) may approve.
+            target = b.get("approver_email") or ""
+            if target and not actor_is_admin and not _actor_is_approver_of(target, actor):
                 raise ValueError(
                     f"this batch is addressed to {target}; only they (or an admin) can approve"
                 )

@@ -726,11 +726,17 @@ export default function FCAllocationV2() {
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
             {canPropose && (() => {
-              // Kanwal owns Audio Array + Fossil (1P-heavy brands);
-              // Sagar covers Nex / Viomi / WM / Tonor.
-              const APPROVER = ["FOSSIL", "AUDIOARRAY", "AUDIO ARRAY"].includes(String(account).toUpperCase())
-                ? "kanwal@cambiumretail.com"
-                : "sagar@cambiumretail.com";
+              // Kanwal owns Audio Array + Fossil (1P-heavy brands).
+              // WM is dual-approver (Tushar + Sagar) — comma-separated
+              // approver_email; backend accepts either. Nex / Viomi /
+              // Tonor stay Sagar-only.
+              const ACC = String(account).toUpperCase();
+              const APPROVER =
+                ["FOSSIL", "AUDIOARRAY", "AUDIO ARRAY"].includes(ACC)
+                  ? "kanwal@cambiumretail.com"
+                  : ["WHITE MULBERRY", "WHITEMULBERRY", "WM"].includes(ACC)
+                    ? "tushar@cambiumretail.com,sagar@cambiumretail.com"
+                    : "sagar@cambiumretail.com";
               const buildRows = () => rows
                 .map((r) => {
                   // qty = LITERAL Working Value Naresh typed. Blank Working
