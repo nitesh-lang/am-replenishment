@@ -375,6 +375,9 @@ export default function FossilReplenishmentV2() {
                   real_am_inv:     r["Total Inventory"] ?? null,
                   mother_inv:      r["Cambium SOH"] ?? null,
                   weekly_velocity: r["Fossil Weekly Sales"] ?? null,
+                  // Product-category snapshot (max 128 chars) for OrderPilot routing.
+                  // Fossil master has "Assortment Type" as the closest label; fall back gracefully.
+                  category:        r["Category"] ?? r["Assortment Type"] ?? null,
                   // Vendor Central doesn't split by hazmat/IXD — send null
                   hazmat:   null,
                   ixd_flag: null,

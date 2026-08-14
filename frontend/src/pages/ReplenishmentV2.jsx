@@ -634,6 +634,9 @@ export default function ReplenishmentV2() {
                     // Cambium vendor SOH — AA only (backend returns null for
                     // other accounts, so it lands in DB as NULL and renders "—").
                     cb_soh:          r.cb_soh ?? null,
+                    // Product-category snapshot for OrderPilot routing
+                    // (max 128 chars). Optional — backend accepts null.
+                    category:        r.category ?? null,
                     // Amazon FBA split keys.
                     // API sends r.hazmat_type = "IXD Hazmat" | "IXD Non-Hazmat" |
                     //                          "Non-IXD Hazmat" | "Non-IXD Non Hazmat"

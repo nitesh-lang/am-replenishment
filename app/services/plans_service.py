@@ -121,6 +121,13 @@ ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS weekly_velocity   NUMERIC(10,2
 -- (sourced from CB Replenishment.final_cb_qty per model). NULL on
 -- accounts without 1P vendor inventory so the approver column renders "—".
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS cb_soh            INT;
+-- Product-category label snapshot at propose time. Included per-line
+-- in the OrderPilot push payload so their seller_account routing can
+-- deterministically match (e.g. WM "desks" go to viomi, everything
+-- else to WM's own seller account). Max 128 chars per OrderPilot spec.
+-- NULL for accounts without a Category source; OrderPilot falls back
+-- to a title-based heuristic. Added 2026-08-14 per OrderPilot team.
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS category          TEXT;
 -- Amazon FBA rejects mixed shipments — OrderPilot must split each per-FC
 -- group into 4 buckets (Hazmat × IXD). AM_Replen snapshots these flags
 -- per line at propose time so the split key travels with the payload.
@@ -314,14 +321,18 @@ def propose_plan(
                 if notes is not None:
                     notes = str(notes).strip() or None
 
+                # Category snapshot for OrderPilot routing (max 128 chars
+                # per their spec). Trim + strip; None if blank/missing.
+                _cat_raw = str(r.get("category") or "").strip()
+                category = (_cat_raw[:128] or None) if _cat_raw else None
                 cur.execute(
                     """
                     INSERT INTO plan_lines
                         (batch_id, sku, model, asin, destination_fc,
                          ship_from_wh, qty, original_send_qty, added_by,
                          real_am_inv, mother_inv, weekly_velocity, cb_soh,
-                         hazmat, ixd_flag, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         hazmat, ixd_flag, notes, category)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (batch_id, sku, destination_fc) DO NOTHING
                     """,
                     (
@@ -336,7 +347,7 @@ def propose_plan(
                         _float_or_none(r.get("weekly_velocity")),
                         _int_or_none(r.get("cb_soh")),
                         hazmat, ixd_flag,
-                        notes,
+                        notes, category,
                     ),
                 )
             cur.execute(
@@ -701,6 +712,7 @@ def add_line(
     cb_soh: int | None = None,
     hazmat: bool | None = None,
     ixd_flag: str | None = None,
+    category: str | None = None,
 ) -> dict:
     sku = (sku or "").strip().upper()
     fc  = (destination_fc or "").strip().upper()
@@ -722,7 +734,8 @@ def add_line(
             # thanks to file_cache.
             need_lookup = (mother_inv is None or model is None or asin is None
                            or real_am_inv is None or weekly_velocity is None
-                           or hazmat is None or ixd_flag is None)
+                           or hazmat is None or ixd_flag is None
+                           or category is None)
             if need_lookup:
                 try:
                     cur.execute("SELECT account FROM plan_batches WHERE batch_id = %s", (batch_id,))
@@ -739,6 +752,7 @@ def add_line(
                             if cb_soh is None:          cb_soh = ctx.get("cb_soh")
                             if hazmat is None:          hazmat = ctx.get("hazmat")
                             if ixd_flag is None:        ixd_flag = ctx.get("ixd_flag")
+                            if category is None:        category = ctx.get("category")
                 except Exception as _e:
                     print(f"⚠️ add_line SKU lookup skipped: {_e}")
 
@@ -762,6 +776,9 @@ def add_line(
                     ixd_val = "NON IXD"
                 elif "IXD" in ixd_val:
                     ixd_val = "IXD"
+            # Category cap at 128 chars per OrderPilot payload contract.
+            _cat_raw = "" if category is None else str(category).strip()
+            cat_val = (_cat_raw[:128] or None) if _cat_raw else None
 
             # If a soft-deleted row exists for the same (batch, sku, fc), undelete
             # and update it instead of erroring out.
@@ -788,12 +805,13 @@ def add_line(
                         weekly_velocity = COALESCE(%s, weekly_velocity),
                         cb_soh          = COALESCE(%s, cb_soh),
                         hazmat          = COALESCE(%s, hazmat),
-                        ixd_flag        = COALESCE(%s, ixd_flag)
+                        ixd_flag        = COALESCE(%s, ixd_flag),
+                        category        = COALESCE(%s, category)
                     WHERE id = %s
                     RETURNING *
                     """,
                     (qty, actor, model, asin, ship_from_wh, notes,
-                     am_inv, m_inv, wk_vel, cb_val, haz_val, ixd_val,
+                     am_inv, m_inv, wk_vel, cb_val, haz_val, ixd_val, cat_val,
                      existing["id"]),
                 )
                 out = dict(cur.fetchone())
@@ -811,15 +829,15 @@ def add_line(
                         (batch_id, sku, model, asin, destination_fc,
                          ship_from_wh, qty, original_send_qty, added_by, notes,
                          real_am_inv, mother_inv, weekly_velocity, cb_soh,
-                         hazmat, ixd_flag)
+                         hazmat, ixd_flag, category)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, %s,
                             %s, %s, %s, %s,
-                            %s, %s)
+                            %s, %s, %s)
                     RETURNING *
                     """,
                     (batch_id, sku, model, asin, fc, ship_from_wh, qty, actor, notes,
                      am_inv, m_inv, wk_vel, cb_val,
-                     haz_val, ixd_val),
+                     haz_val, ixd_val, cat_val),
                 )
                 out = dict(cur.fetchone())
                 cur.execute(
@@ -986,13 +1004,13 @@ def clone_batch(source_batch_id: str, actor: str, as_draft: bool = False,
                      ship_from_wh, qty, original_send_qty, added_by,
                      real_am_inv, mother_inv, weekly_velocity, cb_soh,
                      hazmat, ixd_flag, notes, approver_note,
-                     exclude_from_push)
+                     exclude_from_push, category)
                 SELECT
                     %s, sku, model, asin, destination_fc,
                     ship_from_wh, qty, original_send_qty, %s,
                     real_am_inv, mother_inv, weekly_velocity, cb_soh,
                     hazmat, ixd_flag, notes, approver_note,
-                    exclude_from_push
+                    exclude_from_push, category
                 FROM plan_lines
                 WHERE batch_id = %s AND is_deleted = FALSE
                 """,
@@ -1268,6 +1286,11 @@ def push_plan(batch_id: str, actor: str, dry_run: bool = False) -> dict:
                 # Both null on Fossil / VENDOR path (1P Vendor Central).
                 "hazmat":          l.get("hazmat"),
                 "ixd_flag":        l.get("ixd_flag"),
+                # Product-category snapshot (≤128 chars) for OrderPilot's
+                # seller_account routing (e.g. WM "desk"→viomi). Null =
+                # they fall back to a title-based heuristic. Contract
+                # added 2026-08-14.
+                "category":        l.get("category"),
             }
             for l in push_lines
         ],

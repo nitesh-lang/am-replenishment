@@ -771,6 +771,8 @@ export default function FCAllocationV2() {
                   real_am_inv:     r.fc_inventory ?? null,
                   mother_inv:      r.ampm_inventory ?? null,
                   weekly_velocity: r.weekly_velocity ?? null,
+                  // Product-category snapshot for OrderPilot routing (max 128 chars)
+                  category:        r.category ?? null,
                   // Amazon FBA split keys — OrderPilot buckets by (fc, hazmat, ixd).
                   // hazmat_type values: "IXD Hazmat" | "IXD Non-Hazmat" |
                   //                     "Non-IXD Hazmat" | "Non-IXD Non Hazmat"
