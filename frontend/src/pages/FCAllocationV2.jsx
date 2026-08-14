@@ -455,6 +455,12 @@ export default function FCAllocationV2() {
     } else {
       base.push(
         { id: "remarks",     accessorKey: "remarks",     header: "Remarks", size: 200, meta: { group: "log" } },
+        // IXD column — mirrors Replenishment V2's ixd_type. Backend
+        // already computes ixd_flag per row (canonicalized to "IXD" /
+        // "NON IXD" from Hazmat Type). Especially useful for WM POS
+        // Stand / Monitor Arm / TV Wall Mount SKUs where IXD-vs-Non-IXD
+        // classification drives FBA storage + shipment eligibility.
+        { id: "ixd_flag",    accessorKey: "ixd_flag",    header: "IXD",     size: 70,  meta: { group: "log" } },
         { id: "hazmat_type", accessorKey: "hazmat_type", header: "Hazmat",  size: 90,  meta: { group: "log" } },
       );
     }
@@ -1213,6 +1219,15 @@ export default function FCAllocationV2() {
                                        : f.includes("NO_SALES") ? "bg-slate-100 text-slate-500"
                                        : "bg-emerald-50 text-emerald-700";
                             content = <span className={cn("inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded", tone)}>{f || "—"}</span>;
+                          } else if (colId === "ixd_flag") {
+                            const raw = String(r.ixd_flag || "").toUpperCase().replace(/-/g, " ");
+                            const isNonIxd = raw.includes("NON IXD") || raw.includes("NONIXD");
+                            const isIxd    = raw.includes("IXD") && !isNonIxd;
+                            const label = isNonIxd ? "NON IXD" : isIxd ? "IXD" : (r.ixd_flag || "—");
+                            const tone  = isIxd    ? "bg-blue-100 text-blue-800"
+                                        : isNonIxd ? "bg-slate-100 text-slate-600"
+                                                   : "text-slate-400";
+                            content = <span className={cn("inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold rounded", tone)}>{label}</span>;
                           } else {
                             // Use cell.getValue() so columns with accessorFn (e.g. basis-aware
                             // "Total sold qty") show the derived value, not the raw row field.
