@@ -1122,14 +1122,26 @@ export default function FCAllocationV2() {
                               </span>
                             );
                           } else if (colId === "sku") {
-                            content = <span className="font-mono text-xs text-slate-700">{r.sku}</span>;
+                            content = (
+                              <span className="inline-flex items-center gap-1 font-mono text-xs text-slate-700">
+                                {r.sku}
+                                {r.is_eol && (
+                                  <span
+                                    title="CB-EOL sibling of a duplicate-model ASIN — visible for audit but send_qty is 0"
+                                    className="px-1 py-0.5 text-[9px] font-bold rounded bg-rose-100 text-rose-700"
+                                  >
+                                    EOL
+                                  </span>
+                                )}
+                              </span>
+                            );
                           } else if (colId === "fulfillment_center") {
                             content = <span className="font-mono text-xs text-slate-700 inline-flex items-center gap-1"><Truck className="w-3 h-3 text-slate-400" />{r.fulfillment_center}</span>;
                           } else if (colId === "cluster") {
                             const cl = FC_CLUSTER[r.fulfillment_center?.toUpperCase()] || r.cluster || "-";
                             content = <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">{cl}</span>;
                           } else if (colId === "asin") {
-                            content = <span className="font-mono text-xs text-slate-500">{r.asin || "—"}</span>;
+                            content = <span className={cn("font-mono text-xs", r.is_eol ? "text-rose-500 line-through" : "text-slate-500")}>{r.asin || "—"}</span>;
                           } else if (colId === "inbound_to_fc") {
                             const v = r.inbound_to_fc || 0;
                             content = v > 0

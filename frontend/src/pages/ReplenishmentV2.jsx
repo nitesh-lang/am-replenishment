@@ -981,9 +981,21 @@ export default function ReplenishmentV2() {
                               </span>
                             );
                           } else if (colId === "sku") {
-                            content = <span className="font-mono text-xs text-slate-700">{r.sku}</span>;
+                            content = (
+                              <span className="inline-flex items-center gap-1 font-mono text-xs text-slate-700">
+                                {r.sku}
+                                {r.is_eol && (
+                                  <span
+                                    title="CB-EOL sibling of a duplicate-model ASIN — visible for audit but replenishment_qty is 0"
+                                    className="px-1 py-0.5 text-[9px] font-bold rounded bg-rose-100 text-rose-700"
+                                  >
+                                    EOL
+                                  </span>
+                                )}
+                              </span>
+                            );
                           } else if (colId === "asin") {
-                            content = <span className="font-mono text-xs text-slate-500">{r.asin || "—"}</span>;
+                            content = <span className={cn("font-mono text-xs", r.is_eol ? "text-rose-500 line-through" : "text-slate-500")}>{r.asin || "—"}</span>;
                           } else if (colId === "trend") {
                             content = <Sparkline data={r.weekly_sales || []} />;
                           } else if (colId === "sales_velocity") {

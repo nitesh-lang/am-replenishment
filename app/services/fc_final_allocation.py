@@ -1261,22 +1261,26 @@ def calculate_final_allocation(
         "velocity_basis",
     ] = "2wk"
 
-    # CB EOL filter (AUDIO ARRAY only) — mirrors the Replenishment view.
-    # CB Replenishment Master's "CB" column (Yes/No) per ASIN gates
-    # visibility; SKUs where CB=No are Cambium-EOL and shouldn't appear.
+    # CB EOL gate (AUDIO ARRAY only) — shared with Replenishment tab.
+    # 2026-08-14 rule: solo-EOL models dropped; duplicate-model EOL
+    # siblings kept with is_eol=True + send_qty=0 so operator sees both.
+    # NB: FC alloc is per-(SKU, FC), so a duplicate model has 2 SKUs ×
+    # N FCs = 2N rows; the gate compares distinct ASINs per model.
     if account.upper() == "AUDIO ARRAY":
         try:
-            from app.services.replenishment import _cb_eol_asin_set
-            eol = _cb_eol_asin_set()
-            if eol and "asin" in final_df.columns:
-                _asin_norm = final_df["asin"].astype(str).str.strip().str.upper()
-                before = len(final_df)
-                final_df = final_df[~_asin_norm.isin(eol)].reset_index(drop=True)
-                dropped = before - len(final_df)
-                if dropped:
-                    print(f"[AA FC-Alloc CB-EOL] hid {dropped} rows (CB=No)")
+            from app.services.replenishment import _apply_cb_eol_gate
+            # FC alloc uses lowercase "model" + "asin" cols. Zero out
+            # send-oriented columns; leave working_value / remarks (operator-owned).
+            final_df = _apply_cb_eol_gate(
+                final_df, model_col="model", asin_col="asin",
+                zero_cols=["send_qty", "to_send", "recommended_qty",
+                           "cartons_needed", "excess_units"],
+            )
         except Exception as _e:
-            print(f"⚠️ AA FC-Alloc CB-EOL filter skipped: {_e}")
+            print(f"⚠️ AA FC-Alloc CB-EOL gate skipped: {_e}")
+    else:
+        if "is_eol" not in final_df.columns:
+            final_df["is_eol"] = False
 
     # NOTE: model-level Mother WH + CB SOH are Replenishment-tab-only per
     # operator rule 2026-08-12. FC Allocation stays on per-(SKU, FC)

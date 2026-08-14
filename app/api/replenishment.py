@@ -108,6 +108,10 @@ def get_replenishment(
             # on missing → use pd.isna() (row[..]==row[..] trick fails for
             # pd.NA because bool(pd.NA) raises).
             "cb_soh": (None if pd.isna(row.get("cb_soh")) else int(row["cb_soh"])),
+            # CB-EOL sibling of a duplicate-model ASIN (AA only). Backend
+            # zeros replenishment_qty for these; frontend renders an EOL
+            # badge so operator can tell active vs EOL at a glance.
+            "is_eol":         bool(row.get("is_eol", False)),
             "b2b_inventory":  int(row.get("b2b_inventory", 0)),
             "required_units": int(row["required_units"]),
             "replenishment_qty": int(row["replenishment_qty"]),

@@ -1020,22 +1020,17 @@ def calculate_replenishment(
     if "ampm_inventory" in df.columns:
         df["model_ampm_inventory"] = pd.to_numeric(df["ampm_inventory"], errors="coerce").fillna(0).astype(int)
 
-    # CB EOL filter (AUDIO ARRAY only) — CB Replenishment Master carries
-    # a "CB" column (Yes/No) per ASIN. "No" = Cambium has EOL'd this SKU,
-    # so it should NOT appear in AA replenishment or FC allocation views
-    # (operator rule 2026-08-11).
+    # CB EOL gate (AUDIO ARRAY only). Operator rule evolution:
+    #   2026-08-11: drop every CB=No ASIN (hidden entirely).
+    #   2026-08-14: for duplicate models (2+ ASINs), KEEP the EOL
+    #               sibling visible with is_eol=True + replenishment_qty=0
+    #               so operator sees both. Solo-EOL models still dropped.
+    # Shared helper (_apply_cb_eol_gate) is also called from
+    # fc_final_allocation.py so the two views stay in sync.
     if account.upper() == "AUDIO ARRAY":
-        try:
-            eol = _cb_eol_asin_set()
-            if eol and "asin" in df.columns:
-                _asin_norm = df["asin"].astype(str).str.strip().str.upper()
-                before = len(df)
-                df = df[~_asin_norm.isin(eol)].reset_index(drop=True)
-                dropped = before - len(df)
-                if dropped:
-                    print(f"[AA CB-EOL] hid {dropped} SKUs (CB=No in CB Replenishment_Master)")
-        except Exception as _e:
-            print(f"⚠️ AA CB-EOL filter skipped: {_e}")
+        df = _apply_cb_eol_gate(df, model_col="model", asin_col="asin")
+    else:
+        df["is_eol"] = False
 
     # CB SOH (Cambium warehouse stock at CB vendor) — AA only.
     # Sourced from CB Replenishment's final_cb_qty per model. Same brand
@@ -1057,6 +1052,75 @@ def calculate_replenishment(
 # =================================================
 # CB EOL helper — shared by AA Replenishment + FC Allocation
 # =================================================
+def _apply_cb_eol_gate(df, model_col: str = "model", asin_col: str = "asin",
+                       zero_cols: list = None):
+    """AA-only gate for CB-EOL ASINs (operator rule 2026-08-14):
+
+      Model has 1 ASIN  → CB-EOL row is DROPPED (as before, 2026-08-11 rule).
+      Model has 2+ ASINs → CB-EOL rows are KEPT so both siblings are
+                           visible; `is_eol=True` flag added; specified
+                           `zero_cols` set to 0 so the EOL row won't
+                           consume plan qty (approver sees the row for
+                           audit but can't reorder it).
+
+    Ensures `is_eol` column exists on ALL rows (False for non-EOL, True
+    for surviving EOL siblings) so frontend can badge consistently.
+    """
+    import pandas as _pd
+    if df is None or len(df) == 0:
+        if df is not None:
+            df["is_eol"] = False
+        return df
+    try:
+        eol = _cb_eol_asin_set()
+    except Exception as e:
+        print(f"⚠️ CB-EOL gate skipped: {e}")
+        df["is_eol"] = False
+        return df
+    df["is_eol"] = False
+    if not eol or asin_col not in df.columns or model_col not in df.columns:
+        return df
+    _asin = df[asin_col].astype(str).str.strip().str.upper()
+    _is_eol = _asin.isin(eol)
+    # Count ASINs per model. Empty ASINs (blank rows) don't count.
+    _valid_asin = _asin != ""
+    _model = df[model_col].astype(str).str.strip()
+    _counts = (
+        df.loc[_valid_asin]
+          .assign(_m=_model[_valid_asin])
+          .groupby("_m")[asin_col]
+          .nunique()
+    )
+    _dup_models = set(_counts[_counts >= 2].index)
+    is_duplicate_model = _model.isin(_dup_models)
+    # Rows to drop: EOL AND model has only 1 ASIN (no active sibling)
+    drop_mask = _is_eol & ~is_duplicate_model
+    keep_mask = ~drop_mask
+    dropped = int(drop_mask.sum())
+    kept_eol = int((_is_eol & is_duplicate_model).sum())
+    df = df.loc[keep_mask].reset_index(drop=True)
+    # Recompute for the retained frame
+    _asin2 = df[asin_col].astype(str).str.strip().str.upper()
+    _is_eol2 = _asin2.isin(eol)
+    df["is_eol"] = _is_eol2
+    # Zero out plan/qty columns on surviving EOL rows so they don't
+    # take stock from OrderPilot pushes. Keep informational fields
+    # (real_am_inv, mother_inv, cb_soh, weekly_velocity) intact.
+    zero_cols = zero_cols or [
+        "replenishment_qty", "recommended_qty",
+        "cartons_needed", "excess_units",
+        # FC-alloc-style columns; harmless when absent.
+        "send_qty", "to_send",
+    ]
+    for c in zero_cols:
+        if c in df.columns:
+            df.loc[df["is_eol"], c] = 0
+    if dropped or kept_eol:
+        print(f"[AA CB-EOL gate] dropped {dropped} (solo-EOL) · "
+              f"kept {kept_eol} EOL siblings with qty=0 (duplicate models)")
+    return df
+
+
 def _cb_eol_asin_set() -> set:
     """Read CB Replenishment_Master.xlsx and return the set of ASINs
     where the "CB" column value is "No" (Cambium has EOL'd this SKU)."""

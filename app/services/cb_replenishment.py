@@ -526,6 +526,28 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
         _china_covers = _low_ampm & (_china_it > 0)
         df.loc[_china_covers, "buffer_note"] = "Can be filled by China IT"
 
+        # ============================================================
+        # DUPLICATE-MODEL EOL zero-out (operator rule 2026-08-14)
+        # If a model has 2+ ASINs and one is CB-EOL, keep the EOL row
+        # visible for audit but zero its po_requirement so operator can't
+        # accidentally reorder a discontinued SKU. Solo-EOL rows keep
+        # their po_requirement (current CB behavior — CB doesn't drop
+        # EOL rows, and operator may still want to see the shortfall
+        # signal on solo EOLs).
+        # ============================================================
+        if "is_eol" in df.columns and "asin" in df.columns and "model_join" in df.columns:
+            _valid_asin = df["asin"].astype(str).str.strip() != ""
+            _asin_counts = (
+                df.loc[_valid_asin]
+                  .groupby("model_join")["asin"]
+                  .nunique()
+            )
+            _dup_models = set(_asin_counts[_asin_counts >= 2].index)
+            _dup_eol_mask = df["is_eol"] & df["model_join"].isin(_dup_models)
+            if _dup_eol_mask.any():
+                df.loc[_dup_eol_mask, "po_requirement"] = 0
+                print(f"[CB duplicate-EOL] zeroed po_requirement for {int(_dup_eol_mask.sum())} EOL siblings")
+
         # =========================
         # DB MERGE (remarks only) — best-effort; if DB is unreachable
         # (e.g. local dev without DATABASE_URL), return the computed report
