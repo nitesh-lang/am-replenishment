@@ -259,6 +259,18 @@ def lookup_sku(request: Request, account: str, sku: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/plans/skus")
+def list_skus(request: Request, account: str):
+    """Return every SKU on the account's master (sku, model, asin, is_eol).
+    Used by the Plans Approval Add Row datalist picker so the approver
+    can autocomplete rather than typing the SKU by hand."""
+    _either(request)
+    try:
+        return _ok({"status": "ok", "skus": plans_service.list_skus_for_account(account)})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.delete("/plans/{batch_id}/lines/{line_id}")
 def del_line(batch_id: str, line_id: int, request: Request):
     actor = _editor_or_approver(request)

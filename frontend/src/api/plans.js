@@ -91,6 +91,11 @@ export function lookupSkuForPlan(account, sku) {
   return req("GET", `${P}/lookup-sku?${p.toString()}`);
 }
 
+export function listSkusForAccount(account) {
+  const p = new URLSearchParams({ account });
+  return req("GET", `${P}/skus?${p.toString()}`);
+}
+
 export function deleteLine(batchId, lineId) {
   return req("DELETE", `${P}/${encodeURIComponent(batchId)}/lines/${lineId}`);
 }

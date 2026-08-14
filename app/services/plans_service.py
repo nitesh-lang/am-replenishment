@@ -572,6 +572,47 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
     return updated
 
 
+def list_skus_for_account(account: str) -> list[dict]:
+    """Return every SKU on the given account's master, lightweight —
+    used by the Plans Approval Add Row picker (datalist autocomplete).
+    Payload: [{sku, model, asin, is_eol}, ...].
+
+    Cached via file_cache so repeat calls are cheap; still runs the
+    full calculate_replenishment path to get the same EOL gate the
+    live Replenishment tab applies (so the picker only surfaces
+    SKUs an approver could actually reorder on this account)."""
+    if not account:
+        return []
+    try:
+        from app.services.replenishment import calculate_replenishment
+        df = calculate_replenishment(sales_window=12, replenish_weeks=8, account=account)
+    except Exception as e:
+        print(f"⚠️ list_skus_for_account failed for {account}: {e}")
+        return []
+    if df is None or len(df) == 0:
+        return []
+    _sku_col = "SKU" if "SKU" in df.columns else "sku"
+    if _sku_col not in df.columns:
+        return []
+    out = []
+    for _, r in df.iterrows():
+        s = str(r.get(_sku_col) or "").strip().upper()
+        if not s or s == "NAN":
+            continue
+        out.append({
+            "sku":    s,
+            "model":  (str(r.get("model") or "") or None),
+            "asin":   (str(r.get("ASIN") or r.get("asin") or "") or None),
+            "is_eol": bool(r.get("is_eol", False)),
+        })
+    # De-dup by SKU (defensive; master shouldn't have dupes)
+    seen = set(); dedup = []
+    for x in out:
+        if x["sku"] in seen: continue
+        seen.add(x["sku"]); dedup.append(x)
+    return sorted(dedup, key=lambda x: x["sku"])
+
+
 def lookup_sku_context(account: str, sku: str) -> dict:
     """Look up the calc-engine context for a single SKU on a given account.
     Used by:

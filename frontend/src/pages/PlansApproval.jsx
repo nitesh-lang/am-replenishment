@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   listPlans, getPlan, editLine, addLine, deleteLine, approvePlan, pushPlan,
   sendToApprover, deletePlan, requestRework, clonePlan, lookupSkuForPlan,
+  listSkusForAccount,
 } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
@@ -793,12 +794,30 @@ function AddRowForm({ batch, onDone }) {
   const [qty, setQty] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  // Preview fetched from /plans/lookup-sku when the SKU input blurs.
-  // Passed through to add_line so mother_inv/real_am_inv/velocity/cb_soh/
-  // hazmat/ixd are persisted on the new plan_line row (same audit
-  // fields the proposed rows carry).
+  // Preview fetched from /plans/lookup-sku on SKU change/blur.
   const [lookup, setLookup] = useState(null);
   const [lookupBusy, setLookupBusy] = useState(false);
+  // SKU picker — fetched once from /plans/skus on mount. Populates a
+  // <datalist> so operator can autocomplete rather than typing by hand.
+  const [skuList, setSkuList] = useState([]);
+  const [skuListErr, setSkuListErr] = useState("");
+  const lookupTimerRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listSkusForAccount(batch.account)
+      .then((r) => { if (!cancelled) setSkuList(r?.skus || []); })
+      .catch((e) => { if (!cancelled) setSkuListErr(e.message); });
+    return () => { cancelled = true; };
+  }, [batch.account]);
+
+  // Build a map for quick lookups + a lowercase index-by-sku for
+  // matching what the user typed against the picker's values.
+  const skuIndex = useMemo(() => {
+    const m = new Map();
+    for (const s of skuList) m.set((s.sku || "").toUpperCase(), s);
+    return m;
+  }, [skuList]);
 
   async function doLookup(skuVal) {
     const s = String(skuVal || "").trim().toUpperCase();
@@ -810,6 +829,22 @@ function AddRowForm({ batch, onDone }) {
     } catch (e) {
       setLookup({ _err: e.message, sku: s });
     } finally { setLookupBusy(false); }
+  }
+
+  // Debounced auto-lookup: fires on change once the typed SKU matches
+  // a picker entry (or when the string is 6+ chars — covers typed FBAxxxxx).
+  function onSkuChange(next) {
+    setSku(next);
+    const s = String(next || "").trim().toUpperCase();
+    if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current);
+    if (!s) { setLookup(null); return; }
+    // If user selected from picker (or typed a full SKU that exists in
+    // the master), fire the detail lookup immediately.
+    const inMaster = skuIndex.has(s);
+    const looksLikeFull = s.length >= 6;
+    if (inMaster || looksLikeFull) {
+      lookupTimerRef.current = setTimeout(() => doLookup(s), inMaster ? 0 : 250);
+    }
   }
 
   async function submit(e) {
@@ -843,16 +878,32 @@ function AddRowForm({ batch, onDone }) {
       marginBottom: 12,
     }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <input placeholder="SKU (e.g. FBA79984)" value={sku}
-               onChange={(e) => setSku(e.target.value)}
-               onBlur={() => doLookup(sku)}
-               required style={inp} />
+        <input
+          placeholder={skuList.length ? `SKU (pick from ${skuList.length} ${batch.account} SKUs)` : "SKU (e.g. FBA79984)"}
+          list="plans-add-sku-picker"
+          value={sku}
+          onChange={(e) => onSkuChange(e.target.value)}
+          onBlur={() => doLookup(sku)}
+          autoComplete="off"
+          required
+          style={{ ...inp, minWidth: 240 }}
+        />
+        {/* Autocomplete source — browser filters as user types. Renders
+            "FBA79984 · AM-C47 · B0FJS57732" in the dropdown for context. */}
+        <datalist id="plans-add-sku-picker">
+          {skuList.map((s) => (
+            <option key={s.sku} value={s.sku}>
+              {[s.model, s.asin, s.is_eol ? "EOL" : null].filter(Boolean).join(" · ")}
+            </option>
+          ))}
+        </datalist>
         <input placeholder="FC (e.g. DEL4)" value={fc} onChange={(e) => setFc(e.target.value)}
                required style={inp} />
         <input placeholder="Qty" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)}
                required style={{ ...inp, width: 90 }} />
         <button type="submit" disabled={busy} style={btnStyle("#3b82f6")}>Add</button>
         {lookupBusy && <span style={{ fontSize: 11, color: "#6366f1" }}>looking up…</span>}
+        {skuListErr && <span style={{ fontSize: 11, color: "#ef4444" }}>picker load failed: {skuListErr}</span>}
         {err && <span style={{ color: "#ef4444", fontSize: 12 }}>{err}</span>}
       </div>
       {/* Preview panel — shows what will get auto-filled on the new
