@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   listPlans, getPlan, editLine, addLine, deleteLine, approvePlan, pushPlan,
-  sendToApprover, deletePlan, requestRework, clonePlan,
+  sendToApprover, deletePlan, requestRework, clonePlan, lookupSkuForPlan,
 } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
@@ -793,13 +793,45 @@ function AddRowForm({ batch, onDone }) {
   const [qty, setQty] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Preview fetched from /plans/lookup-sku when the SKU input blurs.
+  // Passed through to add_line so mother_inv/real_am_inv/velocity/cb_soh/
+  // hazmat/ixd are persisted on the new plan_line row (same audit
+  // fields the proposed rows carry).
+  const [lookup, setLookup] = useState(null);
+  const [lookupBusy, setLookupBusy] = useState(false);
+
+  async function doLookup(skuVal) {
+    const s = String(skuVal || "").trim().toUpperCase();
+    if (!s || s === (lookup?.sku || "")) return;
+    setLookupBusy(true);
+    try {
+      const r = await lookupSkuForPlan(batch.account, s);
+      setLookup(r?.context && Object.keys(r.context).length ? r.context : { _empty: true, sku: s });
+    } catch (e) {
+      setLookup({ _err: e.message, sku: s });
+    } finally { setLookupBusy(false); }
+  }
 
   async function submit(e) {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
-      await addLine(batch.batch_id, { sku, destination_fc: fc, qty: Number(qty) });
-      setSku(""); setFc(""); setQty("");
+      const payload = { sku, destination_fc: fc, qty: Number(qty) };
+      // If we have preview data, pass it through so the server persists
+      // the same snapshot fields as proposed lines (backend also does
+      // its own auto-lookup as a fallback, so this is belt-and-braces).
+      if (lookup && !lookup._empty && !lookup._err) {
+        if (lookup.model            != null) payload.model            = lookup.model;
+        if (lookup.asin             != null) payload.asin             = lookup.asin;
+        if (lookup.mother_inv       != null) payload.mother_inv       = lookup.mother_inv;
+        if (lookup.real_am_inv      != null) payload.real_am_inv      = lookup.real_am_inv;
+        if (lookup.weekly_velocity  != null) payload.weekly_velocity  = lookup.weekly_velocity;
+        if (lookup.cb_soh           != null) payload.cb_soh           = lookup.cb_soh;
+        if (lookup.hazmat           != null) payload.hazmat           = lookup.hazmat;
+        if (lookup.ixd_flag         != null) payload.ixd_flag         = lookup.ixd_flag;
+      }
+      await addLine(batch.batch_id, payload);
+      setSku(""); setFc(""); setQty(""); setLookup(null);
       onDone();
     } catch (er) { setErr(er.message); }
     finally { setBusy(false); }
@@ -808,17 +840,65 @@ function AddRowForm({ batch, onDone }) {
   return (
     <form onSubmit={submit} style={{
       background: "#eff6ff", border: "1px solid #bfdbfe", padding: 12, borderRadius: 6,
-      marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+      marginBottom: 12,
     }}>
-      <input placeholder="SKU (e.g. FBA79984)" value={sku} onChange={(e) => setSku(e.target.value)}
-             required style={inp} />
-      <input placeholder="FC (e.g. DEL4)" value={fc} onChange={(e) => setFc(e.target.value)}
-             required style={inp} />
-      <input placeholder="Qty" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)}
-             required style={{ ...inp, width: 90 }} />
-      <button type="submit" disabled={busy} style={btnStyle("#3b82f6")}>Add</button>
-      {err && <span style={{ color: "#ef4444", fontSize: 12 }}>{err}</span>}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input placeholder="SKU (e.g. FBA79984)" value={sku}
+               onChange={(e) => setSku(e.target.value)}
+               onBlur={() => doLookup(sku)}
+               required style={inp} />
+        <input placeholder="FC (e.g. DEL4)" value={fc} onChange={(e) => setFc(e.target.value)}
+               required style={inp} />
+        <input placeholder="Qty" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)}
+               required style={{ ...inp, width: 90 }} />
+        <button type="submit" disabled={busy} style={btnStyle("#3b82f6")}>Add</button>
+        {lookupBusy && <span style={{ fontSize: 11, color: "#6366f1" }}>looking up…</span>}
+        {err && <span style={{ color: "#ef4444", fontSize: 12 }}>{err}</span>}
+      </div>
+      {/* Preview panel — shows what will get auto-filled on the new
+          plan_line so the approver isn't adding a SKU blindly. */}
+      {lookup && !lookupBusy && (
+        <div style={{ marginTop: 8, fontSize: 12 }}>
+          {lookup._empty ? (
+            <span style={{ color: "#dc2626" }}>
+              ⚠ SKU <b>{lookup.sku}</b> not found in {batch.account} master. You can still
+              add the row, but Mother Inv / Real AM Inv / Vel/wk will be blank.
+            </span>
+          ) : lookup._err ? (
+            <span style={{ color: "#dc2626" }}>Lookup error: {lookup._err}</span>
+          ) : (
+            <div style={{
+              display: "flex", flexWrap: "wrap", gap: 12, padding: 8,
+              background: "white", border: "1px solid #c7d2fe", borderRadius: 4,
+              color: "#312e81",
+            }}>
+              <PreviewChip label="Model" value={lookup.model} />
+              <PreviewChip label="ASIN" value={lookup.asin} mono />
+              <PreviewChip label="Mother Inv" value={lookup.mother_inv} highlight />
+              <PreviewChip label="Real AM Inv" value={lookup.real_am_inv} />
+              <PreviewChip label="Vel/wk" value={lookup.weekly_velocity != null ? Number(lookup.weekly_velocity).toFixed(1) : null} />
+              {lookup.cb_soh != null && <PreviewChip label="CB SOH" value={lookup.cb_soh} />}
+              {lookup.ixd_flag && <PreviewChip label="IXD" value={lookup.ixd_flag} />}
+              {lookup.hazmat && <PreviewChip label="HZ" value="Hazmat" />}
+              {lookup.is_eol && <PreviewChip label="EOL" value="yes" tone="#dc2626" />}
+            </div>
+          )}
+        </div>
+      )}
     </form>
+  );
+}
+
+function PreviewChip({ label, value, mono, highlight, tone }) {
+  if (value == null || value === "") return null;
+  return (
+    <span style={{ fontSize: 11 }}>
+      <span style={{ color: "#6366f1", marginRight: 4 }}>{label}:</span>
+      <b style={{
+        color: tone || (highlight ? "#0369a1" : "#312e81"),
+        fontFamily: mono ? "monospace" : "inherit",
+      }}>{value}</b>
+    </span>
   );
 }
 

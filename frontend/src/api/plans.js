@@ -86,6 +86,11 @@ export function addLine(batchId, payload) {
   return req("POST", `${P}/${encodeURIComponent(batchId)}/lines`, payload);
 }
 
+export function lookupSkuForPlan(account, sku) {
+  const p = new URLSearchParams({ account, sku });
+  return req("GET", `${P}/lookup-sku?${p.toString()}`);
+}
+
 export function deleteLine(batchId, lineId) {
   return req("DELETE", `${P}/${encodeURIComponent(batchId)}/lines/${lineId}`);
 }

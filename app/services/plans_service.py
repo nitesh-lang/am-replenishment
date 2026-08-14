@@ -572,6 +572,77 @@ def edit_line(batch_id: str, line_id: int, new_qty: int | None, actor: str,
     return updated
 
 
+def lookup_sku_context(account: str, sku: str) -> dict:
+    """Look up the calc-engine context for a single SKU on a given account.
+    Used by:
+      - GET /api/plans/lookup-sku (frontend Add Row preview)
+      - add_line() (backend auto-fill of snapshot fields when the
+        approver adds a fresh SKU that wasn't in the original proposal)
+
+    Returns {sku, model, asin, mother_inv, real_am_inv, weekly_velocity,
+             cb_soh, hazmat, ixd_flag, is_eol, replenishment_qty}.
+    Empty dict if SKU not found in the account's master.
+
+    Uses calculate_replenishment which is per-SKU-aggregate (no FC
+    dimension) — good enough for the Add Row context. Cached files
+    keep this cheap on repeat calls.
+    """
+    sku = (sku or "").strip().upper()
+    if not sku or not account:
+        return {}
+    try:
+        from app.services.replenishment import calculate_replenishment
+        # Standard 12-wk sales window / 8-wk cover — matches operator
+        # defaults on Replenishment V2 so numbers align with what the
+        # approver saw in the source tab.
+        df = calculate_replenishment(sales_window=12, replenish_weeks=8, account=account)
+    except Exception as e:
+        print(f"⚠️ lookup_sku_context failed to load {account}: {e}")
+        return {}
+    _sku = df["SKU"].astype(str).str.strip().str.upper() if "SKU" in df.columns \
+           else df.get("sku", None)
+    if _sku is None:
+        return {}
+    match = df[_sku == sku]
+    if match.empty:
+        return {}
+    r = match.iloc[0]
+    # Hazmat / IXD derivation matches ReplenishmentV2's propose payload.
+    hz_type = str(r.get("hazmat_type") or "").lower()
+    hazmat = ("hazmat" in hz_type) and not ("non-hazmat" in hz_type or "non hazmat" in hz_type)
+    ixd_flag = str(r.get("ixd_type") or "").upper() or None
+    def _pyint(v):
+        if v is None: return None
+        try:
+            import pandas as _pd
+            if _pd.isna(v): return None
+        except Exception: pass
+        try: return int(v)
+        except (TypeError, ValueError): return None
+    def _pyfloat(v):
+        if v is None: return None
+        try:
+            import pandas as _pd
+            if _pd.isna(v): return None
+        except Exception: pass
+        try: return float(v)
+        except (TypeError, ValueError): return None
+    return {
+        "sku":               sku,
+        "model":             (str(r.get("model") or "") or None),
+        "asin":              (str(r.get("ASIN") or r.get("asin") or "") or None),
+        "category":          (str(r.get("Category") or r.get("category") or "") or None),
+        "mother_inv":        _pyint(r.get("model_ampm_inventory") or r.get("ampm_inventory")),
+        "real_am_inv":       _pyint(r.get("real_am_inv_available")),
+        "weekly_velocity":   _pyfloat(r.get("sales_velocity") or r.get("weekly_velocity")),
+        "cb_soh":            _pyint(r.get("cb_soh")),
+        "hazmat":            bool(hazmat),
+        "ixd_flag":          ixd_flag,
+        "is_eol":            bool(r.get("is_eol", False)),
+        "replenishment_qty": _pyint(r.get("replenishment_qty")),
+    }
+
+
 def add_line(
     batch_id: str,
     sku: str,
@@ -583,6 +654,12 @@ def add_line(
     ship_from_wh: str | None = None,
     notes: str | None = None,
     actor_is_admin: bool = False,
+    mother_inv: int | None = None,
+    real_am_inv: int | None = None,
+    weekly_velocity: float | None = None,
+    cb_soh: int | None = None,
+    hazmat: bool | None = None,
+    ixd_flag: str | None = None,
 ) -> dict:
     sku = (sku or "").strip().upper()
     fc  = (destination_fc or "").strip().upper()
@@ -595,6 +672,56 @@ def add_line(
     with get_conn() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             _assert_editable(cur, batch_id, actor, actor_is_admin)
+            # Auto-lookup context (AMPM, Real AM Inv, velocity, CB SOH,
+            # hazmat, ixd, model, asin) from the batch's account master
+            # if the caller didn't pass them explicitly. This is the
+            # "map AMPM inventory as per model/sku" behavior the
+            # approver expects when adding a fresh SKU to a plan
+            # (operator directive 2026-08-14). Cheap on repeat calls
+            # thanks to file_cache.
+            need_lookup = (mother_inv is None or model is None or asin is None
+                           or real_am_inv is None or weekly_velocity is None
+                           or hazmat is None or ixd_flag is None)
+            if need_lookup:
+                try:
+                    cur.execute("SELECT account FROM plan_batches WHERE batch_id = %s", (batch_id,))
+                    _brow = cur.fetchone()
+                    _acct = (_brow.get("account") if _brow else None) or ""
+                    if _acct:
+                        ctx = lookup_sku_context(_acct, sku)
+                        if ctx:
+                            if model is None:           model = ctx.get("model")
+                            if asin is None:            asin  = ctx.get("asin")
+                            if mother_inv is None:      mother_inv = ctx.get("mother_inv")
+                            if real_am_inv is None:     real_am_inv = ctx.get("real_am_inv")
+                            if weekly_velocity is None: weekly_velocity = ctx.get("weekly_velocity")
+                            if cb_soh is None:          cb_soh = ctx.get("cb_soh")
+                            if hazmat is None:          hazmat = ctx.get("hazmat")
+                            if ixd_flag is None:        ixd_flag = ctx.get("ixd_flag")
+                except Exception as _e:
+                    print(f"⚠️ add_line SKU lookup skipped: {_e}")
+
+            # Normalize numeric types for insert
+            def _int_or_none(v):
+                if v is None or v == "": return None
+                try: return int(round(float(v)))
+                except (TypeError, ValueError): return None
+            def _float_or_none(v):
+                if v is None or v == "": return None
+                try: return float(v)
+                except (TypeError, ValueError): return None
+            m_inv   = _int_or_none(mother_inv)
+            am_inv  = _int_or_none(real_am_inv)
+            wk_vel  = _float_or_none(weekly_velocity)
+            cb_val  = _int_or_none(cb_soh)
+            haz_val = None if hazmat is None else bool(hazmat)
+            ixd_val = (str(ixd_flag).strip().upper() or None) if ixd_flag else None
+            if ixd_val:
+                if "NON IXD" in ixd_val or "NON-IXD" in ixd_val:
+                    ixd_val = "NON IXD"
+                elif "IXD" in ixd_val:
+                    ixd_val = "IXD"
+
             # If a soft-deleted row exists for the same (batch, sku, fc), undelete
             # and update it instead of erroring out.
             cur.execute(
@@ -614,11 +741,19 @@ def add_line(
                         model = COALESCE(%s, model),
                         asin  = COALESCE(%s, asin),
                         ship_from_wh = COALESCE(%s, ship_from_wh),
-                        notes = COALESCE(%s, notes)
+                        notes = COALESCE(%s, notes),
+                        real_am_inv     = COALESCE(%s, real_am_inv),
+                        mother_inv      = COALESCE(%s, mother_inv),
+                        weekly_velocity = COALESCE(%s, weekly_velocity),
+                        cb_soh          = COALESCE(%s, cb_soh),
+                        hazmat          = COALESCE(%s, hazmat),
+                        ixd_flag        = COALESCE(%s, ixd_flag)
                     WHERE id = %s
                     RETURNING *
                     """,
-                    (qty, actor, model, asin, ship_from_wh, notes, existing["id"]),
+                    (qty, actor, model, asin, ship_from_wh, notes,
+                     am_inv, m_inv, wk_vel, cb_val, haz_val, ixd_val,
+                     existing["id"]),
                 )
                 out = dict(cur.fetchone())
                 cur.execute(
@@ -626,18 +761,24 @@ def add_line(
                     INSERT INTO plan_line_events (batch_id, line_id, event_type, actor, payload_json)
                     VALUES (%s, %s, 'undelete', %s, %s)
                     """,
-                    (batch_id, out["id"], actor, json.dumps({"qty": qty})),
+                    (batch_id, out["id"], actor, json.dumps({"qty": qty, "auto_lookup": need_lookup})),
                 )
             else:
                 cur.execute(
                     """
                     INSERT INTO plan_lines
                         (batch_id, sku, model, asin, destination_fc,
-                         ship_from_wh, qty, original_send_qty, added_by, notes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, %s)
+                         ship_from_wh, qty, original_send_qty, added_by, notes,
+                         real_am_inv, mother_inv, weekly_velocity, cb_soh,
+                         hazmat, ixd_flag)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, %s,
+                            %s, %s, %s, %s,
+                            %s, %s)
                     RETURNING *
                     """,
-                    (batch_id, sku, model, asin, fc, ship_from_wh, qty, actor, notes),
+                    (batch_id, sku, model, asin, fc, ship_from_wh, qty, actor, notes,
+                     am_inv, m_inv, wk_vel, cb_val,
+                     haz_val, ixd_val),
                 )
                 out = dict(cur.fetchone())
                 cur.execute(
@@ -646,7 +787,9 @@ def add_line(
                     VALUES (%s, %s, 'add', %s, %s)
                     """,
                     (batch_id, out["id"], actor,
-                     json.dumps({"sku": sku, "destination_fc": fc, "qty": qty})),
+                     json.dumps({"sku": sku, "destination_fc": fc, "qty": qty,
+                                 "auto_lookup": need_lookup,
+                                 "mother_inv": m_inv, "real_am_inv": am_inv})),
                 )
         conn.commit()
     return out

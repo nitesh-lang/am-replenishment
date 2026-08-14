@@ -230,11 +230,33 @@ async def post_line(batch_id: str, request: Request):
             asin=body.get("asin"),
             ship_from_wh=body.get("ship_from_wh"),
             notes=body.get("notes"),
+            # Snapshot context — if the frontend already fetched via
+            # /plans/lookup-sku and passes them, we use those; otherwise
+            # add_line does its own auto-lookup from the batch's account.
+            mother_inv=body.get("mother_inv"),
+            real_am_inv=body.get("real_am_inv"),
+            weekly_velocity=body.get("weekly_velocity"),
+            cb_soh=body.get("cb_soh"),
+            hazmat=body.get("hazmat"),
+            ixd_flag=body.get("ixd_flag"),
             actor_is_admin=is_admin,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return _ok({"status": "ok", "line": out}, status_code=201)
+
+
+@router.get("/plans/lookup-sku")
+def lookup_sku(request: Request, account: str, sku: str):
+    """Look up snapshot fields (AMPM, Real AM Inv, velocity, CB SOH,
+    hazmat/ixd, model, asin) for a single SKU. Used by the Plans
+    Approval Add Row form to preview what will get auto-filled on
+    save. Returns {} if SKU not found in the account's master."""
+    _either(request)
+    try:
+        return _ok({"status": "ok", "context": plans_service.lookup_sku_context(account, sku)})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/plans/{batch_id}/lines/{line_id}")
