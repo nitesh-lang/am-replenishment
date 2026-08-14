@@ -65,6 +65,36 @@ def list_plans(request: Request, account: str | None = None, status: str | None 
     return _ok({"status": "ok", "batches": rows})
 
 
+# NOTE: These two path-literal routes MUST be declared before the
+# `/plans/{batch_id}` path-param route. FastAPI matches routes in
+# declaration order — if the param route wins first, "lookup-sku" and
+# "skus" get treated as batch_ids and the handlers below never fire
+# (regression seen 2026-08-14: "batch not found: lookup-sku").
+@router.get("/plans/lookup-sku")
+def lookup_sku(request: Request, account: str, sku: str):
+    """Look up snapshot fields (AMPM, Real AM Inv, velocity, CB SOH,
+    hazmat/ixd, model, asin) for a single SKU. Used by the Plans
+    Approval Add Row form to preview what will get auto-filled on
+    save. Returns {} if SKU not found in the account's master."""
+    _either(request)
+    try:
+        return _ok({"status": "ok", "context": plans_service.lookup_sku_context(account, sku)})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/plans/skus")
+def list_skus(request: Request, account: str):
+    """Return every SKU on the account's master (sku, model, asin, is_eol).
+    Used by the Plans Approval Add Row datalist picker so the approver
+    can autocomplete rather than typing the SKU by hand."""
+    _either(request)
+    try:
+        return _ok({"status": "ok", "skus": plans_service.list_skus_for_account(account)})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/plans/{batch_id}")
 def get_plan(batch_id: str, request: Request, include_deleted: bool = True):
     _either(request)
@@ -244,31 +274,6 @@ async def post_line(batch_id: str, request: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return _ok({"status": "ok", "line": out}, status_code=201)
-
-
-@router.get("/plans/lookup-sku")
-def lookup_sku(request: Request, account: str, sku: str):
-    """Look up snapshot fields (AMPM, Real AM Inv, velocity, CB SOH,
-    hazmat/ixd, model, asin) for a single SKU. Used by the Plans
-    Approval Add Row form to preview what will get auto-filled on
-    save. Returns {} if SKU not found in the account's master."""
-    _either(request)
-    try:
-        return _ok({"status": "ok", "context": plans_service.lookup_sku_context(account, sku)})
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@router.get("/plans/skus")
-def list_skus(request: Request, account: str):
-    """Return every SKU on the account's master (sku, model, asin, is_eol).
-    Used by the Plans Approval Add Row datalist picker so the approver
-    can autocomplete rather than typing the SKU by hand."""
-    _either(request)
-    try:
-        return _ok({"status": "ok", "skus": plans_service.list_skus_for_account(account)})
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/plans/{batch_id}/lines/{line_id}")
