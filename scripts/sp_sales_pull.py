@@ -25,6 +25,7 @@ import argparse
 import functools
 import io
 import os
+import re
 import sys
 import time
 from datetime import date, datetime, timezone
@@ -218,6 +219,19 @@ _ACCOUNT_MASTER = {
 }
 
 
+# FC/channel prefix on an otherwise identical SKU. Amazon reports the SKU
+# the order actually shipped under (FBS…/FBO…), while sku_master carries the
+# FBA… variant of the same product. Matching literally drops those rows.
+# Same regex + semantics as app/services/ampm_history.py:74 — longest
+# alternative first so FBAM isn't partially eaten by FBA.
+_SKU_PREFIX_RE = re.compile(r"^(FBAM|FBA|FBM|FBK|FBP|FBS|FBO)", re.IGNORECASE)
+
+
+def _sku_stem(s: str) -> str:
+    """SKU with its FC prefix stripped, for prefix-insensitive matching."""
+    return _SKU_PREFIX_RE.sub("", (s or "").strip().upper())
+
+
 def _load_master_skus(account: str | None = None) -> set[str] | None:
     """Return the union of allowed FBA SKUs for the filter.
 
@@ -310,9 +324,16 @@ def tsv_to_csv(raw: bytes, out_path: Path, filter_master_skus: bool = True,
                 None,
             )
             if sku_idx is not None:
+                # Match on the literal SKU first, then on the prefix-stripped
+                # stem, so FC/channel variants (FBS…/FBO…) of a master FBA…
+                # SKU aren't dropped as "non-master". Empty stems are excluded
+                # so a bare prefix can't match everything.
+                master_stems = {st for st in (_sku_stem(s) for s in master_skus) if st}
                 kept, dropped = [], []
                 for r in body:
-                    if len(r) > sku_idx and r[sku_idx].strip().upper() in master_skus:
+                    raw_sku = r[sku_idx].strip().upper() if len(r) > sku_idx else ""
+                    if raw_sku and (raw_sku in master_skus
+                                    or _sku_stem(raw_sku) in master_stems):
                         kept.append(r)
                     else:
                         dropped.append(r)
