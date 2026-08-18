@@ -134,6 +134,22 @@ export default function ChinaReorderV2() {
 
   useEffect(() => { setPage(1); }, [search, view, selectedL0, selectedL1, selectedBrands, fromWeek, toWeek]);
 
+  // Clear category filters whenever the brand selection changes.
+  // category_l0/l1 are almost entirely brand-exclusive (e.g. "Bundles" exists
+  // only for Audio Array, "Dynamic Microphone" only for Tonor), so a filter
+  // left over from a previous brand selection silently drops every newly
+  // added brand — from the table AND from Export CSV, which exports
+  // filteredRows. Reported 2026-08-18: 4 brands selected, export contained 2.
+  const brandKey = selectedBrands.join("|");
+  const prevBrandKey = useRef(brandKey);
+  useEffect(() => {
+    if (prevBrandKey.current !== brandKey) {
+      prevBrandKey.current = brandKey;
+      setSelectedL0("");
+      setSelectedL1("");
+    }
+  }, [brandKey]);
+
   /* ============================================================
      DERIVED
   ============================================================ */
@@ -343,7 +359,14 @@ export default function ChinaReorderV2() {
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `reorder_${selectedBrands.join("_").toLowerCase()}_${view}.csv`;
+    // Name the active category filter in the file. The export is filteredRows,
+    // and category_l0/l1 are near brand-exclusive, so a filtered export can
+    // legitimately contain fewer brands than are selected — say so in the
+    // filename rather than letting it look like a full export.
+    const catTag = [selectedL0, selectedL1].filter(Boolean).join("-")
+      .replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+    a.download = `reorder_${selectedBrands.join("_").toLowerCase()}_${view}`
+      + (catTag ? `_filtered_${catTag}` : "") + ".csv";
     a.click();
   }
 
@@ -386,6 +409,20 @@ export default function ChinaReorderV2() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            {(selectedL0 || selectedL1) && (
+              <span
+                className="text-xs px-2 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-900 inline-flex items-center gap-1.5"
+                title="A category filter is active — the table and Export CSV show only matching rows, which may exclude entire brands."
+              >
+                Filtered: {[selectedL0, selectedL1].filter(Boolean).join(" › ")}
+                <button
+                  onClick={() => { setSelectedL0(""); setSelectedL1(""); }}
+                  className="underline hover:no-underline"
+                >
+                  clear
+                </button>
+              </span>
+            )}
             {sohLastSync && (
               <span className="text-xs text-slate-500 tabular-nums" title="Last CB SOH sync">
                 CB SOH {new Date(sohLastSync).toLocaleTimeString("en-IN", {
