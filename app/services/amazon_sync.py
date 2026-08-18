@@ -59,6 +59,20 @@ _locks:  dict[str, threading.Lock] = {}
 _status: dict[str, dict]            = {}
 
 
+# Vendor (1P) SOH sync for China Reorder. One report covers both brands:
+# sp_vendor_soh_pull.py pulls GET_VENDOR_INVENTORY_REPORT under the Audio
+# Array vendor token and splits it per sku_master brand into AA + Tonor.
+# Keyed separately from _ACCOUNT_MAP because it's a different script, a
+# different token, and a different set of output files.
+_VENDOR_SOH_KEY   = "CB_SOH"
+_VENDOR_SOH_ACCT  = "AUDIOARRAY"
+_VENDOR_SOH_FILES = [
+    "vendor_soh_audio_array.csv",
+    "vendor_soh_tonor.csv",
+    "vendor_soh_unmatched_audioarray.csv",
+]
+
+
 def _lock_for(acct_key: str) -> threading.Lock:
     if acct_key not in _locks:
         _locks[acct_key] = threading.Lock()
@@ -74,6 +88,78 @@ def get_status(account: str) -> dict:
 
 def supported_accounts() -> list[str]:
     return list(_ACCOUNT_MAP.keys())
+
+
+def sync_vendor_soh(snapshot_date: str | None = None,
+                    timeout_sec: int = 900) -> dict:
+    """Blocking CB (1P vendor) SOH pull for Audio Array + Tonor, then
+    cache-bust so China Reorder's next GET sees fresh numbers.
+
+    One SP-API report request under the Audio Array vendor token yields both
+    brands; sp_vendor_soh_pull.py splits them per sku_master.
+
+    timeout_sec defaults to 900, not the 240 used by sync_inventory: this is a
+    report-family pull that queues on Amazon's side and has been observed to
+    poll for ~15 min. 240 would abort a healthy run.
+
+    snapshot_date (YYYY-MM-DD) targets a specific SnapshotDate; the puller
+    falls back up to 3 days if Amazon hasn't published it yet. None = latest.
+    """
+    key  = _VENDOR_SOH_KEY
+    lock = _lock_for(key)
+    if not lock.acquire(blocking=False):
+        return {"status": "already_running", "account": key, **get_status(key)}
+
+    prior = get_status(key)
+    _status[key] = {
+        "last_sync_at": prior.get("last_sync_at"),
+        "in_progress": True, "last_error": None,
+        "started_at":  datetime.now(timezone.utc).isoformat(),
+    }
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+
+    cmd = [sys.executable, str(SCRIPTS_DIR / "sp_vendor_soh_pull.py"),
+           "--account", _VENDOR_SOH_ACCT]
+    if snapshot_date:
+        cmd += ["--date", snapshot_date]
+
+    try:
+        print(f"[amazon_sync] {key}: running sp_vendor_soh_pull.py "
+              f"(date={snapshot_date or 'latest'})")
+        proc = subprocess.run(cmd, cwd=str(REPO_ROOT), env=env,
+                              capture_output=True, text=True, timeout=timeout_sec)
+        result = {"script": "sp_vendor_soh_pull.py", "rc": proc.returncode,
+                  "stdout_tail": (proc.stdout or "")[-800:],
+                  "stderr_tail": (proc.stderr or "")[-400:]}
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"sp_vendor_soh_pull.py exit={proc.returncode}: "
+                f"{(proc.stderr or proc.stdout or '')[-400:].strip()}"
+            )
+
+        for f in _VENDOR_SOH_FILES:
+            try: file_cache.invalidate(f)
+            except Exception: pass
+
+        now = datetime.now(timezone.utc).isoformat()
+        _status[key] = {"last_sync_at": now, "in_progress": False, "last_error": None}
+        return {"status": "ok", "account": key, "last_sync_at": now,
+                "files_updated": _VENDOR_SOH_FILES, "scripts": [result]}
+
+    except subprocess.TimeoutExpired:
+        err = f"timeout after {timeout_sec}s on sp_vendor_soh_pull.py"
+        _status[key] = {"last_sync_at": prior.get("last_sync_at"),
+                        "in_progress": False, "last_error": err}
+        return {"status": "error", "account": key, "error": err}
+    except Exception as e:
+        err = str(e)
+        _status[key] = {"last_sync_at": prior.get("last_sync_at"),
+                        "in_progress": False, "last_error": err}
+        return {"status": "error", "account": key, "error": err}
+    finally:
+        lock.release()
 
 
 def sync_inventory(account: str, timeout_sec: int = 240) -> dict:

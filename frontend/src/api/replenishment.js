@@ -100,3 +100,27 @@ export async function getSyncStatus(account) {
     `${BASE}/sync/inventory/status?account=${encodeURIComponent(account)}`
   );
 }
+
+/* =========================================================
+   CB (1P VENDOR) SOH SYNC — Audio Array + Tonor in one pull.
+   Used by China Reorder. Slower than the inventory sync: this is a
+   report-family request that queues on Amazon's side, so allow 16 min
+   rather than the 5 used above.
+   ========================================================= */
+export async function syncVendorSOH(date) {
+  const qs = date ? `?date=${encodeURIComponent(date)}` : "";
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 16 * 60 * 1000);
+  try {
+    const res = await fetch(`${BASE}/sync/vendor-soh${qs}`, {
+      method: "POST", signal: ctrl.signal,
+    });
+    return await res.json();
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+export async function getVendorSOHStatus() {
+  return fetchJSON(`${BASE}/sync/vendor-soh/status`);
+}

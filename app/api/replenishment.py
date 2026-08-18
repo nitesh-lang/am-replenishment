@@ -645,6 +645,27 @@ def sync_inventory_status(account: str = Query(...)):
 
 
 # =================================================
+# CB (1P VENDOR) SOH SYNC — Audio Array + Tonor
+# Triggered by the 🔄 Sync CB SOH button in China Reorder.
+# One vendor report under the Audio Array token covers both brands.
+# Blocking and slower than the inventory sync: this is report-family and
+# queues on Amazon's side (seconds to ~15 min). Deduped by thread lock.
+# NOTE: literal paths must stay above any /{param} route in this router
+# (declaration-order matching) — see feedback_fastapi_path_literal_before_param.
+# =================================================
+@router.post("/sync/vendor-soh")
+def sync_vendor_soh(date: str | None = Query(
+        None, description="Target SnapshotDate YYYY-MM-DD; omit for latest")):
+    out = amazon_sync.sync_vendor_soh(snapshot_date=date)
+    return out  # HTTP 200 with status=error so the JSON body reaches the UI
+
+
+@router.get("/sync/vendor-soh/status")
+def sync_vendor_soh_status():
+    return {"account": "CB_SOH", **amazon_sync.get_status("CB_SOH")}
+
+
+# =================================================
 # FC VALIDATION ENDPOINT
 # =================================================
 @router.get("/fc-validation")

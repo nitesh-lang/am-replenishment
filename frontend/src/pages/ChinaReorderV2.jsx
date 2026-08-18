@@ -6,8 +6,10 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import {
-  Search, Download, ChevronDown, ChevronRight, Settings2, Star,
+  Search, Download, ChevronDown, ChevronRight, Settings2, Star, RefreshCw,
 } from "lucide-react";
+
+import { syncVendorSOH, getVendorSOHStatus } from "../api/replenishment";
 
 import { CommandPalette } from "../components/CommandPalette";
 import { SavedViews } from "../components/SavedViews";
@@ -63,6 +65,14 @@ export default function ChinaReorderV2() {
   /* SOP modal */
   const [sopOpen, setSopOpen] = useState(false);
 
+  // CB (1P vendor) SOH sync — Audio Array + Tonor, one report under the AA
+  // vendor token. syncNonce bump re-fires the LOAD effect so the table
+  // re-reads the refreshed vendor_soh_*.csv.
+  const [sohSyncing, setSohSyncing]   = useState(false);
+  const [sohMsg, setSohMsg]           = useState("");
+  const [sohLastSync, setSohLastSync] = useState(null);
+  const [syncNonce, setSyncNonce]     = useState(0);
+
   /* ============================================================
      LOAD
   ============================================================ */
@@ -87,7 +97,40 @@ export default function ChinaReorderV2() {
         }
       })
       .finally(() => setLoading(false));
-  }, [selectedBrands, selectedMonths, fromWeek, toWeek]);
+  }, [selectedBrands, selectedMonths, fromWeek, toWeek, syncNonce]);
+
+  // Last CB SOH sync time for the toolbar chip.
+  useEffect(() => {
+    getVendorSOHStatus()
+      .then(s => { if (s?.last_sync_at) setSohLastSync(s.last_sync_at); })
+      .catch(() => {});
+  }, [syncNonce]);
+
+  async function runSOHSync() {
+    if (sohSyncing) return;
+    setSohSyncing(true);
+    setSohMsg("Syncing CB SOH (Audio Array + Tonor) from Amazon Vendor Central… this is a queued report, it can take a few minutes.");
+    try {
+      const r = await syncVendorSOH();
+      if (r?.status === "ok") {
+        setSohLastSync(r.last_sync_at);
+        setSohMsg("✓ CB SOH synced. Refreshing…");
+        setSyncNonce(n => n + 1);
+        setTimeout(() => setSohMsg(""), 4000);
+      } else if (r?.status === "already_running") {
+        setSohMsg("A CB SOH sync is already in progress.");
+        setTimeout(() => setSohMsg(""), 5000);
+      } else {
+        setSohMsg(`CB SOH sync failed: ${r?.error || "unknown"}`);
+        setTimeout(() => setSohMsg(""), 8000);
+      }
+    } catch (e) {
+      setSohMsg(`CB SOH sync error: ${e.message}`);
+      setTimeout(() => setSohMsg(""), 8000);
+    } finally {
+      setSohSyncing(false);
+    }
+  }
 
   useEffect(() => { setPage(1); }, [search, view, selectedL0, selectedL1, selectedBrands, fromWeek, toWeek]);
 
@@ -343,12 +386,39 @@ export default function ChinaReorderV2() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            {sohLastSync && (
+              <span className="text-xs text-slate-500 tabular-nums" title="Last CB SOH sync">
+                CB SOH {new Date(sohLastSync).toLocaleTimeString("en-IN", {
+                  timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false,
+                })}
+              </span>
+            )}
             <SOPButton onClick={() => setSopOpen(true)} />
+            <button
+              onClick={runSOHSync}
+              disabled={sohSyncing}
+              title="Pull 1P vendor SOH for Audio Array + Tonor from Amazon Vendor Central"
+              className={cn(
+                "px-3 py-2 rounded-md border text-sm font-medium inline-flex items-center gap-1.5",
+                sohSyncing
+                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "border-slate-200 bg-white hover:bg-slate-50"
+              )}
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", sohSyncing && "animate-spin")} />
+              {sohSyncing ? "Syncing CB SOH…" : "Sync CB SOH"}
+            </button>
             <button onClick={exportCSV} className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5">
               <Download className="w-3.5 h-3.5" /> Export CSV
             </button>
           </div>
         </div>
+
+        {sohMsg && (
+          <div className="mb-3 px-3 py-2 rounded-md border border-amber-200 bg-amber-50 text-sm text-amber-900">
+            {sohMsg}
+          </div>
+        )}
 
         <div className="grid grid-cols-5 gap-3 mb-5">
           <KPICard label="Total Models"     value={rows.length}        hint={`${selectedBrands.length} brand${selectedBrands.length === 1 ? "" : "s"} loaded`} />
