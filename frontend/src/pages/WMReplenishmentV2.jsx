@@ -181,7 +181,11 @@ export default function WMReplenishmentV2() {
     { id: "cb_3m_sales",      accessorKey: "cb_3m_sales",      header: "CB 3M",        size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "amazon_3m_sales",  accessorKey: "amazon_3m_sales",  header: "Amazon 3M",    size: 95,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "avg_weekly_sales", accessorKey: "avg_weekly_sales", header: "Avg/Wk",       size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
-    { id: "final_cb_qty",     accessorKey: "final_cb_qty",     header: "CB Inv",       size: 80,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    // 1P stock held at Clicktech, sourced from Inventory_snapshot_WM.xlsx
+    // channel="1p" (wm_replenishment.py:120). Labelled "CT SOH" — the old
+    // "CB Inv" header read as Cambium on a Clicktech page and operators
+    // couldn't find it. Field name stays final_cb_qty; display only.
+    { id: "final_cb_qty",     accessorKey: "final_cb_qty",     header: "CT SOH",       size: 80,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "ampm_inventory",   accessorKey: "ampm_inventory",   header: "Mother WH",    size: 100, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "open_po",          accessorKey: "open_po",          header: "Open PO",      size: 85,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "in_transit",       accessorKey: "in_transit",       header: "In-Transit",   size: 90,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
@@ -722,7 +726,7 @@ function WMDetailRow({ row, colSpan }) {
           <div className="col-span-4">
             <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Pipeline</div>
             <div className="bg-white rounded-md border border-slate-200 p-3 space-y-2 text-xs">
-              <KV label="CB Inv"          val={Math.round(row.final_cb_qty || 0)} />
+              <KV label="CT SOH"          val={Math.round(row.final_cb_qty || 0)} />
               <KV label="Mother WH (AMPM)" val={Math.round(row.ampm_inventory || 0)} accent />
               <KV label="Open PO"          val={Math.round(row.open_po || 0)} />
               <KV label="In-Transit"       val={Math.round(row.in_transit || 0)} />
