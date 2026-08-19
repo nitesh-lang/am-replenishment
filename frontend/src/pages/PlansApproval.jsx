@@ -71,11 +71,18 @@ export default function PlansApproval() {
   useEffect(() => {
     listPlanWeeks()
       .then((j) => {
-        setWeekOptions(j.weeks || []);
+        // Union of weeks already on batches AND the current default. Without
+        // the union the dropdown is empty until the first tagged batch exists,
+        // which reads as "the filter is broken".
+        const seen = j.weeks || [];
+        const merged = j.current && !seen.includes(j.current)
+          ? [j.current, ...seen]
+          : seen;
+        setWeekOptions(merged);
         setCurrentWeek(j.current || null);
       })
       .catch(() => {});
-  }, []);
+  }, [batches.length]);
   useEffect(() => { if (selectedId) loadBatch(selectedId); }, [selectedId]);
 
   return (
@@ -133,6 +140,25 @@ export default function PlansApproval() {
               </span>
             )}
           </div>
+
+          {/* Say plainly what the list is currently showing. The old batches
+              all predate week tagging, so an empty "Week NN" result is normal
+              rather than a broken filter — spell that out. */}
+          <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 8 }}>
+            Showing <b>{batches.length}</b>{" "}
+            {weekFilter === "unassigned"
+              ? "untagged plan(s)"
+              : weekFilter
+                ? `plan(s) in ${weekFilter}`
+                : "plan(s), all weeks"}
+            {statusFilter ? ` · status ${statusFilter}` : ""}
+            {weekFilter && weekFilter !== "unassigned" && batches.length === 0 && (
+              <span style={{ color: "#b45309" }}>
+                {" "}— none yet. Plans proposed before 19/08 have no week; see{" "}
+                <b>Unassigned</b>.
+              </span>
+            )}
+          </div>
           <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, maxHeight: "70vh", overflow: "auto" }}>
             {batches.length === 0 && (
               <div style={{ padding: 12, color: "#6b7280", fontSize: 12, lineHeight: 1.5 }}>
@@ -175,6 +201,19 @@ export default function PlansApproval() {
                       padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
                       background: STATUS_COLORS[b.status] || "#9ca3af", color: "white",
                     }}>{b.status}</span>
+                  </div>
+                  {/* Shipment week — always rendered, so a card is never
+                      ambiguous about which week's plan it is. Batches created
+                      before week tagging existed show "no week". */}
+                  <div style={{ marginTop: 5 }}>
+                    <span style={{
+                      padding: "1px 7px", borderRadius: 10, fontSize: 10, fontWeight: 700,
+                      background: b.week_tag ? "#e0e7ff" : "#f3f4f6",
+                      color:      b.week_tag ? "#3730a3" : "#9ca3af",
+                      border:     b.week_tag ? "1px solid #c7d2fe" : "1px dashed #d1d5db",
+                    }}>
+                      {b.week_tag || "no week"}
+                    </span>
                   </div>
                   <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
                     {b.proposed_by} · {fmt(b.proposed_at)}
@@ -295,9 +334,10 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail, onSe
       <div style={{
         background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6,
         padding: 12, marginBottom: 12, display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)", gap: 12,
+        gridTemplateColumns: "repeat(5, 1fr)", gap: 12,
       }}>
         <Stat label="Account" value={batch.account} />
+        <Stat label="Shipment week" value={batch.week_tag || "— not set"} />
         <Stat label="From tab" value={batch.source_module || "—"} />
         <Stat label="Assigned to" value={batch.approver_email || "(any approver)"} />
         <Stat label="Status" value={batch.status} color={STATUS_COLORS[batch.status]} />
