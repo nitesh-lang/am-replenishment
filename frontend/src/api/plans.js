@@ -61,12 +61,20 @@ export function clonePlan(batchId, { asDraft = false } = {}) {
   return req("POST", `${P}/${encodeURIComponent(batchId)}/clone`, { as_draft: asDraft });
 }
 
-export function listPlans({ account, status, limit = 50 } = {}) {
+export function listPlans({ account, status, week, limit = 50 } = {}) {
   const p = new URLSearchParams();
   if (account) p.set("account", account);
   if (status) p.set("status", status);
+  // week = "Week 33" | "unassigned" | undefined (all weeks)
+  if (week) p.set("week", week);
   p.set("limit", String(limit));
   return req("GET", `${P}?${p.toString()}`);
+}
+
+// Week tags present on batches + the current default shipment week
+// (latest completed sales week). Feeds the Plans Approval week dropdown.
+export function listPlanWeeks() {
+  return req("GET", `${P}/weeks`);
 }
 
 export function getPlan(batchId, { includeDeleted = true } = {}) {

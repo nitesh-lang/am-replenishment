@@ -30,11 +30,13 @@ Edit permissions:
 
 import json
 import os
+import re
 import secrets
 import time
 from datetime import datetime, timezone
 from typing import Any
 
+import pandas as pd
 import psycopg2
 import requests
 from psycopg2.extras import RealDictCursor
@@ -210,6 +212,52 @@ def _new_batch_id() -> str:
     return f"pb_{stamp}_{secrets.token_hex(3)}"
 
 
+def latest_sales_week() -> str | None:
+    """"Week NN" for the newest week present in weekly_sales_snapshot.csv.
+
+    This is the SHIPMENT WEEK a new plan belongs to — deliberately the latest
+    *completed sales* week, not the calendar week of created_at. Operator
+    directive 2026-08-19: a plan proposed on Wed 19/08 belongs to Week 33
+    (the data it was calculated from), not Week 34 (the Sun-Sat week the
+    click happened in). It advances on its own as soon as W34 sales land.
+
+    Returns None if the snapshot can't be read, in which case week_tag stays
+    NULL and the batch simply shows as unassigned rather than blocking a
+    propose.
+    """
+    try:
+        from app.services.file_cache import get as _cache_get
+        df = _cache_get("weekly_sales_snapshot.csv")
+        col = next((c for c in df.columns if str(c).strip().lower() == "week"), None)
+        if col is None:
+            return None
+        nums = (
+            df[col].astype(str).str.extract(r"(\d+)")[0]
+            .pipe(pd.to_numeric, errors="coerce").dropna()
+        )
+        if nums.empty:
+            return None
+        return f"Week {int(nums.max())}"
+    except Exception as e:
+        print(f"⚠️ latest_sales_week failed: {e}")
+        return None
+
+
+def list_week_tags() -> list[str]:
+    """Distinct non-null week_tags present on batches, newest first.
+    Feeds the Plans Approval week dropdown."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT week_tag FROM plan_batches WHERE week_tag IS NOT NULL"
+            )
+            tags = [r[0] for r in cur.fetchall() if r and r[0]]
+    def _n(t: str) -> int:
+        m = re.search(r"(\d+)", str(t))
+        return int(m.group(1)) if m else -1
+    return sorted(tags, key=_n, reverse=True)
+
+
 def propose_plan(
     account: str,
     proposed_by: str,
@@ -264,6 +312,13 @@ def propose_plan(
         if v is None or v == "": return None
         try: return float(v)
         except (TypeError, ValueError): return None
+
+    # Shipment week. Defaulted server-side so every propose path (Replenishment
+    # V2 / FC Allocation V2 / Fossil Replenishment V2) gets it without each page
+    # having to send it — none of them did, which is why all 16 pre-existing
+    # batches have week_tag NULL. An explicit caller value still wins.
+    if not week_tag:
+        week_tag = latest_sales_week()
 
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -362,7 +417,8 @@ def propose_plan(
     return batch_id
 
 
-def list_batches(account: str | None = None, status: str | None = None, limit: int = 50) -> list[dict]:
+def list_batches(account: str | None = None, status: str | None = None,
+                 week: str | None = None, limit: int = 50) -> list[dict]:
     where = []
     params: list[Any] = []
     if account:
@@ -371,6 +427,14 @@ def list_batches(account: str | None = None, status: str | None = None, limit: i
     if status:
         where.append("status = %s")
         params.append(status)
+    if week:
+        # "unassigned" surfaces the pre-2026-08-19 batches that predate
+        # week tagging; they are NOT hidden by the default (no-week) view.
+        if str(week).strip().lower() == "unassigned":
+            where.append("week_tag IS NULL")
+        else:
+            where.append("week_tag = %s")
+            params.append(week)
     sql = "SELECT * FROM plan_batches"
     if where:
         sql += " WHERE " + " AND ".join(where)

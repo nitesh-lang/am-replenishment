@@ -59,9 +59,10 @@ def _editor_or_approver(request: Request) -> str:
 # LIST / GET
 # ============================================================
 @router.get("/plans")
-def list_plans(request: Request, account: str | None = None, status: str | None = None, limit: int = 50):
+def list_plans(request: Request, account: str | None = None, status: str | None = None,
+               week: str | None = None, limit: int = 50):
     _either(request)
-    rows = plans_service.list_batches(account=account, status=status, limit=limit)
+    rows = plans_service.list_batches(account=account, status=status, week=week, limit=limit)
     return _ok({"status": "ok", "batches": rows})
 
 
@@ -70,6 +71,18 @@ def list_plans(request: Request, account: str | None = None, status: str | None 
 # declaration order — if the param route wins first, "lookup-sku" and
 # "skus" get treated as batch_ids and the handlers below never fire
 # (regression seen 2026-08-14: "batch not found: lookup-sku").
+@router.get("/plans/weeks")
+def list_plan_weeks(request: Request):
+    """Week tags present on batches + the current default, for the Plans
+    Approval week dropdown. Literal route — must stay above /plans/{batch_id}."""
+    _either(request)
+    return _ok({
+        "status": "ok",
+        "weeks": plans_service.list_week_tags(),
+        "current": plans_service.latest_sales_week(),
+    })
+
+
 @router.get("/plans/lookup-sku")
 def lookup_sku(request: Request, account: str, sku: str):
     """Look up snapshot fields (AMPM, Real AM Inv, velocity, CB SOH,

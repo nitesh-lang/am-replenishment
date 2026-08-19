@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   listPlans, getPlan, editLine, addLine, deleteLine, approvePlan, pushPlan,
   sendToApprover, deletePlan, requestRework, clonePlan, lookupSkuForPlan,
-  listSkusForAccount,
+  listSkusForAccount, listPlanWeeks,
 } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
@@ -33,11 +33,20 @@ export default function PlansApproval() {
   // Default: show ALL so editors see both their drafts and their already-sent
   // proposals (and approvers see everything they can act on).
   const [statusFilter, setStatusFilter] = useState("");
+  // Shipment week filter. "" = all weeks (default, so nothing disappears —
+  // batches proposed before week tagging existed have week_tag NULL and are
+  // reachable via the "Unassigned" option).
+  const [weekFilter, setWeekFilter] = useState("");
+  const [weekOptions, setWeekOptions] = useState([]);
+  const [currentWeek, setCurrentWeek] = useState(null);
 
   async function refreshList() {
     setErr("");
     try {
-      const j = await listPlans({ status: statusFilter || undefined });
+      const j = await listPlans({
+        status: statusFilter || undefined,
+        week: weekFilter || undefined,
+      });
       setBatches(j.batches || []);
     } catch (e) {
       setErr(e.message);
@@ -57,7 +66,16 @@ export default function PlansApproval() {
     }
   }
 
-  useEffect(() => { refreshList(); }, [statusFilter]);
+  useEffect(() => { refreshList(); }, [statusFilter, weekFilter]);
+
+  useEffect(() => {
+    listPlanWeeks()
+      .then((j) => {
+        setWeekOptions(j.weeks || []);
+        setCurrentWeek(j.current || null);
+      })
+      .catch(() => {});
+  }, []);
   useEffect(() => { if (selectedId) loadBatch(selectedId); }, [selectedId]);
 
   return (
@@ -91,6 +109,29 @@ export default function PlansApproval() {
               <option value="pushed">Pushed</option>
               <option value="failed">Failed</option>
             </select>
+          </div>
+
+          {/* Shipment week — the latest COMPLETED sales week a plan was built
+              from, not the calendar week it was clicked in. Default "All" so
+              nothing is hidden; pre-tagging batches sit under Unassigned. */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+            <label style={{ fontSize: 12, color: "#6b7280" }}>Week:</label>
+            <select
+              value={weekFilter}
+              onChange={(e) => setWeekFilter(e.target.value)}
+              style={{ padding: 6, borderRadius: 4, border: "1px solid #d1d5db" }}
+            >
+              <option value="">All weeks</option>
+              {weekOptions.map((w) => (
+                <option key={w} value={w}>{w}</option>
+              ))}
+              <option value="unassigned">Unassigned</option>
+            </select>
+            {currentWeek && (
+              <span style={{ fontSize: 11, color: "#6b7280" }}>
+                new plans → <b>{currentWeek}</b>
+              </span>
+            )}
           </div>
           <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, maxHeight: "70vh", overflow: "auto" }}>
             {batches.length === 0 && (
