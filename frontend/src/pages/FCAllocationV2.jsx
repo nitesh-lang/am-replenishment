@@ -282,18 +282,34 @@ export default function FCAllocationV2() {
     }
   }
 
+  // Bulk-clear this account's saved Working values + Remarks. Works for every
+  // account: Fossil clears fossil_fc_inputs + fossil_cluster_po, others clear
+  // their fc_allocation_inputs rows. Previously only Fossil had a reset.
   async function resetFossilInputs() {
-    if (!confirm("Reset all Fossil send_qty + cluster_po overrides?")) return;
+    const what = isFossil
+      ? "all Fossil send_qty + cluster_po overrides"
+      : `all saved Working values and Remarks for ${account}`;
+    if (!confirm(`Reset ${what}?\n\nThis cannot be undone — rows fall back to calculated values.`)) return;
     setSaving(true);
     try {
-      await fetch(`${BASE}/fc-final-allocation/fossil-reset`, { method: "POST" });
+      const r = await fetch(
+        `${BASE}/fc-final-allocation/reset?account=${encodeURIComponent(account)}`,
+        { method: "POST" }
+      ).then((x) => x.json()).catch(() => ({}));
+      if (r?.status === "error") {
+        setSaveMsg(`Reset failed: ${r.error || "unknown"}`);
+        setSaving(false);
+        setTimeout(() => setSaveMsg(""), 6000);
+        return;
+      }
+      const n = r?.deleted;
       // Reload
       const fallbackWindow = (fromWeek != null && toWeek != null)
         ? Math.abs(Number(toWeek) - Number(fromWeek)) + 1
         : (availableWeeks.length || 12);
       const res = await getFCFinal(replenishWeeks, channel, account, fallbackWindow, fromWeek, toWeek);
       setRows(Array.isArray(res) ? res : (res?.data ?? []));
-      setSaveMsg("Reset");
+      setSaveMsg(typeof n === "number" ? `Reset — cleared ${n} row(s)` : "Reset");
     } catch {
       setSaveMsg("Reset failed");
     } finally {
@@ -855,16 +871,21 @@ export default function FCAllocationV2() {
             {proposeMsg && (
               <span className="text-xs text-amber-700 ml-1">{proposeMsg}</span>
             )}
+            {/* Reset is for EVERY account, not just Fossil — non-Fossil
+                accounts had no way to clear their saved Working/Remarks in
+                bulk. Kept outside the isFossil block. */}
+            <button
+              onClick={resetFossilInputs}
+              disabled={saving}
+              className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5"
+              title={isFossil
+                ? "Reset all Fossil send_qty + cluster_po overrides"
+                : `Clear all saved Working values and Remarks for ${account}`}
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset
+            </button>
             {isFossil && (
               <>
-                <button
-                  onClick={resetFossilInputs}
-                  disabled={saving}
-                  className="px-3 py-2 rounded-md border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 inline-flex items-center gap-1.5"
-                  title="Reset all Fossil send_qty + cluster_po overrides"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Reset
-                </button>
                 <button
                   onClick={saveFossilInputs}
                   disabled={saving}

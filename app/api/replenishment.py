@@ -459,6 +459,44 @@ def get_fc_final(
 # =================================================
 # FOSSIL FC RESET ENDPOINT
 # =================================================
+@router.post("/fc-final-allocation/reset")
+async def reset_fc_alloc_inputs(account: str = Query(...)):
+    """Bulk-clear saved Working values + Remarks for ONE account.
+
+    Fossil keeps its own tables (fossil_fc_inputs / fossil_cluster_po) and
+    already had a reset; every other account writes to fc_allocation_inputs
+    and had no reset at all — the button was wrapped in `isFossil`. Routing
+    both through here so the UI has one action regardless of account.
+
+    Destructive but scoped: only the named account's rows are removed, and
+    absence of a row simply means "no override", so the tab falls back to
+    calculated values. Returns the row count actually deleted so the UI can
+    report it instead of silently claiming success.
+    """
+    acct = (account or "").strip()
+    if not acct:
+        raise HTTPException(status_code=400, detail="account is required")
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                if acct.lower() == "fossil":
+                    cursor.execute("DELETE FROM fossil_fc_inputs")
+                    n = cursor.rowcount or 0
+                    cursor.execute("DELETE FROM fossil_cluster_po")
+                    n += cursor.rowcount or 0
+                else:
+                    cursor.execute(
+                        "DELETE FROM fc_allocation_inputs WHERE UPPER(account) = %s",
+                        (acct.upper(),),
+                    )
+                    n = cursor.rowcount or 0
+            conn.commit()
+        return {"status": "reset", "account": acct, "deleted": n}
+    except Exception as e:
+        print(f"⚠️ FC alloc reset error ({acct}):", e)
+        return {"status": "error", "account": acct, "error": str(e)}
+
+
 @router.post("/fc-final-allocation/fossil-reset")
 async def reset_fossil_fc_inputs():
     try:
