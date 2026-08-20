@@ -791,6 +791,13 @@ def calculate_final_allocation(
         # B2B rows in a separate snapshot file. Union both so lookups
         # find Tonor rows too.
         _ampm_extra = "Inventory_snapshot_tonor.xlsx"
+    elif account.lower() == "viomi":
+        # WM->Viomi move (operator 2026-08-20): the 20 WM ASINs now executed
+        # from Viomi keep their mother-warehouse stock in the WM snapshot
+        # only. Mirror the same union done in replenishment.load_data, or FC
+        # Allocation shows Mother WH = 0 for them and caps send_qty at zero.
+        ampm_file = "data/input/inventory_snapshot_nexlev.xlsx"
+        _ampm_extra = "Inventory_snapshot_WM.xlsx"
     else:
         ampm_file = "data/input/inventory_snapshot_nexlev.xlsx"
         _ampm_extra = None
@@ -1306,6 +1313,8 @@ def _load_account_master(account: str) -> pd.DataFrame | None:
             m = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")
         elif a == "white mulberry":
             m = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
+            from app.services.replenishment import drop_moved_to_viomi
+            m = drop_moved_to_viomi(m, "fc meta")
         elif a == "fossil":
             m = get_excel_sheet("Fossil Replenishment/Fossil Replenishment.xlsx", "Sheet1")
             m.columns = m.columns.str.strip()

@@ -474,6 +474,10 @@ def calculate_fc_plan(
         master_df = get("replenishment_master_viomi.xlsx")
     elif account.lower() == "white mulberry":
         master_df = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
+        # Lazy import — replenishment imports fc modules elsewhere, so a
+        # top-level import here would be circular.
+        from app.services.replenishment import drop_moved_to_viomi
+        master_df = drop_moved_to_viomi(master_df, "fc planning master")
     elif account.lower() == "audio array":
         master_df = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")
     elif account.lower() == "fossil":

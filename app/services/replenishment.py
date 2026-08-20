@@ -27,6 +27,77 @@ AA_WM_MASTER_FILE = DATA_DIR / "Audio Array & WM Replenishment" / "AA & WM Reple
 # =================================================
 # LOADERS
 # =================================================
+# Which weekly_sales_snapshot `brand` tags belong to each account.
+# Single source of truth — this filter is applied at three separate sales
+# windows (selected window / last-4 / last-2) and they must never drift.
+#
+# VIOMI carries "White Mulberry" because of the WM->Viomi move (operator
+# 2026-08-20): 20 WM ASINs now live in the Viomi master and are executed from
+# the Viomi account, but their sales rows are still tagged brand="White
+# Mulberry" in the snapshot (720 rows / 7,355 units). Without this they would
+# show zero velocity under Viomi. This does NOT pull WM's whole catalogue in —
+# the downstream master join keeps only SKUs present in the Viomi master.
+_ACCOUNT_SALES_BRANDS: dict[str, list[str]] = {
+    "NEXLEV":         ["Nexlev"],
+    "VIOMI":          ["Nexlev", "White Mulberry"],
+    "AUDIO ARRAY":    ["Audio Array", "Tonor"],
+    "WHITE MULBERRY": ["White Mulberry"],
+}
+
+
+def moved_to_viomi_asins() -> set[str]:
+    """ASINs that have been moved out of the White Mulberry account and are
+    now executed from Viomi.
+
+    Derived, not hard-coded: any ASIN present in BOTH the Viomi master and the
+    WM sheet has been moved. The operator performs the move by adding the rows
+    to replenishment_master_viomi.xlsx, so that file is the control surface —
+    add a row there and it leaves WM automatically; delete it and it returns.
+
+    Introduced 2026-08-20 for the 20 Monitor Arm / POS Stand / TV Wall Mount
+    ASINs. Without this they would appear under BOTH accounts and be planned
+    (and ordered) twice.
+    """
+    try:
+        vi = get("replenishment_master_viomi.xlsx")
+        wm = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
+        vc = next((c for c in vi.columns if str(c).strip().lower() == "asin"), None)
+        wc = next((c for c in wm.columns if str(c).strip().lower() == "asin"), None)
+        if not vc or not wc:
+            return set()
+        v = set(vi[vc].astype(str).str.strip().str.upper()) - {"", "NAN"}
+        w = set(wm[wc].astype(str).str.strip().str.upper()) - {"", "NAN"}
+        return v & w
+    except Exception as e:
+        print(f"⚠️ moved_to_viomi_asins failed ({e}); WM keeps all rows")
+        return set()
+
+
+def drop_moved_to_viomi(df, label: str = ""):
+    """Remove moved-to-Viomi ASINs from a White Mulberry frame."""
+    moved = moved_to_viomi_asins()
+    if not moved or df is None or not len(df):
+        return df
+    col = next((c for c in df.columns if str(c).strip().lower() == "asin"), None)
+    if not col:
+        return df
+    keep = ~df[col].astype(str).str.strip().str.upper().isin(moved)
+    n = int((~keep).sum())
+    if n:
+        print(f"ℹ️ WM{(' ' + label) if label else ''}: dropped {n} row(s) moved to Viomi")
+    return df[keep]
+
+
+def _filter_sales_by_brand(df, account: str):
+    """Keep only the sales rows whose brand belongs to `account`."""
+    if "brand" not in df.columns:
+        return df
+    brands = _ACCOUNT_SALES_BRANDS.get(account.upper())
+    if not brands:
+        return df
+    return df[df["brand"].astype(str).str.strip().isin(brands)]
+
+
 def load_data(account: str):
 
     if not SALES_FILE.exists():
@@ -46,6 +117,8 @@ def load_data(account: str):
 
     elif account.upper() == "WHITE MULBERRY":
         master = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
+        # Rows moved to Viomi must not also plan under WM (double-ordering).
+        master = drop_moved_to_viomi(master, "replenishment master")
 
     else:
         raise ValueError(f"Unsupported account: {account}")
@@ -82,6 +155,21 @@ def load_data(account: str):
 
     elif account.upper() == "WHITE MULBERRY":
         inventory = get("Inventory_snapshot_WM.xlsx")
+
+    elif account.upper() == "VIOMI":
+        # WM->Viomi move (operator 2026-08-20): 20 WM ASINs (Monitor Arm /
+        # POS Stand / TV Wall Mount) now sit in the Viomi master and must be
+        # executed from the Viomi account. Their FBA inventory and ledger
+        # rows are already inside Viomi's own SP-API files, but their mother
+        # -warehouse stock lives ONLY in Inventory_snapshot_WM.xlsx (10,280
+        # units) — inventory_snapshot_nexlev.xlsx has zero rows for them.
+        # Without this union they'd show Mother WH = 0 and replenishment
+        # would be computed against stock the warehouse actually holds.
+        # Operator directive: "use WM snapshot file for this".
+        inventory = pd.concat(
+            [get("inventory_snapshot_nexlev.xlsx"), get("Inventory_snapshot_WM.xlsx")],
+            ignore_index=True,
+        )
 
     else:
         inventory = get("inventory_snapshot_nexlev.xlsx")
@@ -421,20 +509,10 @@ def calculate_replenishment(
     # ---------------------------------------------
     sales_n = get_last_n_weeks_sales(sales, sales_window)
 
-    # Filter sales by brand to prevent cross-brand model collisions (e.g. PB-01 in Nexlev vs Audio Array)
-    # Nexlev and Viomi share the same sales data (both tagged as "Nexlev" brand)
-    # Audio Array and White Mulberry have their own brand tags
-    if "brand" in sales_n.columns:
-        if account.upper() in ("NEXLEV", "VIOMI"):
-            # Exclude other brands — keep only Nexlev (shared by both accounts)
-            sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "Nexlev"]
-        elif account.upper() == "AUDIO ARRAY":
-            # Tonor rows added to the AA master (2026-07-28) share the same
-            # Amazon Seller account, so their weekly_sales_snapshot brand is
-            # "Tonor". Include both so Tonor SKUs get proper velocity.
-            sales_n = sales_n[sales_n["brand"].astype(str).str.strip().isin(["Audio Array", "Tonor"])]
-        elif account.upper() == "WHITE MULBERRY":
-            sales_n = sales_n[sales_n["brand"].astype(str).str.strip() == "White Mulberry"]
+    # Filter sales by brand to prevent cross-brand model collisions (e.g. PB-01
+    # in Nexlev vs Audio Array). See _ACCOUNT_SALES_BRANDS for the per-account
+    # brand sets and why Viomi now also accepts "White Mulberry".
+    sales_n = _filter_sales_by_brand(sales_n, account)
 
     # Channel filter:
     # - Audio Array → Amazon only (no 1p Sales)
@@ -516,13 +594,7 @@ def calculate_replenishment(
     df["window_units_sold"]  = df["total_units_sold"]
 
     sales_4 = get_last_n_weeks_sales(sales, 4)
-    if "brand" in sales_4.columns:
-        if account.upper() in ("NEXLEV", "VIOMI"):
-            sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "Nexlev"]
-        elif account.upper() == "AUDIO ARRAY":
-            sales_4 = sales_4[sales_4["brand"].astype(str).str.strip().isin(["Audio Array", "Tonor"])]
-        elif account.upper() == "WHITE MULBERRY":
-            sales_4 = sales_4[sales_4["brand"].astype(str).str.strip() == "White Mulberry"]
+    sales_4 = _filter_sales_by_brand(sales_4, account)
     if account.upper() == "AUDIO ARRAY":
         sales_4 = sales_4[sales_4["channel"] == "Amazon"]
     elif account.upper() in ("NEXLEV", "VIOMI"):
@@ -578,13 +650,7 @@ def calculate_replenishment(
     # last-2 catches sharp recent trends that a wider window smooths out.
     # ---------------------------------------------
     sales_2 = get_last_n_weeks_sales(sales, 2)
-    if "brand" in sales_2.columns:
-        if account.upper() in ("NEXLEV", "VIOMI"):
-            sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "Nexlev"]
-        elif account.upper() == "AUDIO ARRAY":
-            sales_2 = sales_2[sales_2["brand"].astype(str).str.strip().isin(["Audio Array", "Tonor"])]
-        elif account.upper() == "WHITE MULBERRY":
-            sales_2 = sales_2[sales_2["brand"].astype(str).str.strip() == "White Mulberry"]
+    sales_2 = _filter_sales_by_brand(sales_2, account)
     if account.upper() == "AUDIO ARRAY":
         sales_2 = sales_2[sales_2["channel"] == "Amazon"]
     elif account.upper() in ("NEXLEV", "VIOMI"):
