@@ -428,9 +428,23 @@ export default function ChinaReorderV2() {
     const order = columns.map(c => c.id);
     const headers = order.map(id => columns.find(c => c.id === id).header);
     const lines = [headers.join(",")];
-    table.getSortedRowModel().rows.forEach(({ original: r }) => {
+    // Export must go through the TABLE's cell values, not the raw row —
+    // accessorFn columns (% Contribution, rounded cover / sales / velocity)
+    // either don't exist on the row at all or hold the unrounded value.
+    // % Contribution is derived purely from contribMap, so reading r[id]
+    // emitted a header with an empty column beneath it.
+    table.getSortedRowModel().rows.forEach(row => {
+      const r = row.original;
+      const byId = new Map(row.getAllCells().map(c => [c.column.id, c.getValue()]));
       const cells = order.map(id => {
-        let v = r[id];
+        // Fallback path covers columns whose SECTION is collapsed (they're
+        // absent from getAllCells). % Contribution has no row field at all,
+        // so it must be recomputed from contribMap rather than read.
+        let v = byId.has(id)
+          ? byId.get(id)
+          : id === "sales_contribution"
+            ? Number((contribMap.get(`${r.brand}|${r.model}`)?.share || 0).toFixed(1))
+            : r[id];
         if (v == null) v = "";
         const s = String(v).replace(/"/g, '""');
         return /[",\n]/.test(s) ? `"${s}"` : s;
