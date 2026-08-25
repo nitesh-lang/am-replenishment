@@ -238,11 +238,11 @@ export default function ChinaReorderV2() {
     { id: "current_inventory", accessorKey: "current_inventory", header: "Inventory",       size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "open_order_qty",    accessorKey: "open_order_qty",    header: "PO Yet to Pickup",size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "pipeline_qty",      accessorKey: "pipeline_qty",      header: "PO Picked Up",    size: 105, meta: { group: "inv", numeric: true, sortDescFirst: true } },
-    { id: "weeks_cover",       accessorKey: "weeks_cover",       header: "Cover (wk)", size: 90,  meta: { group: "cover", numeric: true, sortDescFirst: true } },
+    { id: "weeks_cover",       accessorFn: r => Math.round(Number(r.weeks_cover) || 0), header: "Cover (wk)", size: 90,  meta: { group: "cover", numeric: true, sortDescFirst: true } },
     // Cover including the vendor-PO position (picked up + yet to pickup).
     // 1P accounts only — matches Cover (wk) for Nexlev / WM, which have no
     // vendor PO feed.
-    { id: "total_weeks_cover", accessorKey: "total_weeks_cover", header: "Total Cover (wk)", size: 120, meta: { group: "cover", numeric: true, sortDescFirst: true } },
+    { id: "total_weeks_cover", accessorFn: r => Math.round(Number(r.total_weeks_cover) || 0), header: "Total Cover (wk)", size: 120, meta: { group: "cover", numeric: true, sortDescFirst: true } },
     { id: "suggested_reorder", accessorKey: "suggested_reorder", header: "Reorder",    size: 95,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "status",            accessorFn: r => reorderStatus(r), header: "Status",    size: 110, meta: { group: "plan" } },
     { id: "avg_rating",        accessorKey: "avg_rating",        header: "Rating",     size: 80,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
