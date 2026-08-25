@@ -232,8 +232,8 @@ export default function ChinaReorderV2() {
     // the two always describe the same period.
     { id: "window_gross_sales", accessorFn: r => Math.round(Number(r.window_gross_sales) || 0), header: "12 Wk Total Sales", size: 140, meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "avg_weekly_sales",  accessorKey: "avg_weekly_sales",  header: "Avg/Wk",     size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
-    { id: "window_velocity",   accessorKey: "window_velocity",   header: "Sel Wk",     size: 75,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
-    { id: "last_2_velocity",   accessorKey: "last_2_velocity",   header: "2wk",        size: 70,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    { id: "window_velocity",   accessorFn: r => Math.round(Number(r.window_velocity) || 0), header: "Sel Wk", size: 75,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    { id: "last_2_velocity",   accessorFn: r => Math.round(Number(r.last_2_velocity) || 0), header: "2wk", size: 70,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "velocity_basis",    accessorKey: "velocity_basis",    header: "Basis",      size: 75,  meta: { group: "sales" } },
     { id: "current_inventory", accessorKey: "current_inventory", header: "Inventory",       size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "open_order_qty",    accessorKey: "open_order_qty",    header: "PO Yet to Pickup",size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
@@ -535,7 +535,7 @@ export default function ChinaReorderV2() {
             </div>
 
             <div className="col-span-1">
-              <Label>Inventory Cover</Label>
+              <Label>Inventory Cover (months)</Label>
               <select value={selectedMonths} onChange={e => setSelectedMonths(Number(e.target.value))}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
                 {[1, 2, 3, 6, 12].map(n => <option key={n}>{n}</option>)}
@@ -710,7 +710,7 @@ export default function ChinaReorderV2() {
                               w < 12            ? "text-red-700 font-semibold" :
                               w <= 16           ? "text-amber-700" :
                                                   "text-emerald-700";
-                            content = <span className={cn("tabular-nums", tone)}>{w == null ? "—" : Number(w).toFixed(1)}</span>;
+                            content = <span className={cn("tabular-nums", tone)}>{w == null ? "—" : Math.round(Number(w))}</span>;
                           } else if (colId === "status") {
                             const s = reorderStatus(r);
                             const tone =
@@ -750,9 +750,14 @@ export default function ChinaReorderV2() {
                             const tone = v < 0 ? "text-red-700 font-semibold" : "text-slate-700";
                             content = v ? <span className={cn("tabular-nums", tone)}>{v.toFixed(1)}%</span> : <span className="text-slate-300">—</span>;
                           } else {
+                            // MUST read cell.getValue(), not r[colId] — columns
+                            // defined with accessorFn (Total Cover, 12 Wk Total
+                            // Sales) derive their value; the raw row ignores it.
+                            // See feedback_tanstack_cell_getvalue.md.
+                            const gv = cell.getValue();
                             content = (
                               <span className="tabular-nums">
-                                {r[colId] ?? (meta.numeric ? 0 : "—")}
+                                {gv ?? (meta.numeric ? 0 : "—")}
                               </span>
                             );
                           }
