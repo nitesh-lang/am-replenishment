@@ -16,6 +16,7 @@ import { SavedViews } from "../components/SavedViews";
 import { SOPModal, SOPButton } from "../components/SOPModal";
 import { ChinaReorderSOPContent } from "../components/SOPContents";
 import DataFreshnessBanner from "../components/DataFreshnessBanner";
+import { ColumnGroupToggles, isColumnVisible, groupsFromColumns } from "../components/ColumnGroupToggles";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -67,6 +68,14 @@ export default function ChinaReorderV2() {
 
   /* SOP modal */
   const [sopOpen, setSopOpen] = useState(false);
+
+  // Collapsible column sections (visibility). Set of collapsed group keys.
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const toggleGroup = (key) => setCollapsedGroups(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
   // CB (1P vendor) SOH sync — Audio Array + Tonor, one report under the AA
   // vendor token. syncNonce bump re-fires the LOAD effect so the table
@@ -264,9 +273,16 @@ export default function ChinaReorderV2() {
     { id: "net_margin_pct",    accessorKey: "net_margin_pct",    header: "Margin %",   size: 90,  meta: { group: "money", numeric: true, sortDescFirst: true } },
   ], []);
 
+  const GROUP_LABELS = { id: "ID", sales: "Sales", inv: "Inventory", cover: "Cover", plan: "Plan", quality: "Quality", money: "Margin" };
+  const groupChips = useMemo(() => groupsFromColumns(columns, GROUP_LABELS), [columns]);
+  const visibleColumns = useMemo(
+    () => columns.filter(c => isColumnVisible(c, collapsedGroups)),
+    [columns, collapsedGroups]
+  );
+
   const table = useReactTable({
     data: filteredRows,
-    columns,
+    columns: visibleColumns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
@@ -315,7 +331,7 @@ export default function ChinaReorderV2() {
     let count = 0, sum = 0;
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
-        const col = columns[c];
+        const col = visibleColumns[c];
         const orig = sortedTable[r]?.original;
         if (!col || !orig) continue;
         count++;
@@ -323,7 +339,7 @@ export default function ChinaReorderV2() {
       }
     }
     return count ? { count, sum } : null;
-  }, [selRange, table, columns]);
+  }, [selRange, table, visibleColumns]);
 
   useEffect(() => {
     function onCopy(e) {
@@ -338,7 +354,7 @@ export default function ChinaReorderV2() {
       for (let r = r0; r <= r1; r++) {
         const cells = [];
         for (let c = c0; c <= c1; c++) {
-          const id = columns[c]?.id;
+          const id = visibleColumns[c]?.id;
           const v  = sortedTable[r]?.original?.[id];
           cells.push(v == null ? "" : String(v));
         }
@@ -625,6 +641,11 @@ export default function ChinaReorderV2() {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Collapsible column sections */}
+        <div className="mb-2">
+          <ColumnGroupToggles groups={groupChips} collapsed={collapsedGroups} onToggle={toggleGroup} />
         </div>
 
         {/* TABLE */}

@@ -18,6 +18,7 @@ import { SavedViews } from "../components/SavedViews";
 import { SOPModal, SOPButton } from "../components/SOPModal";
 import { FCAllocationSOPContent } from "../components/SOPContents";
 import DataFreshnessBanner from "../components/DataFreshnessBanner";
+import { ColumnGroupToggles, isColumnVisible, groupsFromColumns } from "../components/ColumnGroupToggles";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -114,6 +115,14 @@ export default function FCAllocationV2() {
 
   /* SOP modal */
   const [sopOpen, setSopOpen] = useState(false);
+
+  // Collapsible column sections (visibility). Set of collapsed group keys.
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const toggleGroup = (key) => setCollapsedGroups(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
   /* ============================================================
      Reset week range when account changes so per-account defaults
@@ -503,9 +512,16 @@ export default function FCAllocationV2() {
     return base;
   }, [isFossil]);
 
+  const GROUP_LABELS = { id: "ID", vel: "Velocity", inv: "Inventory", plan: "Plan", log: "Logistics", list: "Listing" };
+  const groupChips = useMemo(() => groupsFromColumns(columns, GROUP_LABELS), [columns]);
+  const visibleColumns = useMemo(
+    () => columns.filter(c => isColumnVisible(c, collapsedGroups)),
+    [columns, collapsedGroups]
+  );
+
   const table = useReactTable({
     data: filteredRows,
-    columns,
+    columns: visibleColumns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
@@ -561,7 +577,7 @@ export default function FCAllocationV2() {
     let count = 0, sum = 0;
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
-        const col = columns[c];
+        const col = visibleColumns[c];
         const orig = sortedTable[r]?.original;
         if (!col || !orig) continue;
         count++;
@@ -569,7 +585,7 @@ export default function FCAllocationV2() {
       }
     }
     return count ? { count, sum } : null;
-  }, [selRange, table, columns]);
+  }, [selRange, table, visibleColumns]);
 
   useEffect(() => {
     function onCopy(e) {
@@ -584,7 +600,7 @@ export default function FCAllocationV2() {
       for (let r = r0; r <= r1; r++) {
         const cells = [];
         for (let c = c0; c <= c1; c++) {
-          const colId = columns[c]?.id;
+          const colId = visibleColumns[c]?.id;
           const v = sortedTable[r]?.original?.[colId];
           cells.push(v == null ? "" : String(v));
         }
@@ -1093,6 +1109,11 @@ export default function FCAllocationV2() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Collapsible column sections */}
+        <div className="mb-2">
+          <ColumnGroupToggles groups={groupChips} collapsed={collapsedGroups} onToggle={toggleGroup} />
         </div>
 
         {/* TABLE */}

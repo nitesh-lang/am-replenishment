@@ -20,6 +20,7 @@ import { SavedViews } from "../components/SavedViews";
 import { SOPModal, SOPButton } from "../components/SOPModal";
 import { ReplenishmentSOPContent } from "../components/SOPContents";
 import DataFreshnessBanner from "../components/DataFreshnessBanner";
+import { ColumnGroupToggles, isColumnVisible, groupsFromColumns } from "../components/ColumnGroupToggles";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -112,6 +113,14 @@ export default function ReplenishmentV2() {
 
   /* ─────────── SOP modal ─────────── */
   const [sopOpen, setSopOpen] = useState(false);
+
+  // Collapsible column sections (visibility). Set of collapsed group keys.
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const toggleGroup = (key) => setCollapsedGroups(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
   /* ============================================================
      LOAD
@@ -342,9 +351,16 @@ export default function ReplenishmentV2() {
     { id: "master_carton",    accessorKey: "master_carton",    header: "MC",        size: 55,  meta: { group: "log" } },
   ], []);
 
+  const GROUP_LABELS = { id: "ID", vel: "Velocity", inv: "Inventory", rep: "Replenishment", log: "Logistics", list: "Listing" };
+  const groupChips = useMemo(() => groupsFromColumns(columns, GROUP_LABELS), [columns]);
+  const visibleColumns = useMemo(
+    () => columns.filter(c => isColumnVisible(c, collapsedGroups)),
+    [columns, collapsedGroups]
+  );
+
   const table = useReactTable({
     data: filteredRows,
-    columns,
+    columns: visibleColumns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
@@ -394,7 +410,7 @@ export default function ReplenishmentV2() {
     let count = 0, sum = 0;
     for (let r = r0; r <= r1; r++) {
       for (let c = c0; c <= c1; c++) {
-        const col = columns[c];
+        const col = visibleColumns[c];
         const orig = sortedRows[r]?.original;
         if (!col || !orig) continue;
         count++;
@@ -402,7 +418,7 @@ export default function ReplenishmentV2() {
       }
     }
     return count ? { count, sum } : null;
-  }, [selRange, table, columns]);
+  }, [selRange, table, visibleColumns]);
 
   useEffect(() => {
     function onCopy(e) {
@@ -417,7 +433,7 @@ export default function ReplenishmentV2() {
       for (let r = r0; r <= r1; r++) {
         const cells = [];
         for (let c = c0; c <= c1; c++) {
-          const colId = columns[c]?.id;
+          const colId = visibleColumns[c]?.id;
           const v = sortedRows[r]?.original?.[colId];
           cells.push(v == null ? "" : String(v));
         }
@@ -936,6 +952,11 @@ export default function ReplenishmentV2() {
               )}
             </div>
           )}
+        </div>
+
+        {/* Collapsible column sections */}
+        <div className="mb-2">
+          <ColumnGroupToggles groups={groupChips} collapsed={collapsedGroups} onToggle={toggleGroup} />
         </div>
 
         {/* TABLE */}
