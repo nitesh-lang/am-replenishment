@@ -45,6 +45,7 @@ export default function ChinaReorderV2() {
   const [toWeek,   setToWeek]   = useState(null);
   const [availableWeeks, setAvailableWeeks] = useState([]);
   const [selectedL0, setSelectedL0] = useState("");
+  const [selectedAsinType, setSelectedAsinType] = useState("");
   const [selectedL1, setSelectedL1] = useState("");
 
   const [rows, setRows] = useState([]);
@@ -132,7 +133,7 @@ export default function ChinaReorderV2() {
     }
   }
 
-  useEffect(() => { setPage(1); }, [search, view, selectedL0, selectedL1, selectedBrands, fromWeek, toWeek]);
+  useEffect(() => { setPage(1); }, [search, view, selectedL0, selectedL1, selectedAsinType, selectedBrands, fromWeek, toWeek]);
 
   // Clear category filters whenever the brand selection changes.
   // category_l0/l1 are almost entirely brand-exclusive (e.g. "Bundles" exists
@@ -147,6 +148,7 @@ export default function ChinaReorderV2() {
       prevBrandKey.current = brandKey;
       setSelectedL0("");
       setSelectedL1("");
+      setSelectedAsinType("");
     }
   }, [brandKey]);
 
@@ -164,10 +166,18 @@ export default function ChinaReorderV2() {
     )].sort();
   }, [rows, selectedL0]);
 
+  // ASIN Type options come from the loaded rows, so they follow the brand
+  // selection automatically (WM/Tonor currently have none in sku_master).
+  const asinTypeOptions = useMemo(
+    () => [...new Set(rows.map(r => r.asin_type).filter(Boolean))].sort(),
+    [rows]
+  );
+
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter(r => {
       if (selectedL0 && r.category_l0 !== selectedL0) return false;
+      if (selectedAsinType && (r.asin_type || "") !== selectedAsinType) return false;
       if (selectedL1 && r.category_l1 !== selectedL1) return false;
       if (q && !(
         (r.model || "").toLowerCase().includes(q) ||
@@ -182,7 +192,7 @@ export default function ChinaReorderV2() {
       if (view === "top_rated")     return (r.avg_rating || 0) >= 4;
       return true;
     });
-  }, [rows, search, view, selectedL0, selectedL1]);
+  }, [rows, search, view, selectedL0, selectedL1, selectedAsinType]);
 
   const views = useMemo(() => [
     { key: "all",          label: "All",              count: rows.length },
@@ -216,12 +226,19 @@ export default function ChinaReorderV2() {
     { id: "asin_type",         accessorKey: "asin_type",         header: "ASIN Type",  size: 110, meta: { group: "id" } },
     { id: "category_l0",       accessorKey: "category_l0",       header: "L0",         size: 110, meta: { group: "id" } },
     { id: "last_12w_sales",    accessorKey: "last_12w_sales",    header: "12W Sales",  size: 95,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    // Gross sales summed over the SAME selected week window as 12W Sales, so
+    // the two always describe the same period.
+    { id: "window_gross_sales", accessorKey: "window_gross_sales", header: "Gross Sales", size: 115, meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "avg_weekly_sales",  accessorKey: "avg_weekly_sales",  header: "Avg/Wk",     size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "current_inventory", accessorKey: "current_inventory", header: "Inventory",       size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "open_order_qty",    accessorKey: "open_order_qty",    header: "PO Yet to Pickup",size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "pipeline_qty",      accessorKey: "pipeline_qty",      header: "PO Picked Up",    size: 105, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "weeks_cover",       accessorKey: "weeks_cover",       header: "Cover (wk)", size: 90,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "suggested_reorder", accessorKey: "suggested_reorder", header: "Reorder",    size: 95,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
+    // Amazon vendor PO position on OPEN POs: Received (picked up) + Remaining
+    // (yet to pickup). Display only — NOT subtracted from Reorder. Vendor POs
+    // exist for 1P accounts only, so Nexlev / White Mulberry show 0.
+    { id: "po_total_soh",      accessorKey: "po_total_soh",      header: "Total SOH (PO Picked up + Yet to Pickup)", size: 175, meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "status",            accessorFn: r => reorderStatus(r), header: "Status",    size: 110, meta: { group: "plan" } },
     { id: "avg_rating",        accessorKey: "avg_rating",        header: "Rating",     size: 80,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
     { id: "rating_count",      accessorKey: "rating_count",      header: "Reviews",    size: 85,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
@@ -367,7 +384,7 @@ export default function ChinaReorderV2() {
     // and category_l0/l1 are near brand-exclusive, so a filtered export can
     // legitimately contain fewer brands than are selected — say so in the
     // filename rather than letting it look like a full export.
-    const catTag = [selectedL0, selectedL1].filter(Boolean).join("-")
+    const catTag = [selectedL0, selectedL1, selectedAsinType].filter(Boolean).join("-")
       .replace(/[^a-z0-9]+/gi, "_").toLowerCase();
     a.download = `reorder_${selectedBrands.join("_").toLowerCase()}_${view}`
       + (catTag ? `_filtered_${catTag}` : "") + ".csv";
@@ -413,14 +430,14 @@ export default function ChinaReorderV2() {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {(selectedL0 || selectedL1) && (
+            {(selectedL0 || selectedL1 || selectedAsinType) && (
               <span
                 className="text-xs px-2 py-1 rounded-md border border-amber-300 bg-amber-50 text-amber-900 inline-flex items-center gap-1.5"
                 title="A category filter is active — the table and Export CSV show only matching rows, which may exclude entire brands."
               >
-                Filtered: {[selectedL0, selectedL1].filter(Boolean).join(" › ")}
+                Filtered: {[selectedL0, selectedL1, selectedAsinType].filter(Boolean).join(" › ")}
                 <button
-                  onClick={() => { setSelectedL0(""); setSelectedL1(""); }}
+                  onClick={() => { setSelectedL0(""); setSelectedL1(""); setSelectedAsinType(""); }}
                   className="underline hover:no-underline"
                 >
                   clear
@@ -570,6 +587,15 @@ export default function ChinaReorderV2() {
                 disabled={!selectedL0}>
                 <option value="">All L1</option>
                 {l1Options.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="col-span-3">
+              <Label>ASIN Type</Label>
+              <select value={selectedAsinType} onChange={e => setSelectedAsinType(e.target.value)}
+                className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white"
+                title="From sku_master. Blank for brands with no ASIN Type set (currently WM + Tonor).">
+                <option value="">All ASIN Types</option>
+                {asinTypeOptions.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>

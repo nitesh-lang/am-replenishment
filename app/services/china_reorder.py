@@ -12,6 +12,49 @@ _DATA_INPUT = Path("data/input")
 # "pipeline"), so we inject the SP-API rows into inv_df with channel='1p'
 # for the affected brands. Other brands (WM, Nexlev) keep their existing
 # snapshot 1p rows unchanged.
+def _vendor_po_soh_for_brand(brand_clean: str) -> pd.DataFrame:
+    """model -> PO Picked up + Yet to Pickup, from the Amazon vendor PO feed.
+
+    Operator 2026-08-25: Reorder's suggested_reorder accounts for China open
+    orders and pipeline but NOT Amazon vendor POs, so a model with a large
+    outstanding PO looked under-stocked. This surfaces that as a column.
+
+    Only OPEN POs count — CLOSED ones are already delivered and sitting in
+    current_inventory, so including them would double-count.
+      Received quantity  -> picked up
+      Remaining quantity -> yet to pickup
+
+    Vendor POs exist only for the 1P accounts (Audio Array, Tonor); Nexlev and
+    White Mulberry have no vendor PO feed and get 0.
+    """
+    fname_map = {
+        "audio array": "vendor_po_audio_array.csv",
+        "tonor":       "vendor_po_tonor.csv",
+    }
+    fname = fname_map.get(brand_clean)
+    if not fname:
+        return pd.DataFrame(columns=["model", "po_picked_up", "po_yet_to_pickup"])
+    p = _DATA_INPUT / fname
+    if not p.exists():
+        return pd.DataFrame(columns=["model", "po_picked_up", "po_yet_to_pickup"])
+    try:
+        d = pd.read_csv(p, low_memory=False)
+        d.columns = d.columns.astype(str).str.strip()
+        if "PO Status" in d.columns:
+            d = d[d["PO Status"].astype(str).str.strip().str.upper() == "OPEN"]
+        if d.empty or "Model" not in d.columns:
+            return pd.DataFrame(columns=["model", "po_picked_up", "po_yet_to_pickup"])
+        d["model"] = d["Model"].astype(str).str.strip().str.upper()
+        d["po_picked_up"] = pd.to_numeric(d.get("Received quantity"), errors="coerce").fillna(0)
+        d["po_yet_to_pickup"] = pd.to_numeric(d.get("Remaining quantity"), errors="coerce").fillna(0)
+        return (
+            d.groupby("model", as_index=False)[["po_picked_up", "po_yet_to_pickup"]].sum()
+        )
+    except Exception as e:
+        print(f"⚠️ vendor PO load failed for {brand_clean}: {e}")
+        return pd.DataFrame(columns=["model", "po_picked_up", "po_yet_to_pickup"])
+
+
 def _vendor_soh_1p_for_brand(brand_clean: str) -> pd.DataFrame:
     fname_map = {
         "audio array": "vendor_soh_audio_array.csv",
@@ -393,11 +436,20 @@ def china_reorder_logic(
     # SALES AGGREGATION
     # ============================================================
 
+    # gross_sales summed over the SAME selected window as last_12w_sales, so
+    # the two always describe the same period (operator 2026-08-25: "gross
+    # sales as per selected window"). Guarded — older snapshots may not carry
+    # the column.
+    _agg = {"last_12w_sales": ("units_sold", "sum")}
+    if "gross_sales" in last_12.columns:
+        _agg["window_gross_sales"] = ("gross_sales", "sum")
     sales_agg = (
         last_12
         .groupby("model", as_index=False)
-        .agg(last_12w_sales=("units_sold", "sum"))
+        .agg(**_agg)
     )
+    if "window_gross_sales" not in sales_agg.columns:
+        sales_agg["window_gross_sales"] = 0.0
 
     sales_agg["avg_weekly_sales"] = (
         sales_agg["last_12w_sales"] / window_size
@@ -549,6 +601,19 @@ def china_reorder_logic(
     df["suggested_reorder"] = (
         df["target_stock"] - df["current_inventory"] - df["open_order_qty"] - df["pipeline_qty"]
     ).clip(lower=0)
+
+    # Amazon vendor PO position — DISPLAY ONLY, deliberately NOT subtracted
+    # from suggested_reorder above (operator: "dont touch anything else").
+    _po = _vendor_po_soh_for_brand(brand_clean)
+    if len(_po):
+        df = df.merge(_po, on="model", how="left")
+    for _c in ("po_picked_up", "po_yet_to_pickup"):
+        # Brands with no vendor PO feed never get the column from the merge,
+        # so seed it as a Series — df.get(col, 0) would return a bare int.
+        if _c not in df.columns:
+            df[_c] = 0
+        df[_c] = pd.to_numeric(df[_c], errors="coerce").fillna(0).round(0).astype(int)
+    df["po_total_soh"] = df["po_picked_up"] + df["po_yet_to_pickup"]
 
     # ============================================================
     # SKU + ASIN from sku_master (canonical source of truth)
