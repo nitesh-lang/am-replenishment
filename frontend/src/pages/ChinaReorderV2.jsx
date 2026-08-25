@@ -177,6 +177,31 @@ export default function ChinaReorderV2() {
     )].sort();
   }, [rows, selectedL0]);
 
+  // Pareto (80-20) sales contribution WITHIN the selected brands.
+  // share = row 12W sales / total 12W sales of all loaded rows; class comes
+  // from the cumulative share walking rows in descending sales order:
+  //   <=80% cumulative -> "top" (the 80-20 head), <=95% -> "mid", else "tail".
+  // Computed over rows (not filteredRows) so table filters don't move the %.
+  const contribMap = useMemo(() => {
+    const total = rows.reduce((a, r) => a + (Number(r.last_12w_sales) || 0), 0);
+    const map = new Map();
+    if (!total) return map;
+    const sorted = [...rows].sort(
+      (a, b) => (Number(b.last_12w_sales) || 0) - (Number(a.last_12w_sales) || 0)
+    );
+    let cum = 0;
+    for (const r of sorted) {
+      const sales = Number(r.last_12w_sales) || 0;
+      const share = (sales / total) * 100;
+      cum += share;
+      map.set(`${r.brand}|${r.model}`, {
+        share,
+        band: sales <= 0 ? "tail" : cum <= 80 ? "top" : cum <= 95 ? "mid" : "tail",
+      });
+    }
+    return map;
+  }, [rows]);
+
   // ASIN Type options come from the loaded rows, so they follow the brand
   // selection automatically (WM/Tonor currently have none in sku_master).
   const asinTypeOptions = useMemo(
@@ -249,6 +274,8 @@ export default function ChinaReorderV2() {
     { id: "asin_type",         accessorKey: "asin_type",         header: "ASIN Type",  size: 110, meta: { group: "id" } },
     { id: "category_l0",       accessorKey: "category_l0",       header: "L0",         size: 110, meta: { group: "id" } },
     { id: "last_12w_sales",    accessorKey: "last_12w_sales",    header: "12W Sales",  size: 95,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    // % of the selected brands' total 12W sales; colour = Pareto band.
+    { id: "sales_contribution", accessorFn: r => Number((contribMap.get(`${r.brand}|${r.model}`)?.share || 0).toFixed(1)), header: "% Contribution", size: 115, meta: { group: "sales", numeric: true, sortDescFirst: true } },
     // Gross sales summed over the SAME selected week window as 12W Sales, so
     // the two always describe the same period.
     { id: "window_gross_sales", accessorFn: r => Math.round(Number(r.window_gross_sales) || 0), header: "12 Wk Total Sales", size: 140, meta: { group: "sales", numeric: true, sortDescFirst: true } },
@@ -271,7 +298,7 @@ export default function ChinaReorderV2() {
     { id: "returns_pct",       accessorKey: "returns_pct",       header: "Returns %",  size: 90,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
     { id: "net_margin_inr",    accessorKey: "net_margin_inr",    header: "Margin (₹)", size: 100, meta: { group: "money", numeric: true, sortDescFirst: true } },
     { id: "net_margin_pct",    accessorKey: "net_margin_pct",    header: "Margin %",   size: 90,  meta: { group: "money", numeric: true, sortDescFirst: true } },
-  ], []);
+  ], [contribMap]);
 
   const GROUP_LABELS = { id: "ID", sales: "Sales", inv: "Inventory", cover: "Cover", plan: "Plan", quality: "Quality", money: "Margin" };
   const groupChips = useMemo(() => groupsFromColumns(columns, GROUP_LABELS), [columns]);
@@ -782,6 +809,19 @@ export default function ChinaReorderV2() {
                             const v = Number(r.net_margin_pct || 0);
                             const tone = v < 0 ? "text-red-700 font-semibold" : "text-slate-700";
                             content = v ? <span className={cn("tabular-nums", tone)}>{v.toFixed(1)}%</span> : <span className="text-slate-300">—</span>;
+                          } else if (colId === "sales_contribution") {
+                            const e = contribMap.get(`${r.brand}|${r.model}`);
+                            const share = e?.share || 0;
+                            const band = e?.band || "tail";
+                            const tone =
+                              band === "top" ? "bg-emerald-100 text-emerald-800" :
+                              band === "mid" ? "bg-amber-100 text-amber-800" :
+                                               "bg-slate-100 text-slate-500";
+                            content = (
+                              <span className={cn("inline-flex px-1.5 py-0.5 rounded text-[11px] font-semibold tabular-nums", tone)}>
+                                {share.toFixed(1)}%
+                              </span>
+                            );
                           } else {
                             // MUST read cell.getValue(), not r[colId] — columns
                             // defined with accessorFn (Total Cover, 12 Wk Total
