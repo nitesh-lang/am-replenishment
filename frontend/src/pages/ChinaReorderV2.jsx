@@ -210,6 +210,10 @@ export default function ChinaReorderV2() {
     { id: "sku",               accessorKey: "sku",               header: "SKU",        size: 110, meta: { group: "id" } },
     { id: "asin",              accessorKey: "asin",              header: "ASIN",       size: 110, meta: { group: "id" } },
     { id: "brand",             accessorKey: "brand",             header: "Brand",      size: 100, meta: { group: "id" } },
+    // ASIN Type from sku_master (Core / Medium / Tail / New / New Launch /
+    // To be Launched / EOL). Display only. Blank where sku_master has no
+    // value for that model — currently all of WM and Tonor.
+    { id: "asin_type",         accessorKey: "asin_type",         header: "ASIN Type",  size: 110, meta: { group: "id" } },
     { id: "category_l0",       accessorKey: "category_l0",       header: "L0",         size: 110, meta: { group: "id" } },
     { id: "last_12w_sales",    accessorKey: "last_12w_sales",    header: "12W Sales",  size: 95,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "avg_weekly_sales",  accessorKey: "avg_weekly_sales",  header: "Avg/Wk",     size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },

@@ -566,9 +566,18 @@ def china_reorder_logic(
         sku_master["_model"] = sku_master["Model"].astype(str).str.strip().str.upper()
         sku_master["sku"] = sku_master["FBA SKU"].astype(str).str.strip().str.upper()
         sku_master["asin_master"] = sku_master["ASIN"].astype(str).str.strip().str.upper()
+        # ASIN Type (Core / Medium / Tail / New / New Launch / To be Launched /
+        # EOL) — operator added the column to sku_master 2026-08-25 and wants it
+        # visible per brand on the Reorder tab. Display only; drives nothing.
+        # Column may be absent on an older sku_master, so guard it.
+        _at = next((c for c in sku_master.columns
+                    if str(c).strip().lower() == "asin type"), None)
+        sku_master["asin_type"] = (
+            sku_master[_at].fillna("").astype(str).str.strip() if _at else ""
+        )
         master_lookup = (
             sku_master[sku_master["_brand"] == brand_clean]
-            [["_model", "sku", "asin_master"]]
+            [["_model", "sku", "asin_master", "asin_type"]]
             .drop_duplicates(subset="_model", keep="first")
             .rename(columns={"_model": "model"})
         )
@@ -577,6 +586,7 @@ def china_reorder_logic(
         print(f"⚠️  sku_master lookup failed for {brand_clean}: {e}")
         df["sku"] = ""
         df["asin_master"] = ""
+        df["asin_type"] = ""
 
     # Fallback ASIN from inventory snapshot if sku_master didn't resolve
     asin_col = None
@@ -599,6 +609,7 @@ def china_reorder_logic(
     df["asin"] = df["asin_master"].fillna("").astype(str)
     df.loc[df["asin"].isin(["", "NAN"]), "asin"] = df.loc[df["asin"].isin(["", "NAN"]), "asin_inv"].fillna("").astype(str)
     df["sku"] = df["sku"].fillna("").astype(str)
+    df["asin_type"] = df.get("asin_type", "").fillna("").astype(str).replace({"nan": "", "NaN": ""})
     df.drop(columns=[c for c in ["asin_master", "asin_inv"] if c in df.columns], inplace=True)
 
     # Reviews
