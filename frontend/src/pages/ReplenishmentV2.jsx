@@ -43,6 +43,10 @@ export default function ReplenishmentV2() {
   const [fromWeek, setFromWeek] = useState(1);
   const [toWeek, setToWeek] = useState(12);
   const [replenishWeeks, setReplenishWeeks] = useState(8);
+  // "max" = max(selected window, last-2wk) [default, unchanged behaviour];
+  // "window" = selected window only. Operator asked for the choice because
+  // requirements aren't always based on the 2-week burst.
+  const [velocityMode, setVelocityMode] = useState("max");
   const [account, setAccount] = useState("NEXLEV");
 
   /* ─────────── data ─────────── */
@@ -129,7 +133,7 @@ export default function ReplenishmentV2() {
 
     const loadCurrent = () => Promise.all([
       getKPIs(fromWeek, toWeek),
-      getReplenishment(toWeek - fromWeek + 1, replenishWeeks, account),
+      getReplenishment(toWeek - fromWeek + 1, replenishWeeks, account, velocityMode),
     ]).then(([kpiRes, replRes]) => {
       setKpis(kpiRes);
       const data = Array.isArray(replRes) ? replRes : [];
@@ -163,7 +167,7 @@ export default function ReplenishmentV2() {
     });
 
     (weekStart ? loadPast(weekStart) : loadCurrent()).finally(() => setLoading(false));
-  }, [fromWeek, toWeek, replenishWeeks, account, weekStart, syncNonce]);
+  }, [fromWeek, toWeek, replenishWeeks, account, weekStart, syncNonce, velocityMode]);
 
   /* ─────────── Amazon sync: fetch initial status when account changes ─────────── */
   useEffect(() => {
@@ -311,6 +315,8 @@ export default function ReplenishmentV2() {
     { id: "real_am_inv_available", accessorKey: "real_am_inv_available", header: "Real AM Inv", size: 95, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "ampm_inventory",   accessorKey: "model_ampm_inventory", header: "Mother WH", size: 100, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "cb_soh",           accessorKey: "cb_soh",           header: "CB SOH",    size: 85,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    // China in-transit — same number CB Replenishment shows. Display only.
+    { id: "china_pipeline",   accessorKey: "china_pipeline",   header: "China Pipeline", size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "b2b_inventory",    accessorKey: "b2b_inventory",    header: "B2B",       size: 60,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "required_units",   accessorKey: "required_units",   header: "Req",       size: 65,  meta: { group: "rep", numeric: true, sortDescFirst: true } },
     { id: "warehouse_shortfall", accessorKey: "warehouse_shortfall", header: "Shortfall", size: 85, meta: { group: "rep", numeric: true, sortDescFirst: true } },
@@ -809,10 +815,26 @@ export default function ReplenishmentV2() {
               </select>
             </div>
 
+            <div className="col-span-1">
+              <Label>Velocity basis</Label>
+              <select
+                value={velocityMode}
+                onChange={e => setVelocityMode(e.target.value)}
+                title="Higher-of: Avg/Wk = max(selected window, last-2wk). Window only: ignore the 2-week burst."
+                className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white"
+              >
+                <option value="max">Higher of window / 2wk</option>
+                <option value="window">Selected window only</option>
+              </select>
+            </div>
+
             <div className="col-span-2">
               <Label>Status</Label>
               <div className="text-xs text-slate-500 truncate">
                 {loading ? "Loading…" : `${filteredRows.length} of ${rows.length} rows`}
+                {velocityMode === "window" && (
+                  <span className="ml-1 text-amber-700 font-medium">· window-only</span>
+                )}
               </div>
               {saveMsg && <div className="text-xs text-indigo-700 mt-1">{saveMsg}</div>}
               {syncMsg && <div className="text-xs text-sky-700 mt-1">{syncMsg}</div>}

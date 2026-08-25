@@ -43,7 +43,8 @@ def _load_vendor_soh_1p() -> pd.DataFrame:
         return pd.DataFrame(columns=_SNAPSHOT_COLS)
     return pd.concat(rows, ignore_index=True)
 
-def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: int = 8):
+def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: int = 8,
+                          velocity_mode: str = "max"):
     """
     from_week   : start of sales window (inclusive), default 1
     to_week     : end   of sales window (inclusive), default 11
@@ -484,10 +485,12 @@ def load_cb_replenishment(from_week: int = 52, to_week: int = 11, cover_weeks: i
             df["last_2_velocity"] = 0.0
 
         # MAX(window, last-2-week) so estimated_qty captures recent surges
-        df["window_velocity"]    = df["avg_weekly_sales"]
-        df["effective_velocity"] = df[["window_velocity", "last_2_velocity"]].max(axis=1)
-        df["velocity_basis"]     = "window"
-        df.loc[df["last_2_velocity"] > df["window_velocity"], "velocity_basis"] = "2wk"
+        df["window_velocity"] = df["avg_weekly_sales"]
+        # Same helper as Replenishment + FC Allocation so all three stay in
+        # lockstep. velocity_mode="window" ignores the 2-week burst for the
+        # maths; last_2_velocity is still returned for display.
+        from app.services.replenishment import _resolve_velocity
+        df = _resolve_velocity(df, velocity_mode, "effective_velocity")
 
         df["estimated_qty"] = (df["effective_velocity"] * cover_weeks).round()
 

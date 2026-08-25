@@ -20,6 +20,9 @@ export default function CBReplenishment() {
   const [fromWeek, setFromWeek] = useState(null);
   const [toWeek, setToWeek] = useState(null);
   const [coverWeeks, setCoverWeeks] = useState(8);
+  // "max" = max(selected window, last-2wk) [default]; "window" = selected
+  // window only. Kept in lockstep with Replenishment + FC Allocation.
+  const [velocityMode, setVelocityMode] = useState("max");
   const [availableWeeks, setAvailableWeeks] = useState([]);
 
   const [sortConfig, setSortConfig] = useState({
@@ -247,7 +250,7 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
     };
 
     const loadCurrent = () => {
-      const params = new URLSearchParams({ cover_weeks: coverWeeks });
+      const params = new URLSearchParams({ cover_weeks: coverWeeks, velocity_mode: velocityMode });
       if (fromWeek) params.append("from_week", fromWeek);
       if (toWeek) params.append("to_week", toWeek);
       return fetch(`${BASE}/api/cb-replenishment/?${params}`)
@@ -277,7 +280,7 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
 
     const p = weekStart ? loadPast(weekStart) : loadCurrent();
     p.finally(() => setLoading(false));
-  }, [fromWeek, toWeek, coverWeeks, weekStart]);
+  }, [fromWeek, toWeek, coverWeeks, weekStart, velocityMode]);
 
   /* ============================================================
      FILTER
@@ -546,6 +549,30 @@ function scheduleAutoSave(row, nextWorking, nextRemarks) {
                     {w} Week{w > 1 ? "s" : ""}
                   </option>
                 ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Velocity basis — same choice as Replenishment + FC Allocation. */}
+        <div>
+          <label className="text-sm font-medium text-slate-600">
+            Velocity Basis
+          </label>
+          <div className="grid grid-cols-1 mt-2">
+            <div>
+              <div className="text-xs text-slate-400 mb-1">&nbsp;</div>
+              <select
+                value={velocityMode}
+                onChange={(e) => {
+                  setCurrentPage(1);
+                  setVelocityMode(e.target.value);
+                }}
+                title="Higher-of: max(selected window, last-2wk). Window only: ignore the 2-week burst."
+                className="w-full px-4 py-2 border border-slate-200 rounded-lg"
+              >
+                <option value="max">Higher of window / 2wk</option>
+                <option value="window">Selected window only</option>
               </select>
             </div>
           </div>

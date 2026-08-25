@@ -132,6 +132,7 @@ def load_fc_data(
     sales_window: int = 12,
     from_week: int | None = None,
     to_week:   int | None = None,
+    velocity_mode: str = "max",
 ):
     key = account.strip().lower()
     if key not in ACCOUNT_FILES:
@@ -170,6 +171,7 @@ def calculate_fc_plan(
     sales_window: int = 12,
     from_week: int | None = None,
     to_week:   int | None = None,
+    velocity_mode: str = "max",
 ) -> pd.DataFrame:
     """
     FC-Level Planning Engine
@@ -192,6 +194,7 @@ def calculate_fc_plan(
         sales_window=sales_window,
         from_week=from_week,
         to_week=to_week,
+        velocity_mode=velocity_mode,
     )
 
     # =================================================
@@ -324,14 +327,12 @@ def calculate_fc_plan(
     fc_velocity["units_last_14d"]  = fc_velocity["units_last_14d"].fillna(0).astype(int)
 
     # --- effective velocity + basis
-    fc_velocity["weekly_velocity"] = fc_velocity[
-        ["window_velocity", "last_2_velocity"]
-    ].max(axis=1).round(2)
-    fc_velocity["velocity_basis"] = "window"
-    fc_velocity.loc[
-        fc_velocity["last_2_velocity"] > fc_velocity["window_velocity"],
-        "velocity_basis",
-    ] = "2wk"
+    # Shared helper with the Replenishment tab so the two cannot drift —
+    # velocity_mode="window" ignores the 2-week term for the maths while still
+    # returning last_2_velocity for display.
+    from app.services.replenishment import _resolve_velocity
+    fc_velocity = _resolve_velocity(fc_velocity, velocity_mode, "weekly_velocity")
+    fc_velocity["weekly_velocity"] = fc_velocity["weekly_velocity"].round(2)
 
     # =================================================
     # VALIDATE LEDGER STRUCTURE

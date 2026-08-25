@@ -17,6 +17,7 @@ def calculate_final_allocation(
     sales_window: int = 12,
     from_week: int | None = None,
     to_week:   int | None = None,
+    velocity_mode: str = "max",
 ) -> pd.DataFrame:
 
 
@@ -32,6 +33,7 @@ def calculate_final_allocation(
         sales_window=sales_window,
         from_week=from_week,
         to_week=to_week,
+        velocity_mode=velocity_mode,
     )
 
     if df_plan is None or df_plan.empty:
@@ -569,12 +571,9 @@ def calculate_final_allocation(
         # still holds because we compare floats directly.
         fossil_final["window_velocity"] = pd.to_numeric(fossil_final["window_velocity"], errors="coerce").fillna(0).round(1)
         fossil_final["last_2_velocity"] = pd.to_numeric(fossil_final["last_2_velocity"], errors="coerce").fillna(0).round(1)
-        fossil_final["weekly_velocity"] = fossil_final[["window_velocity", "last_2_velocity"]].max(axis=1).round(1)
-        fossil_final["velocity_basis"] = "window"
-        fossil_final.loc[
-            fossil_final["last_2_velocity"] > fossil_final["window_velocity"],
-            "velocity_basis",
-        ] = "2wk"
+        from app.services.replenishment import _resolve_velocity
+        fossil_final = _resolve_velocity(fossil_final, velocity_mode, "weekly_velocity")
+        fossil_final["weekly_velocity"] = fossil_final["weekly_velocity"].round(1)
 
         numeric_cleanup_cols = [
             "fc_inventory", "transfer_in", "target_cover_units",
@@ -598,6 +597,13 @@ def calculate_final_allocation(
                 .replace({"nan": None, "None": None, "<NA>": None, "": None})
                 .fillna("-")
             )
+
+        # Fossil has no Pipeline channel in a snapshot — its China in-transit
+        # comes from the PO tracker (in_transit_qty / open_po_qty), which are
+        # already separate columns. Emit the column as 0 so the frontend can
+        # render one shared column definition across accounts.
+        if "china_pipeline" not in fossil_final.columns:
+            fossil_final["china_pipeline"] = 0
 
         return fossil_final
 
@@ -811,6 +817,11 @@ def calculate_final_allocation(
             print(f"⚠️ AMPM extra file {_ampm_extra} skipped: {e}")
 
     ampm_df.columns = ampm_df.columns.str.lower().str.strip()
+
+    # Keep the UNFILTERED snapshot before the AMPM filter — the China-pipeline
+    # column further down needs the Pipeline channel, which this next line
+    # would otherwise discard.
+    snapshot_all = ampm_df.copy()
 
     ampm_df = ampm_df[ampm_df["channel"].str.lower() == "ampm"]
 
@@ -1261,12 +1272,21 @@ def calculate_final_allocation(
     # Re-derive weekly_velocity + basis at 1-decimal precision so the
     # audit invariant `weekly_velocity == max(window, last_2)` holds
     # exactly under float rounding.
-    final_df["weekly_velocity"] = final_df[["window_velocity", "last_2_velocity"]].max(axis=1).round(1)
-    final_df["velocity_basis"] = "window"
-    final_df.loc[
-        final_df["last_2_velocity"] > final_df["window_velocity"],
-        "velocity_basis",
-    ] = "2wk"
+    # MUST honour velocity_mode — this re-derivation runs AFTER
+    # calculate_fc_plan and previously overwrote its result unconditionally,
+    # which silently made velocity_mode a no-op on the FC tab.
+    from app.services.replenishment import _resolve_velocity, attach_china_pipeline
+    final_df = _resolve_velocity(final_df, velocity_mode, "weekly_velocity")
+    final_df["weekly_velocity"] = final_df["weekly_velocity"].round(1)
+
+    # China pipeline (in-transit from China) — display only, same number CB
+    # Replenishment shows. SKU-grain, so it repeats across a SKU's FC rows;
+    # it is NOT per-FC and must not be summed down the column.
+    try:
+        final_df = attach_china_pipeline(final_df, snapshot_all)
+    except Exception as e:
+        print(f"⚠️ china_pipeline attach failed: {e}")
+        final_df["china_pipeline"] = 0
 
     # CB EOL gate (AUDIO ARRAY only) — shared with Replenishment tab.
     # 2026-08-14 rule: solo-EOL models dropped; duplicate-model EOL

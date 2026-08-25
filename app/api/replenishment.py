@@ -36,11 +36,17 @@ def get_replenishment(
     sales_window: int = Query(default=12, ge=1),
     replenish_weeks: int = Query(default=8, ge=1),
     account: str = Query(default="NEXLEV"),
+    velocity_mode: str = Query(
+        default="max",
+        description='"max" = max(selected window, last-2wk) [default]; '
+                    '"window" = selected window only',
+    ),
 ):
     df = calculate_replenishment(
         sales_window=sales_window,
         replenish_weeks=replenish_weeks,
-        account=account
+        account=account,
+        velocity_mode=velocity_mode,
     )
 
     # Merge in saved working_value for the current working week.
@@ -88,6 +94,9 @@ def get_replenishment(
             "total_units_sold": int(row["total_units_sold"]),
             "units_last_4w": int(row.get("units_last_4w", 0)),
             "units_last_2w": int(row.get("units_last_2w", 0)),
+            # China in-transit from the snapshot's Pipeline channel — display
+            # only, same number CB Replenishment shows.
+            "china_pipeline": int(row.get("china_pipeline", 0) or 0),
             "amazon_inventory": int(row["amazon_inventory"]),
             "fba_inv": int(row["fba_inv"]),
             "inbound_inventory": int(row["inbound_inventory"]),
@@ -236,6 +245,11 @@ def get_fc_final(
     sales_window: int = Query(default=12, ge=1, le=52),
     from_week: int | None = Query(default=None, ge=1, le=53),
     to_week:   int | None = Query(default=None, ge=1, le=53),
+    velocity_mode: str = Query(
+        default="max",
+        description='"max" = max(selected window, last-2wk) [default]; '
+                    '"window" = selected window only',
+    ),
 ):
     df = calculate_final_allocation(
         replenish_weeks=replenish_weeks,
@@ -244,6 +258,7 @@ def get_fc_final(
         sales_window=sales_window,
         from_week=from_week,
         to_week=to_week,
+        velocity_mode=velocity_mode,
     )
 
     # ── Fossil: load remarks + master_carton from DB only, send_qty always fresh ──

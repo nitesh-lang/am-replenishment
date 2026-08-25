@@ -49,6 +49,11 @@ def get_cb_replenishment(
     from_week: Optional[int] = Query(default=None, ge=1, le=52),
     to_week:   Optional[int] = Query(default=None, ge=1, le=52),
     cover_weeks: int = Query(default=8, ge=1, le=52),
+    velocity_mode: str = Query(
+        default="max",
+        description='"max" = max(selected window, last-2wk) [default]; '
+                    '"window" = selected window only',
+    ),
 ):
 
     try:
@@ -56,6 +61,7 @@ def get_cb_replenishment(
             from_week=from_week,
             to_week=to_week,
             cover_weeks=cover_weeks,
+            velocity_mode=velocity_mode,
         )
 
         print(f"CB REPLENISHMENT ROWS: {len(df)} | window: {from_week}→{to_week} | cover: {cover_weeks}w")

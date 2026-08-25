@@ -336,10 +336,119 @@ def _apply_wm_channel_filter(sales_df: pd.DataFrame, master_df: pd.DataFrame) ->
     return sales_df[keep]
 
 
+# Velocity modes, shared verbatim by Replenishment / FC Allocation / CB
+# Replenishment. Operator 2026-08-25: "give me an option for just selected
+# window as not every time i have requirements basis window or last 2 week avg".
+#   "max"    — weekly velocity = max(window_velocity, last_2_velocity)  [default,
+#              the behaviour that has always shipped]
+#   "window" — weekly velocity = window_velocity only; the 2-week burst is
+#              ignored for the maths but still DISPLAYED, so the operator can
+#              see what they chose to exclude.
+VELOCITY_MODES = ("max", "window")
+
+
+def china_pipeline_maps(inventory_df):
+    """(by_asin, by_sku, by_model) sums of the snapshot's Pipeline channel.
+
+    Pipeline = stock in-transit from China (see
+    reference_pipeline_vs_open_order_channel.md — Pipeline and Open Order were
+    swapped once; do not re-derive the meaning). From W34 these rows are
+    written by scripts/orderpilot_imports_pull.py.
+
+    Operator 2026-08-25 asked for the same China-pipeline number CB shows to
+    appear on Replenishment + FC Allocation "for naresh to see" — display only,
+    it feeds no calculation on those tabs.
+
+    The three levels are EXCLUSIVE, matching cb_replenishment: a row counts at
+    ASIN if it has one, else SKU, else Model. Without that, a Model fallback
+    re-attributes quantity already counted via ASIN to every duplicate-Model
+    row sharing that Model.
+    """
+    empty = ({}, {}, {})
+    if inventory_df is None or not len(inventory_df):
+        return empty
+    d = inventory_df.copy()
+    d.columns = [str(c).strip() for c in d.columns]
+    ch = next((c for c in d.columns if c.lower() == "channel"), None)
+    qty = next((c for c in d.columns if c.lower() == "qty"), None)
+    if not ch or not qty:
+        return empty
+    pipe = d[d[ch].astype(str).str.strip().str.lower() == "pipeline"].copy()
+    if not len(pipe):
+        return empty
+
+    def col(name):
+        c = next((x for x in pipe.columns if x.lower() == name), None)
+        return (pipe[c].fillna("").astype(str).str.strip() if c
+                else pd.Series("", index=pipe.index))
+
+    pipe["_asin"] = col("asin").str.upper()
+    pipe["_sku"] = col("sku").str.upper()
+    pipe["_model"] = col("model").str.split("(").str[0].str.strip().str.lower()
+    pipe["_q"] = pd.to_numeric(pipe[qty], errors="coerce").fillna(0)
+
+    has_asin = pipe["_asin"] != ""
+    has_sku = pipe["_sku"] != ""
+    by_asin = pipe[has_asin].groupby("_asin")["_q"].sum().to_dict()
+    by_sku = pipe[~has_asin & has_sku].groupby("_sku")["_q"].sum().to_dict()
+    by_model = pipe[~has_asin & ~has_sku].groupby("_model")["_q"].sum().to_dict()
+    return by_asin, by_sku, by_model
+
+
+def attach_china_pipeline(df, inventory_df, asin_col=None, sku_col=None, model_col=None):
+    """Add a `china_pipeline` column to `df` using the exclusive cascade."""
+    by_asin, by_sku, by_model = china_pipeline_maps(inventory_df)
+    if df is None or not len(df):
+        return df
+    pick = lambda names: next(
+        (c for c in df.columns if str(c).strip().lower() in names), None)
+    ac = asin_col or pick({"asin"})
+    sc = sku_col or pick({"sku", "fba sku", "merchant sku"})
+    mc = model_col or pick({"model"})
+
+    def lookup(row):
+        if ac:
+            v = by_asin.get(str(row.get(ac, "")).strip().upper())
+            if v:
+                return v
+        if sc:
+            v = by_sku.get(str(row.get(sc, "")).strip().upper())
+            if v:
+                return v
+        if mc:
+            v = by_model.get(str(row.get(mc, "")).split("(")[0].strip().lower())
+            if v:
+                return v
+        return 0
+
+    df["china_pipeline"] = df.apply(lookup, axis=1)
+    df["china_pipeline"] = pd.to_numeric(
+        df["china_pipeline"], errors="coerce").fillna(0).round(0).astype(int)
+    return df
+
+
+def _resolve_velocity(df, mode: str, out_col: str):
+    """Set `out_col` + velocity_basis from window_velocity / last_2_velocity.
+
+    Kept as one helper so the three tabs cannot drift — see
+    feedback_fc_replenishment_velocity_parity.md ("if you touch velocity math on
+    one tab you MUST update the other in the same commit").
+    """
+    if (mode or "max").strip().lower() == "window":
+        df[out_col] = df["window_velocity"]
+        df["velocity_basis"] = "window"
+    else:
+        df[out_col] = df[["window_velocity", "last_2_velocity"]].max(axis=1)
+        df["velocity_basis"] = "window"
+        df.loc[df["last_2_velocity"] > df["window_velocity"], "velocity_basis"] = "2wk"
+    return df
+
+
 def calculate_replenishment(
     sales_window: int,
     replenish_weeks: int,
-    account: str = "NEXLEV"
+    account: str = "NEXLEV",
+    velocity_mode: str = "max",
 ) -> pd.DataFrame:
     """
     Core replenishment calculation.
@@ -702,9 +811,9 @@ def calculate_replenishment(
     # Effective velocity = max(selected window, last-2-week avg).
     # last_4_velocity is still computed above for display but is NOT part
     # of the sales_velocity max — operator wants a strict 2-signal check.
-    df["sales_velocity"] = df[["window_velocity", "last_2_velocity"]].max(axis=1)
-    df["velocity_basis"] = "window"
-    df.loc[df["last_2_velocity"] > df["window_velocity"], "velocity_basis"] = "2wk"
+    # velocity_mode="window" drops the 2-week term from the maths entirely;
+    # last_2_velocity is still computed and returned for display.
+    df = _resolve_velocity(df, velocity_mode, "sales_velocity")
 
     df = df.drop(columns=[c for c in [
         "units_4w_asin", "units_4w_sku", "units_4w_model",
@@ -915,6 +1024,10 @@ def calculate_replenishment(
     # ---------------------------------------------
     # FLAGS
     # ---------------------------------------------
+    # China pipeline (in-transit from China) — display only, same number CB
+    # Replenishment shows. Feeds no calculation here.
+    df = attach_china_pipeline(df, inventory)
+
     df["is_risky"] = df["amazon_inventory"] < df["sales_velocity"]
     df["is_overstock"] = df["amazon_inventory"] > (df["sales_velocity"] * 8)
 

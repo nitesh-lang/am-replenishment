@@ -48,6 +48,9 @@ export default function FCAllocationV2() {
 
   /* ─────────── state ─────────── */
   const [replenishWeeks, setReplenishWeeks] = useState(8);
+  // "max" = max(selected window, last-2wk) [default]; "window" = selected
+  // window only. Kept in lockstep with the Replenishment tab.
+  const [velocityMode, setVelocityMode] = useState("max");
   const [availableWeeks, setAvailableWeeks] = useState([]);
   const [fromWeek, setFromWeek] = useState(null);
   const [toWeek,   setToWeek]   = useState(null);
@@ -136,7 +139,7 @@ export default function FCAllocationV2() {
       ? Math.abs(Number(toWeek) - Number(fromWeek)) + 1
       : (availableWeeks.length || 12);
 
-    getFCFinal(replenishWeeks, channel, account, fallbackWindow, fromWeek, toWeek)
+    getFCFinal(replenishWeeks, channel, account, fallbackWindow, fromWeek, toWeek, velocityMode)
       .then(res => {
         const list = Array.isArray(res) ? res : (res?.data ?? []);
         let availList = null;
@@ -195,7 +198,7 @@ export default function FCAllocationV2() {
         }
       })
       .finally(() => setLoading(false));
-  }, [replenishWeeks, channel, account, fromWeek, toWeek, syncNonce]);
+  }, [replenishWeeks, channel, account, fromWeek, toWeek, syncNonce, velocityMode]);
 
   /* ─────────── Amazon sync: initial status per account ─────────── */
   useEffect(() => {
@@ -307,7 +310,7 @@ export default function FCAllocationV2() {
       const fallbackWindow = (fromWeek != null && toWeek != null)
         ? Math.abs(Number(toWeek) - Number(fromWeek)) + 1
         : (availableWeeks.length || 12);
-      const res = await getFCFinal(replenishWeeks, channel, account, fallbackWindow, fromWeek, toWeek);
+      const res = await getFCFinal(replenishWeeks, channel, account, fallbackWindow, fromWeek, toWeek, velocityMode);
       setRows(Array.isArray(res) ? res : (res?.data ?? []));
       setSaveMsg(typeof n === "number" ? `Reset — cleared ${n} row(s)` : "Reset");
     } catch {
@@ -426,6 +429,9 @@ export default function FCAllocationV2() {
     base.push(
       { id: "fc_inventory",   accessorKey: "fc_inventory",   header: "FC SOH",    size: 80, meta: { group: "inv", numeric: true, sortDescFirst: true } },
       { id: "ampm_inventory", accessorKey: "ampm_inventory", header: isFossil ? "Fossil SOH" : "Mother WH", size: 100, meta: { group: "inv", numeric: true, sortDescFirst: true } },
+      // China in-transit — SKU-grain, repeats across a SKU's FC rows, so do
+      // NOT sum this column down the table. Display only.
+      { id: "china_pipeline", accessorKey: "china_pipeline", header: "China Pipeline", size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
       { id: "b2b_inventory",  accessorKey: "b2b_inventory",  header: "B2B",       size: 65, meta: { group: "inv", numeric: true, sortDescFirst: true } },
       { id: "inbound_to_fc",  accessorKey: "inbound_to_fc",  header: "Inbound",   size: 85, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     );
@@ -956,6 +962,19 @@ export default function FCAllocationV2() {
               <select value={replenishWeeks} onChange={e => setReplenishWeeks(Number(e.target.value))}
                 className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
                 {[2, 4, 6, 8, 10, 12].map(n => <option key={n}>{n}</option>)}
+              </select>
+            </div>
+
+            <div className="col-span-1">
+              <Label>Velocity basis</Label>
+              <select
+                value={velocityMode}
+                onChange={e => setVelocityMode(e.target.value)}
+                title="Higher-of: Avg/Wk = max(selected window, last-2wk). Window only: ignore the 2-week burst."
+                className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white"
+              >
+                <option value="max">Higher of window / 2wk</option>
+                <option value="window">Selected window only</option>
               </select>
             </div>
 

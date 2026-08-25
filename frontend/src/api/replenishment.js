@@ -18,9 +18,11 @@ async function fetchJSON(url) {
    - sales_window → past weeks for velocity
    - replenish_weeks → future weeks projection
    ========================================================= */
-export async function getReplenishment(salesWindow, replenishWeeks, account) {
+// velocityMode: "max" (default — max of selected window and last-2wk) or
+// "window" (selected window only). See VELOCITY_MODES in replenishment.py.
+export async function getReplenishment(salesWindow, replenishWeeks, account, velocityMode = "max") {
   return fetchJSON(
-    `${BASE}/replenishment?sales_window=${salesWindow}&replenish_weeks=${replenishWeeks}&account=${account}`
+    `${BASE}/replenishment?sales_window=${salesWindow}&replenish_weeks=${replenishWeeks}&account=${account}&velocity_mode=${velocityMode}`
   );
 }
 
@@ -43,12 +45,14 @@ export async function getFCFinal(
   salesWindow = 12,
   fromWeek = null,
   toWeek = null,
+  velocityMode = "max",
 ) {
   const params = new URLSearchParams({
     replenish_weeks: replenishWeeks,
     channel,
     account,
     sales_window: salesWindow,
+    velocity_mode: velocityMode,
   });
   if (fromWeek != null && toWeek != null) {
     params.set("from_week", fromWeek);
