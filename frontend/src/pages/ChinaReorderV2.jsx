@@ -228,17 +228,17 @@ export default function ChinaReorderV2() {
     { id: "last_12w_sales",    accessorKey: "last_12w_sales",    header: "12W Sales",  size: 95,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     // Gross sales summed over the SAME selected week window as 12W Sales, so
     // the two always describe the same period.
-    { id: "window_gross_sales", accessorKey: "window_gross_sales", header: "Gross Sales", size: 115, meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    { id: "window_gross_sales", accessorFn: r => Math.round(Number(r.window_gross_sales) || 0), header: "Gross Sales", size: 115, meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "avg_weekly_sales",  accessorKey: "avg_weekly_sales",  header: "Avg/Wk",     size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "current_inventory", accessorKey: "current_inventory", header: "Inventory",       size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "open_order_qty",    accessorKey: "open_order_qty",    header: "PO Yet to Pickup",size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "pipeline_qty",      accessorKey: "pipeline_qty",      header: "PO Picked Up",    size: 105, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "weeks_cover",       accessorKey: "weeks_cover",       header: "Cover (wk)", size: 90,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
+    // Cover including the vendor-PO position (picked up + yet to pickup).
+    // 1P accounts only — matches Cover (wk) for Nexlev / WM, which have no
+    // vendor PO feed.
+    { id: "total_weeks_cover", accessorKey: "total_weeks_cover", header: "Total Cover (wk)", size: 120, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "suggested_reorder", accessorKey: "suggested_reorder", header: "Reorder",    size: 95,  meta: { group: "plan", numeric: true, sortDescFirst: true } },
-    // Amazon vendor PO position on OPEN POs: Received (picked up) + Remaining
-    // (yet to pickup). Display only — NOT subtracted from Reorder. Vendor POs
-    // exist for 1P accounts only, so Nexlev / White Mulberry show 0.
-    { id: "po_total_soh",      accessorKey: "po_total_soh",      header: "Total SOH (PO Picked up + Yet to Pickup)", size: 175, meta: { group: "plan", numeric: true, sortDescFirst: true } },
     { id: "status",            accessorFn: r => reorderStatus(r), header: "Status",    size: 110, meta: { group: "plan" } },
     { id: "avg_rating",        accessorKey: "avg_rating",        header: "Rating",     size: 80,  meta: { group: "quality", numeric: true, sortDescFirst: true } },
     { id: "rating_count",      accessorKey: "rating_count",      header: "Reviews",    size: 85,  meta: { group: "quality", numeric: true, sortDescFirst: true } },

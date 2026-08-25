@@ -615,6 +615,17 @@ def china_reorder_logic(
         df[_c] = pd.to_numeric(df[_c], errors="coerce").fillna(0).round(0).astype(int)
     df["po_total_soh"] = df["po_picked_up"] + df["po_yet_to_pickup"]
 
+    # Total cover — same maths as weeks_cover but counting the vendor-PO
+    # position (picked up + yet to pickup) as stock the operator can rely on.
+    # Operator 2026-08-25: they want the COVER, not the raw SOH number, so
+    # po_total_soh stays in the payload purely as the input to this and is
+    # not rendered as its own column.
+    _avg = pd.to_numeric(df["avg_weekly_sales"], errors="coerce").fillna(0)
+    _inv = pd.to_numeric(df["current_inventory"], errors="coerce").fillna(0)
+    df["total_weeks_cover"] = (
+        (_inv + df["po_total_soh"]).div(_avg.where(_avg > 0)).fillna(0)
+    )
+
     # ============================================================
     # SKU + ASIN from sku_master (canonical source of truth)
     # ============================================================
