@@ -346,12 +346,25 @@ export default function FCAllocationV2() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
+        // Exact-match-first search (2026-08-25): if the query exactly equals any
+    // row's model / SKU / ASIN / FC, only exact rows show; substring
+    // stays as the fallback so partial typing still works.
+    const hasExact = q && rows.some(r =>
+      (r.model || "").toLowerCase() === q ||
+      (r.sku   || "").toLowerCase() === q ||
+      (r.asin  || "").toLowerCase() === q ||
+      (r.fulfillment_center || "").toLowerCase() === q
+    );
     const filtered = rows.filter(r => {
-      if (q && !(
-        (r.model || "").toLowerCase().includes(q) ||
-        (r.sku   || "").toLowerCase().includes(q) ||
-        (r.asin  || "").toLowerCase().includes(q) ||
-        (r.fulfillment_center || "").toLowerCase().includes(q)
+      if (q && !(hasExact
+        ? ((r.model || "").toLowerCase() === q ||
+        (r.sku || "").toLowerCase() === q ||
+        (r.asin || "").toLowerCase() === q ||
+        (r.fulfillment_center || "").toLowerCase() === q)
+        : ((r.model || "").toLowerCase().includes(q) ||
+        (r.sku || "").toLowerCase().includes(q) ||
+        (r.asin || "").toLowerCase().includes(q) ||
+        (r.fulfillment_center || "").toLowerCase().includes(q))
       )) return false;
       if (selectedCategories.length > 0 && !selectedCategories.includes(r.category)) return false;
       if (selectedStatuses.length   > 0 && !selectedStatuses.includes(r.listing_status)) return false;

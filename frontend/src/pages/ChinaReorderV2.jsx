@@ -177,15 +177,27 @@ export default function ChinaReorderV2() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    // EXACT-match-first search (operator 2026-08-25: searching "AM-C47"
+    // surfaced other rows). If the query exactly equals any row's model, SKU
+    // or ASIN, only exact rows show; substring stays as the fallback so
+    // partial typing still works.
+    const hasExact = q && rows.some(r =>
+      (r.model || "").toLowerCase() === q ||
+      (r.sku   || "").toLowerCase() === q ||
+      (r.asin  || "").toLowerCase() === q
+    );
+    const matchesQuery = (r, qq) => {
+      const m = (r.model || "").toLowerCase();
+      const k = (r.sku   || "").toLowerCase();
+      const a = (r.asin  || "").toLowerCase();
+      if (hasExact) return m === qq || k === qq || a === qq;
+      return m.includes(qq) || k.includes(qq) || a.includes(qq);
+    };
     return rows.filter(r => {
       if (selectedL0 && r.category_l0 !== selectedL0) return false;
       if (selectedAsinType && (r.asin_type || "") !== selectedAsinType) return false;
       if (selectedL1 && r.category_l1 !== selectedL1) return false;
-      if (q && !(
-        (r.model || "").toLowerCase().includes(q) ||
-        (r.sku   || "").toLowerCase().includes(q) ||
-        (r.asin  || "").toLowerCase().includes(q)
-      )) return false;
+      if (q && !matchesQuery(r, q)) return false;
       if (view === "reorder")       return (r.suggested_reorder || 0) > 0;
       if (view === "critical")      return (r.weeks_cover != null) && r.weeks_cover < 12;
       if (view === "moderate")      return (r.weeks_cover != null) && r.weeks_cover >= 12 && r.weeks_cover <= 16;

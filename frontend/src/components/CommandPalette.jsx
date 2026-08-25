@@ -41,9 +41,22 @@ export function CommandPalette({ rows = [], views = [], onPick }) {
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const paletteHasExact = q && rows.some(r =>
+      (r.sku || "").toLowerCase() === q ||
+      (r.model || "").toLowerCase() === q ||
+      (r.asin || "").toLowerCase() === q
+    );
     const skuMatches = rows
       .filter(r => {
         if (!q) return false;
+        // Exact-match-first, mirroring the table search boxes.
+        if (paletteHasExact) {
+          return (
+            (r.sku || "").toLowerCase() === q ||
+            (r.model || "").toLowerCase() === q ||
+            (r.asin || "").toLowerCase() === q
+          );
+        }
         return (
           (r.sku || "").toLowerCase().includes(q) ||
           (r.model || "").toLowerCase().includes(q) ||
