@@ -46,6 +46,8 @@ export default function ChinaReorderV2() {
   const [availableWeeks, setAvailableWeeks] = useState([]);
   const [selectedL0, setSelectedL0] = useState("");
   const [selectedAsinType, setSelectedAsinType] = useState("");
+  // Same velocity choice as Replenishment / FC Allocation / CB Replenishment.
+  const [velocityMode, setVelocityMode] = useState("max");
   const [selectedL1, setSelectedL1] = useState("");
 
   const [rows, setRows] = useState([]);
@@ -81,7 +83,7 @@ export default function ChinaReorderV2() {
     if (selectedBrands.length === 0) { setRows([]); return; }
     setLoading(true);
     setExpandedModel(null);
-    const params = new URLSearchParams({ months: selectedMonths });
+    const params = new URLSearchParams({ months: selectedMonths, velocity_mode: velocityMode });
     selectedBrands.forEach(b => params.append("brand", b));
     if (fromWeek) params.append("from_week", fromWeek);
     if (toWeek)   params.append("to_week",   toWeek);
@@ -98,7 +100,7 @@ export default function ChinaReorderV2() {
         }
       })
       .finally(() => setLoading(false));
-  }, [selectedBrands, selectedMonths, fromWeek, toWeek, syncNonce]);
+  }, [selectedBrands, selectedMonths, fromWeek, toWeek, syncNonce, velocityMode]);
 
   // Last CB SOH sync time for the toolbar chip.
   useEffect(() => {
@@ -230,6 +232,9 @@ export default function ChinaReorderV2() {
     // the two always describe the same period.
     { id: "window_gross_sales", accessorFn: r => Math.round(Number(r.window_gross_sales) || 0), header: "12 Wk Total Sales", size: 140, meta: { group: "sales", numeric: true, sortDescFirst: true } },
     { id: "avg_weekly_sales",  accessorKey: "avg_weekly_sales",  header: "Avg/Wk",     size: 80,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    { id: "window_velocity",   accessorKey: "window_velocity",   header: "Sel Wk",     size: 75,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    { id: "last_2_velocity",   accessorKey: "last_2_velocity",   header: "2wk",        size: 70,  meta: { group: "sales", numeric: true, sortDescFirst: true } },
+    { id: "velocity_basis",    accessorKey: "velocity_basis",    header: "Basis",      size: 75,  meta: { group: "sales" } },
     { id: "current_inventory", accessorKey: "current_inventory", header: "Inventory",       size: 95,  meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "open_order_qty",    accessorKey: "open_order_qty",    header: "PO Yet to Pickup",size: 110, meta: { group: "inv", numeric: true, sortDescFirst: true } },
     { id: "pipeline_qty",      accessorKey: "pipeline_qty",      header: "PO Picked Up",    size: 105, meta: { group: "inv", numeric: true, sortDescFirst: true } },
@@ -596,6 +601,15 @@ export default function ChinaReorderV2() {
                 title="From sku_master. Blank for brands with no ASIN Type set (currently WM + Tonor).">
                 <option value="">All ASIN Types</option>
                 {asinTypeOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="col-span-3">
+              <Label>Velocity basis</Label>
+              <select value={velocityMode} onChange={e => setVelocityMode(e.target.value)}
+                title="Higher-of: max(selected window, last-2wk of that window). Window only: ignore the 2-week burst."
+                className="w-full px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
+                <option value="max">Higher of window / 2wk</option>
+                <option value="window">Selected window only</option>
               </select>
             </div>
           </div>

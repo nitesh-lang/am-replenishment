@@ -14,6 +14,11 @@ def get_china_reorder(
     channel: str = Query("All", description="Sales channel filter"),
     from_week: Optional[int] = Query(default=None),
     to_week:   Optional[int] = Query(default=None),
+    velocity_mode: str = Query(
+        default="max",
+        description='"max" = max(selected window, last-2wk) [default]; '
+                    '"window" = selected window only',
+    ),
 ):
     # Run the per-brand pipeline for each selected brand and concatenate.
     combined: list = []
@@ -22,7 +27,7 @@ def get_china_reorder(
         if not b:
             continue
         try:
-            rows = china_reorder_logic(b, months, channel, from_week, to_week) or []
+            rows = china_reorder_logic(b, months, channel, from_week, to_week, velocity_mode) or []
             # Stamp the brand on each row so multi-brand results are distinguishable
             for r in rows:
                 r["brand"] = b

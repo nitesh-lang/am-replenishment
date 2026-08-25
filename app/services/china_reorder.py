@@ -170,6 +170,7 @@ def china_reorder_logic(
     channel: str = None,
     from_week=None,
     to_week=None,
+    velocity_mode: str = "max",
 ):
 
     # ============================================================
@@ -412,6 +413,28 @@ def china_reorder_logic(
         sales_agg["last_12w_sales"] / window_size
     )
 
+    # Velocity basis — same choice the Replenishment / FC Allocation / CB tabs
+    # got on 2026-08-25, now on Reorder too:
+    #   "max"    -> max(window average, last-2-week average)
+    #   "window" -> window average only
+    # last_2 is the trailing TWO weeks of the SELECTED window, so changing the
+    # window moves both terms together. window_velocity / last_2_velocity are
+    # kept as columns so the operator can see which one won.
+    _last2_weeks = sorted(selected_weeks)[-2:] if selected_weeks else []
+    _l2 = sales_df[sales_df["week_num"].isin(_last2_weeks)]
+    l2_agg = (
+        _l2.groupby("model", as_index=False)
+           .agg(units_last_2w=("units_sold", "sum"))
+    ) if len(_l2) else pd.DataFrame(columns=["model", "units_last_2w"])
+    sales_agg = sales_agg.merge(l2_agg, on="model", how="left")
+    sales_agg["units_last_2w"] = pd.to_numeric(
+        sales_agg["units_last_2w"], errors="coerce").fillna(0)
+    sales_agg["window_velocity"] = sales_agg["avg_weekly_sales"]
+    sales_agg["last_2_velocity"] = sales_agg["units_last_2w"] / max(len(_last2_weeks), 1)
+
+    from app.services.replenishment import _resolve_velocity
+    sales_agg = _resolve_velocity(sales_agg, velocity_mode, "avg_weekly_sales")
+
     # ============================================================
     # INVENTORY SPLIT
     # ============================================================
@@ -567,6 +590,18 @@ def china_reorder_logic(
     #   total SOH = current_inventory + pipeline_qty + open_order_qty
     # Those two are already deducted inside suggested_reorder; this column
     # simply shows how many weeks the full position covers.
+    # Shadow-seeded rows (models with no sales in the window) get every missing
+    # column zero-filled, which turns velocity_basis into the integer 0 and
+    # renders as "0" in the grid. Normalise to the two valid values.
+    df["velocity_basis"] = (
+        df.get("velocity_basis", "window").astype(str).str.strip()
+    )
+    df.loc[~df["velocity_basis"].isin(["window", "2wk"]), "velocity_basis"] = "window"
+    for _c in ("window_velocity", "last_2_velocity", "units_last_2w"):
+        if _c not in df.columns:
+            df[_c] = 0
+        df[_c] = pd.to_numeric(df[_c], errors="coerce").fillna(0)
+
     _avg = pd.to_numeric(df["avg_weekly_sales"], errors="coerce").fillna(0)
     _inv = pd.to_numeric(df["current_inventory"], errors="coerce").fillna(0)
     _pipe = pd.to_numeric(df["pipeline_qty"], errors="coerce").fillna(0)
