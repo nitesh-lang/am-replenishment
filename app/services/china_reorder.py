@@ -12,49 +12,6 @@ _DATA_INPUT = Path("data/input")
 # "pipeline"), so we inject the SP-API rows into inv_df with channel='1p'
 # for the affected brands. Other brands (WM, Nexlev) keep their existing
 # snapshot 1p rows unchanged.
-def _vendor_po_soh_for_brand(brand_clean: str) -> pd.DataFrame:
-    """model -> PO Picked up + Yet to Pickup, from the Amazon vendor PO feed.
-
-    Operator 2026-08-25: Reorder's suggested_reorder accounts for China open
-    orders and pipeline but NOT Amazon vendor POs, so a model with a large
-    outstanding PO looked under-stocked. This surfaces that as a column.
-
-    Only OPEN POs count — CLOSED ones are already delivered and sitting in
-    current_inventory, so including them would double-count.
-      Received quantity  -> picked up
-      Remaining quantity -> yet to pickup
-
-    Vendor POs exist only for the 1P accounts (Audio Array, Tonor); Nexlev and
-    White Mulberry have no vendor PO feed and get 0.
-    """
-    fname_map = {
-        "audio array": "vendor_po_audio_array.csv",
-        "tonor":       "vendor_po_tonor.csv",
-    }
-    fname = fname_map.get(brand_clean)
-    if not fname:
-        return pd.DataFrame(columns=["model", "po_picked_up", "po_yet_to_pickup"])
-    p = _DATA_INPUT / fname
-    if not p.exists():
-        return pd.DataFrame(columns=["model", "po_picked_up", "po_yet_to_pickup"])
-    try:
-        d = pd.read_csv(p, low_memory=False)
-        d.columns = d.columns.astype(str).str.strip()
-        if "PO Status" in d.columns:
-            d = d[d["PO Status"].astype(str).str.strip().str.upper() == "OPEN"]
-        if d.empty or "Model" not in d.columns:
-            return pd.DataFrame(columns=["model", "po_picked_up", "po_yet_to_pickup"])
-        d["model"] = d["Model"].astype(str).str.strip().str.upper()
-        d["po_picked_up"] = pd.to_numeric(d.get("Received quantity"), errors="coerce").fillna(0)
-        d["po_yet_to_pickup"] = pd.to_numeric(d.get("Remaining quantity"), errors="coerce").fillna(0)
-        return (
-            d.groupby("model", as_index=False)[["po_picked_up", "po_yet_to_pickup"]].sum()
-        )
-    except Exception as e:
-        print(f"⚠️ vendor PO load failed for {brand_clean}: {e}")
-        return pd.DataFrame(columns=["model", "po_picked_up", "po_yet_to_pickup"])
-
-
 def _vendor_soh_1p_for_brand(brand_clean: str) -> pd.DataFrame:
     fname_map = {
         "audio array": "vendor_soh_audio_array.csv",
@@ -602,28 +559,20 @@ def china_reorder_logic(
         df["target_stock"] - df["current_inventory"] - df["open_order_qty"] - df["pipeline_qty"]
     ).clip(lower=0)
 
-    # Amazon vendor PO position — DISPLAY ONLY, deliberately NOT subtracted
-    # from suggested_reorder above (operator: "dont touch anything else").
-    _po = _vendor_po_soh_for_brand(brand_clean)
-    if len(_po):
-        df = df.merge(_po, on="model", how="left")
-    for _c in ("po_picked_up", "po_yet_to_pickup"):
-        # Brands with no vendor PO feed never get the column from the merge,
-        # so seed it as a Series — df.get(col, 0) would return a bare int.
-        if _c not in df.columns:
-            df[_c] = 0
-        df[_c] = pd.to_numeric(df[_c], errors="coerce").fillna(0).round(0).astype(int)
-    df["po_total_soh"] = df["po_picked_up"] + df["po_yet_to_pickup"]
 
-    # Total cover — same maths as weeks_cover but counting the vendor-PO
-    # position (picked up + yet to pickup) as stock the operator can rely on.
-    # Operator 2026-08-25: they want the COVER, not the raw SOH number, so
-    # po_total_soh stays in the payload purely as the input to this and is
-    # not rendered as its own column.
+    # Total cover — same maths as weeks_cover but counting the China PO
+    # position as stock. "PO Picked Up" and "PO Yet to Pickup" are this tab's
+    # UI labels for pipeline_qty and open_order_qty respectively (see the
+    # column headers in ChinaReorderV2) — NOT the Amazon vendor PO feed.
+    #   total SOH = current_inventory + pipeline_qty + open_order_qty
+    # Those two are already deducted inside suggested_reorder; this column
+    # simply shows how many weeks the full position covers.
     _avg = pd.to_numeric(df["avg_weekly_sales"], errors="coerce").fillna(0)
     _inv = pd.to_numeric(df["current_inventory"], errors="coerce").fillna(0)
+    _pipe = pd.to_numeric(df["pipeline_qty"], errors="coerce").fillna(0)
+    _open = pd.to_numeric(df["open_order_qty"], errors="coerce").fillna(0)
     df["total_weeks_cover"] = (
-        (_inv + df["po_total_soh"]).div(_avg.where(_avg > 0)).fillna(0)
+        (_inv + _pipe + _open).div(_avg.where(_avg > 0)).fillna(0)
     )
 
     # ============================================================
