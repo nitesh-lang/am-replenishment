@@ -39,6 +39,11 @@ export default function Watchlist() {
   // types that are still present, which would make the chips vanish on click.
   const [asinTypeOpts, setAsinTypeOpts] = useState([]);
 
+  // Changing the account scope invalidates both the selection and the chip
+  // options (they were computed from the previous scope). Resetting the
+  // selection makes the next fetch unfiltered, which refreshes the options.
+  useEffect(() => { setAsinTypes([]); }, [accounts]);
+
   // Email draft — fetched on demand, then fully editable before the operator
   // copies it out. Nothing is ever sent from here.
   const [draft, setDraft] = useState(null);
