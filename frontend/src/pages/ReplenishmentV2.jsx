@@ -69,6 +69,9 @@ export default function ReplenishmentV2() {
   const [expandedSku, setExpandedSku] = useState(null);
   const [density, setDensity] = useState("cozy");
   const [selectedCategories, setSelectedCategories] = useState([]);
+  // Brand filter — Viomi pools Nexlev/Viomi + moved WM ASINs + Tonor, and
+  // FC Allocation also picks up AA SKUs that share the Viomi seller account.
+  const [selectedBrands, setSelectedBrands] = useState([]);
   const [selectedStatuses, setSelectedStatuses]     = useState([]);
 
   /* ─────────── week-save flow ─────────── */
@@ -134,6 +137,10 @@ export default function ReplenishmentV2() {
       })
       .catch(() => {});
   }, [account]);
+
+  // Brands are account-specific — a stale brand filter would blank the table
+  // after switching accounts (same trap as the Reorder category filter).
+  useEffect(() => { setSelectedBrands([]); }, [account]);
 
   useEffect(() => {
     setLoading(true);
@@ -253,6 +260,11 @@ export default function ReplenishmentV2() {
   /* ============================================================
      DERIVED
   ============================================================ */
+  const brands = useMemo(
+    () => [...new Set(rows.map(r => r.brand).filter(Boolean))].sort(),
+    [rows]
+  );
+
   const categories = useMemo(
     () => [...new Set(rows.map(r => r.category).filter(Boolean))].sort(),
     [rows]
@@ -282,6 +294,7 @@ export default function ReplenishmentV2() {
         (r.sku || "").toLowerCase().includes(q) ||
         (r.asin || "").toLowerCase().includes(q))
       )) return false;
+      if (selectedBrands.length > 0 && !selectedBrands.includes(r.brand)) return false;
       if (selectedCategories.length > 0 && !selectedCategories.includes(r.category)) return false;
       if (selectedStatuses.length   > 0 && !selectedStatuses.includes(r.listing_status)) return false;
       if (view === "critical")  return r.is_risky;
@@ -304,7 +317,7 @@ export default function ReplenishmentV2() {
       return 2;
     };
     return [...filtered].sort((x, y) => score(x) - score(y));
-  }, [rows, search, view, selectedCategories, selectedStatuses]);
+  }, [rows, search, view, selectedBrands, selectedCategories, selectedStatuses]);
 
   const views = useMemo(() => [
     { key: "all",       label: "All",            count: rows.length },
@@ -888,8 +901,35 @@ export default function ReplenishmentV2() {
           </div>
 
           {/* Category + Status chip filters */}
-          {(categories.length > 0 || listingStatuses.length > 0) && (
+          {(brands.length > 1 || categories.length > 0 || listingStatuses.length > 0) && (
             <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+              {brands.length > 1 && (
+                <>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Brand</span>
+                  {brands.map(b => {
+                    const on = selectedBrands.includes(b);
+                    return (
+                      <button
+                        key={b}
+                        onClick={() => setSelectedBrands(p => p.includes(b) ? p.filter(x => x !== b) : [...p, b])}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium rounded-md border transition-colors",
+                          on
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        {b}
+                      </button>
+                    );
+                  })}
+                  {selectedBrands.length > 0 && (
+                    <button onClick={() => setSelectedBrands([])} className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
+                  )}
+                  <span className="text-slate-200 mx-2">·</span>
+                </>
+              )}
+
               {categories.length > 0 && (
                 <>
                   <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Category</span>

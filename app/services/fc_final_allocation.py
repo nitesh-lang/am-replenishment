@@ -604,6 +604,8 @@ def calculate_final_allocation(
         # render one shared column definition across accounts.
         if "china_pipeline" not in fossil_final.columns:
             fossil_final["china_pipeline"] = 0
+        if "brand" not in fossil_final.columns:
+            fossil_final["brand"] = "Fossil"
 
         return fossil_final
 
@@ -1287,6 +1289,16 @@ def calculate_final_allocation(
     except Exception as e:
         print(f"⚠️ china_pipeline attach failed: {e}")
         final_df["china_pipeline"] = 0
+
+    # Canonical brand for the brand-level filter. FC Allocation had no brand
+    # field at all, yet Viomi's plan legitimately pools several brands (its
+    # SP-API files carry AA/Tonor SKUs because they share the seller account).
+    try:
+        from app.services.replenishment import attach_brand
+        final_df = attach_brand(final_df)
+    except Exception as e:
+        print(f"⚠️ brand attach failed: {e}")
+        final_df["brand"] = ""
 
     # CB EOL gate (AUDIO ARRAY only) — shared with Replenishment tab.
     # 2026-08-14 rule: solo-EOL models dropped; duplicate-model EOL

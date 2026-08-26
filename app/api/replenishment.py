@@ -97,6 +97,8 @@ def get_replenishment(
             # China in-transit from the snapshot's Pipeline channel — display
             # only, same number CB Replenishment shows.
             "china_pipeline": int(row.get("china_pipeline", 0) or 0),
+            # Canonical brand from sku_master — drives the brand filter.
+            "brand": str(row.get("brand", "") or ""),
             "amazon_inventory": int(row["amazon_inventory"]),
             "fba_inv": int(row["fba_inv"]),
             "inbound_inventory": int(row["inbound_inventory"]),

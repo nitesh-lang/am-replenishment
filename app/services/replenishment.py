@@ -49,6 +49,54 @@ _ACCOUNT_SALES_BRANDS: dict[str, list[str]] = {
 }
 
 
+def attach_brand(df, asin_col=None, sku_col=None):
+    """Add a canonical `brand` column from sku_master (ASIN primary, SKU
+    fallback).
+
+    Operator 2026-08-26 asked for a brand-level filter on Viomi, which now
+    pools Nexlev/Viomi + the moved WM ASINs + the whole Tonor brand. Deriving
+    from sku_master rather than each master's own Brand column keeps the value
+    identical on every tab — the Viomi master has no Brand column at all, and
+    FC Allocation had no brand field of any kind.
+    """
+    if df is None or not len(df):
+        return df
+    try:
+        m = get("sku_master.xlsx").copy()
+        m.columns = m.columns.astype(str).str.strip()
+        by_asin, by_sku = {}, {}
+        if "ASIN" in m.columns and "Brand" in m.columns:
+            by_asin = dict(zip(m["ASIN"].astype(str).str.strip().str.upper(),
+                               m["Brand"].astype(str).str.strip()))
+        skucol = "FBA SKU" if "FBA SKU" in m.columns else None
+        if skucol and "Brand" in m.columns:
+            by_sku = dict(zip(m[skucol].astype(str).str.strip().str.upper(),
+                              m["Brand"].astype(str).str.strip()))
+    except Exception as e:
+        print(f"⚠️ attach_brand: sku_master unavailable ({e})")
+        df["brand"] = ""
+        return df
+
+    pick = lambda names: next(
+        (c for c in df.columns if str(c).strip().lower() in names), None)
+    ac = asin_col or pick({"asin"})
+    sc = sku_col or pick({"sku", "fba sku", "merchant sku"})
+
+    def lookup(row):
+        if ac:
+            v = by_asin.get(str(row.get(ac, "")).strip().upper())
+            if v and v.lower() != "nan":
+                return v
+        if sc:
+            v = by_sku.get(str(row.get(sc, "")).strip().upper())
+            if v and v.lower() != "nan":
+                return v
+        return ""
+
+    df["brand"] = df.apply(lookup, axis=1)
+    return df
+
+
 _TONOR_BRAND = "tonor"
 
 
@@ -1092,6 +1140,9 @@ def calculate_replenishment(
     # China pipeline (in-transit from China) — display only, same number CB
     # Replenishment shows. Feeds no calculation here.
     df = attach_china_pipeline(df, inventory)
+    # Canonical brand for the brand-level filter (Viomi pools Nexlev/Viomi +
+    # moved WM ASINs + the Tonor brand).
+    df = attach_brand(df)
 
     df["is_risky"] = df["amazon_inventory"] < df["sales_velocity"]
     df["is_overstock"] = df["amazon_inventory"] > (df["sales_velocity"] * 8)
