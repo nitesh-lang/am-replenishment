@@ -841,6 +841,8 @@ export default function FCAllocationV2() {
                   weekly_velocity: r.weekly_velocity ?? null,
                   // Product-category snapshot for OrderPilot routing (max 128 chars)
                   category:        r.category ?? null,
+                  // Master Carton so the approver can round qty to whole cartons.
+                  master_carton:   (r.master_carton ?? null),
                   // Amazon FBA split keys — OrderPilot buckets by (fc, hazmat, ixd).
                   // hazmat_type values: "IXD Hazmat" | "IXD Non-Hazmat" |
                   //                     "Non-IXD Hazmat" | "Non-IXD Non Hazmat"

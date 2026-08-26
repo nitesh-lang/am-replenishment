@@ -609,6 +609,7 @@ function BatchDetail({ batch, onReload, isApprover, isEditor, currentEmail, onSe
               <Th align="right" title="Amazon FBA available at push time">Real AM Inv</Th>
               <Th align="right" title="AMPM / Cambium warehouse stock at push time">Mother Inv</Th>
               <Th align="right" title="Cambium vendor SOH at CB warehouse (AA only)">CB SOH</Th>
+              <Th align="right" title="Master Carton — units per carton. Round qty to a whole multiple of this.">MC</Th>
               <Th align="right" title="Sales velocity Naresh's calc used (units/wk)">Vel/wk</Th>
               <Th>Remarks</Th>
               <Th title="Approver's reason for changing qty — required whenever qty is edited so Naresh sees why">Approver Note</Th>
@@ -797,6 +798,30 @@ function LineRow({ line, canEdit, batchId, onReload, isApprover, trackSave, cove
       <Td align="right"><span style={{ color: "#6b7280" }}>{line.real_am_inv ?? "—"}</span></Td>
       <Td align="right"><span style={{ color: "#6b7280" }}>{line.mother_inv ?? "—"}</span></Td>
       <Td align="right"><span style={{ color: "#6b7280" }}>{line.cb_soh ?? "—"}</span></Td>
+      <Td align="right">
+        {(() => {
+          const mc = Number(line.master_carton) || 0;
+          if (!mc) return <span style={{ color: "#9ca3af" }}>—</span>;
+          const q = Number(line.qty) || 0;
+          // Whole cartons the current qty makes, and the remainder — lets the
+          // approver round to a clean carton multiple before approving.
+          const cartons = q / mc;
+          const exact = q > 0 && q % mc === 0;
+          return (
+            <span style={{ color: "#6b7280" }}>
+              {mc}
+              {q > 0 && (
+                <span style={{
+                  marginLeft: 4, fontSize: 10,
+                  color: exact ? "#059669" : "#b45309",
+                }}>
+                  ({cartons.toFixed(exact ? 0 : 1)} ctn)
+                </span>
+              )}
+            </span>
+          );
+        })()}
+      </Td>
       <Td align="right"><span style={{ color: "#6b7280" }}>{line.weekly_velocity != null ? Number(line.weekly_velocity).toFixed(1) : "—"}</span></Td>
       <Td>
         {canEdit && !deleted ? (
@@ -943,6 +968,7 @@ function AddRowForm({ batch, onDone }) {
         if (lookup.real_am_inv      != null) payload.real_am_inv      = lookup.real_am_inv;
         if (lookup.weekly_velocity  != null) payload.weekly_velocity  = lookup.weekly_velocity;
         if (lookup.cb_soh           != null) payload.cb_soh           = lookup.cb_soh;
+        if (lookup.master_carton    != null) payload.master_carton    = lookup.master_carton;
         if (lookup.hazmat           != null) payload.hazmat           = lookup.hazmat;
         if (lookup.ixd_flag         != null) payload.ixd_flag         = lookup.ixd_flag;
       }
@@ -1010,6 +1036,7 @@ function AddRowForm({ batch, onDone }) {
               <PreviewChip label="Real AM Inv" value={lookup.real_am_inv} />
               <PreviewChip label="Vel/wk" value={lookup.weekly_velocity != null ? Number(lookup.weekly_velocity).toFixed(1) : null} />
               {lookup.cb_soh != null && <PreviewChip label="CB SOH" value={lookup.cb_soh} />}
+              {lookup.master_carton != null && <PreviewChip label="MC" value={lookup.master_carton} />}
               {lookup.ixd_flag && <PreviewChip label="IXD" value={lookup.ixd_flag} />}
               {lookup.hazmat && <PreviewChip label="HZ" value="Hazmat" />}
               {lookup.is_eol && <PreviewChip label="EOL" value="yes" tone="#dc2626" />}

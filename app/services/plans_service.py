@@ -123,6 +123,8 @@ ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS weekly_velocity   NUMERIC(10,2
 -- (sourced from CB Replenishment.final_cb_qty per model). NULL on
 -- accounts without 1P vendor inventory so the approver column renders "—".
 ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS cb_soh            INT;
+-- Master Carton so the approver can round qty to whole cartons (2026-08-26).
+ALTER TABLE plan_lines   ADD COLUMN IF NOT EXISTS master_carton     INT;
 -- Product-category label snapshot at propose time. Included per-line
 -- in the OrderPilot push payload so their seller_account routing can
 -- deterministically match (e.g. WM "desks" go to viomi, everything
@@ -385,7 +387,7 @@ def propose_plan(
                     INSERT INTO plan_lines
                         (batch_id, sku, model, asin, destination_fc,
                          ship_from_wh, qty, original_send_qty, added_by,
-                         real_am_inv, mother_inv, weekly_velocity, cb_soh,
+                         real_am_inv, mother_inv, weekly_velocity, cb_soh, master_carton,
                          hazmat, ixd_flag, notes, category)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (batch_id, sku, destination_fc) DO NOTHING
@@ -401,6 +403,7 @@ def propose_plan(
                         _int_or_none(r.get("mother_inv")),
                         _float_or_none(r.get("weekly_velocity")),
                         _int_or_none(r.get("cb_soh")),
+                        _int_or_none(r.get("master_carton")),
                         hazmat, ixd_flag,
                         notes, category,
                     ),
@@ -752,6 +755,7 @@ def lookup_sku_context(account: str, sku: str) -> dict:
         "real_am_inv":       _pyint(r.get("real_am_inv_available")),
         "weekly_velocity":   _pyfloat(r.get("sales_velocity") or r.get("weekly_velocity")),
         "cb_soh":            _pyint(r.get("cb_soh")),
+        "master_carton":     _pyint(r.get("master_carton") or r.get("Master Carton")),
         "hazmat":            bool(hazmat),
         "ixd_flag":          ixd_flag,
         "is_eol":            bool(r.get("is_eol", False)),
@@ -774,6 +778,7 @@ def add_line(
     real_am_inv: int | None = None,
     weekly_velocity: float | None = None,
     cb_soh: int | None = None,
+    master_carton: int | None = None,
     hazmat: bool | None = None,
     ixd_flag: str | None = None,
     category: str | None = None,
@@ -814,6 +819,7 @@ def add_line(
                             if real_am_inv is None:     real_am_inv = ctx.get("real_am_inv")
                             if weekly_velocity is None: weekly_velocity = ctx.get("weekly_velocity")
                             if cb_soh is None:          cb_soh = ctx.get("cb_soh")
+                            if master_carton is None:   master_carton = ctx.get("master_carton")
                             if hazmat is None:          hazmat = ctx.get("hazmat")
                             if ixd_flag is None:        ixd_flag = ctx.get("ixd_flag")
                             if category is None:        category = ctx.get("category")
@@ -833,6 +839,7 @@ def add_line(
             am_inv  = _int_or_none(real_am_inv)
             wk_vel  = _float_or_none(weekly_velocity)
             cb_val  = _int_or_none(cb_soh)
+            mc_val  = _int_or_none(master_carton)
             haz_val = None if hazmat is None else bool(hazmat)
             ixd_val = (str(ixd_flag).strip().upper() or None) if ixd_flag else None
             if ixd_val:
@@ -892,15 +899,15 @@ def add_line(
                     INSERT INTO plan_lines
                         (batch_id, sku, model, asin, destination_fc,
                          ship_from_wh, qty, original_send_qty, added_by, notes,
-                         real_am_inv, mother_inv, weekly_velocity, cb_soh,
+                         real_am_inv, mother_inv, weekly_velocity, cb_soh, master_carton,
                          hazmat, ixd_flag, category)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, %s,
-                            %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s,
                             %s, %s, %s)
                     RETURNING *
                     """,
                     (batch_id, sku, model, asin, fc, ship_from_wh, qty, actor, notes,
-                     am_inv, m_inv, wk_vel, cb_val,
+                     am_inv, m_inv, wk_vel, cb_val, mc_val,
                      haz_val, ixd_val, cat_val),
                 )
                 out = dict(cur.fetchone())
@@ -1066,13 +1073,13 @@ def clone_batch(source_batch_id: str, actor: str, as_draft: bool = False,
                 INSERT INTO plan_lines
                     (batch_id, sku, model, asin, destination_fc,
                      ship_from_wh, qty, original_send_qty, added_by,
-                     real_am_inv, mother_inv, weekly_velocity, cb_soh,
+                     real_am_inv, mother_inv, weekly_velocity, cb_soh, master_carton,
                      hazmat, ixd_flag, notes, approver_note,
                      exclude_from_push, category)
                 SELECT
                     %s, sku, model, asin, destination_fc,
                     ship_from_wh, qty, original_send_qty, %s,
-                    real_am_inv, mother_inv, weekly_velocity, cb_soh,
+                    real_am_inv, mother_inv, weekly_velocity, cb_soh, master_carton,
                     hazmat, ixd_flag, notes, approver_note,
                     exclude_from_push, category
                 FROM plan_lines
