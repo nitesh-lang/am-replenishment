@@ -72,6 +72,7 @@ export default function ReplenishmentV2() {
   // Brand filter — Viomi pools Nexlev/Viomi + moved WM ASINs + Tonor, and
   // FC Allocation also picks up AA SKUs that share the Viomi seller account.
   const [selectedBrands, setSelectedBrands] = useState([]);
+  const [selectedAsinTypes, setSelectedAsinTypes] = useState([]);
   const [selectedStatuses, setSelectedStatuses]     = useState([]);
 
   /* ─────────── week-save flow ─────────── */
@@ -140,7 +141,7 @@ export default function ReplenishmentV2() {
 
   // Brands are account-specific — a stale brand filter would blank the table
   // after switching accounts (same trap as the Reorder category filter).
-  useEffect(() => { setSelectedBrands([]); }, [account]);
+  useEffect(() => { setSelectedBrands([]); setSelectedAsinTypes([]); }, [account]);
 
   useEffect(() => {
     setLoading(true);
@@ -260,6 +261,10 @@ export default function ReplenishmentV2() {
   /* ============================================================
      DERIVED
   ============================================================ */
+  const asinTypes = useMemo(
+    () => [...new Set(rows.map(r => r.asin_type).filter(Boolean))].sort(),
+    [rows]
+  );
   const brands = useMemo(
     () => [...new Set(rows.map(r => r.brand).filter(Boolean))].sort(),
     [rows]
@@ -295,6 +300,7 @@ export default function ReplenishmentV2() {
         (r.asin || "").toLowerCase().includes(q))
       )) return false;
       if (selectedBrands.length > 0 && !selectedBrands.includes(r.brand)) return false;
+      if (selectedAsinTypes.length > 0 && !selectedAsinTypes.includes(r.asin_type)) return false;
       if (selectedCategories.length > 0 && !selectedCategories.includes(r.category)) return false;
       if (selectedStatuses.length   > 0 && !selectedStatuses.includes(r.listing_status)) return false;
       if (view === "critical")  return r.is_risky;
@@ -317,7 +323,7 @@ export default function ReplenishmentV2() {
       return 2;
     };
     return [...filtered].sort((x, y) => score(x) - score(y));
-  }, [rows, search, view, selectedBrands, selectedCategories, selectedStatuses]);
+  }, [rows, search, view, selectedBrands, selectedAsinTypes, selectedCategories, selectedStatuses]);
 
   const views = useMemo(() => [
     { key: "all",       label: "All",            count: rows.length },
@@ -903,8 +909,34 @@ export default function ReplenishmentV2() {
           </div>
 
           {/* Category + Status chip filters */}
-          {(brands.length > 1 || categories.length > 0 || listingStatuses.length > 0) && (
+          {(asinTypes.length > 0 || brands.length > 1 || categories.length > 0 || listingStatuses.length > 0) && (
             <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+              {asinTypes.length > 0 && (
+                <>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">ASIN Type</span>
+                  {asinTypes.map(t => {
+                    const on = selectedAsinTypes.includes(t);
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => setSelectedAsinTypes(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t])}
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-medium rounded-md border transition-colors",
+                          on ? "bg-sky-600 text-white border-sky-600"
+                             : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                        )}
+                      >
+                        {t}
+                      </button>
+                    );
+                  })}
+                  {selectedAsinTypes.length > 0 && (
+                    <button onClick={() => setSelectedAsinTypes([])} className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
+                  )}
+                  <span className="text-slate-200 mx-2">·</span>
+                </>
+              )}
+
               {brands.length > 1 && (
                 <>
                   <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Brand</span>

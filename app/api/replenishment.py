@@ -99,6 +99,7 @@ def get_replenishment(
             "china_pipeline": int(row.get("china_pipeline", 0) or 0),
             # Canonical brand from sku_master — drives the brand filter.
             "brand": str(row.get("brand", "") or ""),
+            "asin_type": str(row.get("asin_type", "") or ""),
             "amazon_inventory": int(row["amazon_inventory"]),
             "fba_inv": int(row["fba_inv"]),
             "inbound_inventory": int(row["inbound_inventory"]),

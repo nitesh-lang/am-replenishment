@@ -606,6 +606,11 @@ def calculate_final_allocation(
             fossil_final["china_pipeline"] = 0
         if "brand" not in fossil_final.columns:
             fossil_final["brand"] = "Fossil"
+        # Fossil has no ASIN Type in sku_master — emit the column empty so the
+        # frontend filter simply doesn't render for this account ("except
+        # fossil", operator 2026-08-26) instead of erroring on a missing field.
+        if "asin_type" not in fossil_final.columns:
+            fossil_final["asin_type"] = ""
 
         return fossil_final
 

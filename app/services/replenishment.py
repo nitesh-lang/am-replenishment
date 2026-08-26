@@ -65,16 +65,23 @@ def attach_brand(df, asin_col=None, sku_col=None):
         m = get("sku_master.xlsx").copy()
         m.columns = m.columns.astype(str).str.strip()
         by_asin, by_sku = {}, {}
+        at_by_asin, at_by_sku = {}, {}
+        _atcol = next((c for c in m.columns if str(c).strip().lower() == "asin type"), None)
         if "ASIN" in m.columns and "Brand" in m.columns:
-            by_asin = dict(zip(m["ASIN"].astype(str).str.strip().str.upper(),
-                               m["Brand"].astype(str).str.strip()))
+            _a = m["ASIN"].astype(str).str.strip().str.upper()
+            by_asin = dict(zip(_a, m["Brand"].astype(str).str.strip()))
+            if _atcol:
+                at_by_asin = dict(zip(_a, m[_atcol].fillna("").astype(str).str.strip()))
         skucol = "FBA SKU" if "FBA SKU" in m.columns else None
         if skucol and "Brand" in m.columns:
-            by_sku = dict(zip(m[skucol].astype(str).str.strip().str.upper(),
-                              m["Brand"].astype(str).str.strip()))
+            _s = m[skucol].astype(str).str.strip().str.upper()
+            by_sku = dict(zip(_s, m["Brand"].astype(str).str.strip()))
+            if _atcol:
+                at_by_sku = dict(zip(_s, m[_atcol].fillna("").astype(str).str.strip()))
     except Exception as e:
         print(f"⚠️ attach_brand: sku_master unavailable ({e})")
         df["brand"] = ""
+        df["asin_type"] = ""
         return df
 
     pick = lambda names: next(
@@ -94,6 +101,22 @@ def attach_brand(df, asin_col=None, sku_col=None):
         return ""
 
     df["brand"] = df.apply(lookup, axis=1)
+
+    # ASIN Type rides along on the same sku_master read — operator wants the
+    # Reorder tab's ASIN Type filter on Replenishment + FC Allocation too
+    # (2026-08-26). Blank where sku_master has no value; Fossil has none.
+    def lookup_at(row):
+        if ac:
+            v = at_by_asin.get(str(row.get(ac, "")).strip().upper())
+            if v and v.lower() != "nan":
+                return v
+        if sc:
+            v = at_by_sku.get(str(row.get(sc, "")).strip().upper())
+            if v and v.lower() != "nan":
+                return v
+        return ""
+
+    df["asin_type"] = df.apply(lookup_at, axis=1)
     return df
 
 
