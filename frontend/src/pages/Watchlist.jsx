@@ -234,6 +234,14 @@ export default function Watchlist() {
                 {r.asin_type && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{r.asin_type}</span>
                 )}
+                {/* Deep 1P cover inverts the recommendation, so it has to be
+                    visible at a glance and not buried in the action text. */}
+                {r.cb_deep && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900 border border-amber-300"
+                        title="Amazon's own 1P stock already covers the replenishment horizon — do not buy on this row's evidence.">
+                    HOLD · 1P covered
+                  </span>
+                )}
                 <span className="ml-auto text-xs font-semibold text-slate-700 tabular-nums">
                   ~{(r.units_at_stake || 0).toLocaleString()} units at stake
                 </span>
@@ -245,12 +253,27 @@ export default function Watchlist() {
                 <span>vel {r.velocity}/wk ({r.velocity_basis})</span>
                 <span>Amazon {r.amazon_available}{r.weeks_cover != null && ` · ${r.weeks_cover}wk cover`}</span>
                 <span>Mother WH {r.mother_wh}</span>
-                {/* CB SOH exists only for Audio Array and Tonor. null means
-                    "no vendor warehouse", so the chip is hidden rather than
-                    shown as 0 — a 0 would read as "we checked, it's empty". */}
+                {/* CB SOH exists only for Audio Array and Tonor (the two 1P
+                    vendor brands). null = no vendor channel at all, so the
+                    chip is hidden — 0 and "not applicable" are different
+                    facts and 0 is the alarming one, not the neutral one. */}
                 {r.cb_soh != null && (
-                  <span className="px-1.5 rounded bg-emerald-50 text-emerald-700 font-medium">
-                    CB SOH {r.cb_soh}
+                  <span
+                    title={
+                      r.cb_channel === "dark"
+                        ? "Amazon's 1P warehouse holds 0 sellable units of this model — the ASIN is unbuyable on both channels."
+                        : `Amazon's 1P warehouse holds ${r.cb_soh} sellable units`
+                          + (r.cb_soh_weeks ? ` (~${r.cb_soh_weeks} wks at this run rate)` : "")
+                          + " — the listing stayed buyable via the 1P offer, so lost units are an upper bound. This stock is Amazon's; it cannot be sent into FBA."
+                    }
+                    className={cn("px-1.5 rounded font-medium cursor-help",
+                      r.cb_channel === "dark"
+                        ? "bg-red-100 text-red-800"
+                        : "bg-emerald-50 text-emerald-700")}
+                  >
+                    1P (CB) {r.cb_soh}
+                    {r.cb_channel === "dark" ? " · dark" :
+                      r.cb_soh_weeks ? ` · ${r.cb_soh_weeks}wk` : ""}
                   </span>
                 )}
                 <span>China pipeline {r.china_pipeline}</span>

@@ -174,6 +174,12 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
     # Weeks of cover currently at Amazon, on the velocity actually in use.
     cover = (am_avail / vel) if vel > 0 else None
 
+    # 1P channel state — see the long note further down for what CB SOH is.
+    # Must be computed BEFORE `base`, which publishes both fields.
+    cb_cover = (cb_soh / vel) if (cb_soh and vel > 0) else None
+    cb_live  = cb_soh is not None and cb_soh > 0
+    cb_dark  = cb_soh is not None and cb_soh <= 0
+
     base = {
         "account":        account,
         "brand":          _s(r, "brand"),
@@ -189,6 +195,16 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
         "weeks_cover":    (round(cover, 1) if cover is not None else None),
         "mother_wh":      int(ampm),
         "cb_soh":         cb_soh,
+        # Weeks of cover the 1P side holds at this model's 3P run rate — a
+        # rough read across two channels, but enough to tell "1P was serving
+        # the customer" from "both channels dark".
+        "cb_soh_weeks":   (round(cb_cover, 1) if cb_cover is not None else None),
+        # "live" | "dark" | None (brand has no vendor channel at all)
+        "cb_channel":     ("live" if cb_live else "dark" if cb_dark else None),
+        # True when 1P cover alone exceeds the replenishment horizon — the
+        # "don't buy this" marker the UI leads with.
+        "cb_deep":        bool(cb_live and cb_cover is not None
+                               and cb_cover >= replenish_weeks),
         "china_pipeline": int(pipeline),
         "replen_qty":     int(replen),
         "warehouse_shortfall": int(shortfall),
@@ -198,16 +214,53 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
         "momentum_flag":  flag,
     }
 
-    # CB warehouse stock is NOT automatic relief — it is committed to the 1P
-    # vendor channel and moving it to 3P is a commercial decision, not a
-    # replenishment one. So it never reclassifies a signal; it is surfaced as
-    # an extra option so Naresh can weigh it. Only mentioned when it is worth
-    # weighing (clears the same materiality bar as the signal itself).
+    # ---- What CB SOH actually is, and how it must be read -----------------
+    # CB SOH = sellableOnHandInventoryUnits from SP-API's
+    # GET_VENDOR_INVENTORY_REPORT (scripts/sp_vendor_soh_pull.py), i.e. stock
+    # AMAZON ALREADY OWNS and holds in its 1P retail warehouses. It is NOT
+    # Cambium warehouse stock and CANNOT be shipped into FBA to cover a 3P
+    # gap — it has already been sold to Amazon under the vendor relationship.
+    #
+    # What it DOES tell us is which channel was serving the customer while the
+    # 3P side ran thin, and that changes the read on a lost-sales signal:
+    #   * 1P holding cover  -> the ASIN stayed buyable on Amazon.in, so
+    #     lost_units_3m (computed from the 3P/AMPM side alone) is an UPPER
+    #     BOUND on truly lost demand, not a measured loss.
+    #   * 1P at zero        -> the ASIN went dark on BOTH channels. That is
+    #     the genuinely urgent case and it is currently invisible on this page.
+    #
+    # We annotate rather than discount the number: we hold a CURRENT 1P
+    # snapshot, not 1P history, so there is no honest way to net it off the
+    # last 13 weeks. Stating an upper bound is real; a computed discount
+    # would be invented.
+    # When the 1P side is holding DEEP cover, "raise a China PO now" is not
+    # just imprecise, it is the wrong instruction — AM-W45 showed 387 "lost"
+    # units against 355 units sitting in Amazon's 1P warehouse, 71 weeks of
+    # cover at the 3P run rate. Buying more of that is the expensive mistake
+    # this page exists to prevent, so the ACTION changes, not just the note.
+    cb_deep = (cb_live and cb_cover is not None and cb_cover >= replenish_weeks)
+
     cb_hint = ""
-    if cb_soh and _material(cb_soh, vel):
-        cb_hint = (f" CB warehouse also holds {cb_soh} units of this model — "
-                   f"worth checking whether part of that can cover the gap "
-                   f"before the China stock lands.")
+    if cb_deep:
+        cb_hint = (f" HOLD: 1P (CB) holds {cb_soh} sellable units, ~{cb_cover:.0f} "
+                   f"weeks at this run rate — the demand is being served on the "
+                   f"1P offer, so this is a channel shift, not lost demand. Do "
+                   f"not raise a China PO on this evidence; if we want the 3P "
+                   f"offer live, the question is a 1P->3P commercial decision, "
+                   f"not replenishment.")
+    elif cb_live and cb_cover is not None and cb_cover >= 2:
+        cb_hint = (f" Note: 1P (CB) held {cb_soh} sellable units "
+                   f"(~{cb_cover:.0f} wks) at the last vendor snapshot, so the "
+                   f"listing stayed buyable — treat the lost-units figure as an "
+                   f"upper bound and sanity-check 1P offtake before sizing an "
+                   f"urgent PO.")
+    elif cb_live:
+        cb_hint = (f" 1P (CB) held only {cb_soh} sellable units at the last "
+                   f"vendor snapshot — thin on that side too.")
+    elif cb_dark:
+        cb_hint = (" 1P (CB) is at ZERO sellable as well — the ASIN went dark "
+                   "on both channels, so this is lost demand, not a channel "
+                   "shift. Treat as urgent.")
 
     # ---- 1/2. Lost sales, split by whether relief is already coming --------
     # Only counts as lost-sales if we actually have evidence of demand AND of
@@ -260,11 +313,13 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
                     f"{int(ampm)} left at AMPM and no China pipeline."
                 ),
                 "action": (
-                    "Raise a China PO now — this is repeat lost revenue, not a one-off. "
-                    + (f"Mother WH is {int(shortfall)} short of the full ask this week."
-                       if shortfall > 0 else
-                       "Ship what AMPM holds this week while the PO runs.")
-                    + cb_hint
+                    cb_hint.strip() if cb_deep else (
+                        "Raise a China PO now — this is repeat lost revenue, not a one-off. "
+                        + (f"Mother WH is {int(shortfall)} short of the full ask this week."
+                           if shortfall > 0 else
+                           "Ship what AMPM holds this week while the PO runs.")
+                        + cb_hint
+                    )
                 ),
             })
 
@@ -400,6 +455,11 @@ def build_watchlist(accounts: list[str] | None = None,
 
     rows.sort(key=lambda x: (
         _SIGNAL_RANK.get(x["signal"], 99),
+        # Within a signal, a model that is ALSO dark on the 1P side outranks
+        # one whose 1P offer stayed live — the first is genuinely unbuyable,
+        # the second only shifted channel. Rows with no vendor channel at all
+        # (cb_channel None) sort between the two: unknown, not good news.
+        {"dark": 0, None: 1, "live": 2}.get(x.get("cb_channel"), 1),
         -(x.get("units_at_stake") or 0),
         -(x.get("velocity") or 0),
     ))
@@ -523,8 +583,13 @@ def build_email_draft(watchlist: dict, week_tag: str | None = None,
             L.append(f"    {g['headline']}")
             if g.get("cb_soh") is not None:
                 _n = g["cb_soh"]
-                L.append(f"    CB SOH: {_n} unit{'' if _n == 1 else 's'} "
-                         f"in the CB warehouse")
+                _w = g.get("cb_soh_weeks")
+                if _n > 0:
+                    L.append(f"    1P (CB) SOH: {_n} sellable"
+                             + (f" (~{_w:g} wks cover)" if _w else "")
+                             + " — listing stayed buyable on the 1P offer")
+                else:
+                    L.append("    1P (CB) SOH: 0 — dark on the 1P side too")
             L.append(f"    Why   : {g['why']}")
             L.append(f"    Action: {g['action']}")
             L.append("")
