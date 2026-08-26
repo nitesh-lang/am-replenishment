@@ -39,10 +39,59 @@ AA_WM_MASTER_FILE = DATA_DIR / "Audio Array & WM Replenishment" / "AA & WM Reple
 # the downstream master join keeps only SKUs present in the Viomi master.
 _ACCOUNT_SALES_BRANDS: dict[str, list[str]] = {
     "NEXLEV":         ["Nexlev"],
-    "VIOMI":          ["Nexlev", "White Mulberry"],
-    "AUDIO ARRAY":    ["Audio Array", "Tonor"],
+    # Viomi carries the WM ASINs moved on 2026-08-20 and the whole Tonor brand
+    # moved on 2026-08-26; both keep their original brand tag in the sales
+    # snapshot. The master join still limits rows to what Viomi's master holds.
+    "VIOMI":          ["Nexlev", "White Mulberry", "Tonor"],
+    # Tonor removed 2026-08-26 — it plans under Viomi now.
+    "AUDIO ARRAY":    ["Audio Array"],
     "WHITE MULBERRY": ["White Mulberry"],
 }
+
+
+_TONOR_BRAND = "tonor"
+
+
+def _aa_sheet():
+    return get_excel_sheet(
+        "Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")
+
+
+def _tonor_mask(df):
+    """Rows whose Brand column says Tonor. Returns an all-False mask when the
+    frame has no Brand column, so callers degrade to a no-op rather than
+    dropping everything."""
+    col = next((c for c in df.columns if str(c).strip().lower() == "brand"), None)
+    if col is None:
+        return pd.Series(False, index=df.index)
+    return df[col].astype(str).str.strip().str.lower() == _TONOR_BRAND
+
+
+def _tonor_rows_from_aa():
+    """Tonor rows lifted out of the AA sheet, for planning under Viomi."""
+    try:
+        aa = _aa_sheet().copy()
+        aa.columns = aa.columns.astype(str).str.strip()
+        rows = aa[_tonor_mask(aa)]
+        if len(rows):
+            print(f"ℹ️ Viomi: +{len(rows)} Tonor row(s) from the AA sheet")
+        return rows
+    except Exception as e:
+        print(f"⚠️ Tonor lift from AA sheet failed ({e}); Viomi keeps its own rows only")
+        return pd.DataFrame()
+
+
+def _drop_tonor(df, label: str = ""):
+    """Remove Tonor rows from an Audio Array frame."""
+    if df is None or not len(df):
+        return df
+    df = df.copy()
+    df.columns = df.columns.astype(str).str.strip()
+    m = _tonor_mask(df)
+    n = int(m.sum())
+    if n:
+        print(f"ℹ️ AA{(' ' + label) if label else ''}: dropped {n} Tonor row(s) — now planned under Viomi")
+    return df[~m]
 
 
 def moved_to_viomi_asins() -> set[str]:
@@ -111,9 +160,21 @@ def load_data(account: str):
 
     elif account.upper() == "VIOMI":
         master = get("replenishment_master_viomi.xlsx")
+        # Tonor -> Viomi (operator 2026-08-26): Tonor is executed from the
+        # Viomi account for Replenishment, same shape as the WM->Viomi move.
+        # Tonor rows live in the AA sheet and are identified by its Brand
+        # column ("Audio Array" 262 / "Tonor" 31), so no ASIN list is needed.
+        # Schemas differ but the service reads master by name with .get()
+        # fallbacks, and SKU/ASIN/Model/Category/Status/Master Carton exist in
+        # both; AMPM comes from the snapshot, not master.
+        _ton = _tonor_rows_from_aa()
+        if len(_ton):
+            master = pd.concat([master, _ton], ignore_index=True)
 
     elif account.upper() == "AUDIO ARRAY":
         master = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "AA")
+        # Tonor now plans under Viomi — drop it here so it isn't planned twice.
+        master = _drop_tonor(master, "AA replenishment master")
 
     elif account.upper() == "WHITE MULBERRY":
         master = get_excel_sheet("Audio Array & WM Replenishment/AA & WM Replenishment.xlsx", "WM")
@@ -166,8 +227,12 @@ def load_data(account: str):
         # Without this union they'd show Mother WH = 0 and replenishment
         # would be computed against stock the warehouse actually holds.
         # Operator directive: "use WM snapshot file for this".
+        # + Inventory_snapshot_tonor.xlsx for the Tonor brand moved on
+        # 2026-08-26 — its mother-warehouse stock lives only in that file.
         inventory = pd.concat(
-            [get("inventory_snapshot_nexlev.xlsx"), get("Inventory_snapshot_WM.xlsx")],
+            [get("inventory_snapshot_nexlev.xlsx"),
+             get("Inventory_snapshot_WM.xlsx"),
+             get("Inventory_snapshot_tonor.xlsx")],
             ignore_index=True,
         )
 
