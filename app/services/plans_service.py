@@ -48,6 +48,9 @@ from app.services.db import get_conn
 # expensive (Excel + DB overlay); cache for 5 min so a burst of GETs
 # doesn't hammer it. Cleared naturally on process restart.
 _CB_SOH_CACHE: dict = {"map": None, "ts": 0.0}
+# Tonor moved to the Viomi account 2026-08-26 and brought its 1P vendor stock,
+# so Viomi batches need their own CB SOH map keyed on the Tonor brand.
+_CB_SOH_CACHE_TONOR: dict = {"map": None, "ts": 0.0}
 _CB_SOH_TTL_SEC = 300
 
 
@@ -73,6 +76,24 @@ def _actor_is_approver_of(approver_email: str | None, actor: str) -> bool:
     if not allowed:
         return True  # any plans-approver can act
     return (actor or "").strip().lower() in allowed
+
+
+def _cached_cb_soh_map_tonor():
+    """CB SOH map for the Tonor brand, cached like the AA one. Used by the
+    get_batch read-path backfill for VIOMI batches."""
+    now = time.time()
+    if (_CB_SOH_CACHE_TONOR["map"] is not None
+            and (now - _CB_SOH_CACHE_TONOR["ts"]) < _CB_SOH_TTL_SEC):
+        return _CB_SOH_CACHE_TONOR["map"]
+    try:
+        from app.services.replenishment import _cb_soh_by_model
+        m = _cb_soh_by_model("Tonor") or {}
+    except Exception as e:
+        print(f"⚠️ Tonor CB SOH cache refresh failed: {e}")
+        m = _CB_SOH_CACHE_TONOR["map"] or {}   # keep stale value on failure
+    _CB_SOH_CACHE_TONOR["map"] = m
+    _CB_SOH_CACHE_TONOR["ts"] = now
+    return m
 
 
 def _cached_cb_soh_map():
@@ -473,15 +494,23 @@ def get_batch(batch_id: str, include_deleted: bool = True) -> dict:
     # CB Rep and fill in-memory only — don't mutate the snapshot, since
     # historical batches should reflect what Naresh saw at propose time.
     # New batches persist cb_soh at propose so this is a no-op for them.
-    if str(b.get("account", "")).strip().lower() in ("audio array",) \
-            and any(l.get("cb_soh") is None for l in lines):
-        cb_map = _cached_cb_soh_map()
-        if cb_map:
-            for l in lines:
-                if l.get("cb_soh") is None and l.get("model"):
-                    key = str(l["model"]).split("(")[0].strip().lower()
-                    if key in cb_map:
-                        l["cb_soh"] = int(cb_map[key])
+    # AA uses the Audio Array map; VIOMI uses the Tonor map — Tonor moved to
+    # that account on 2026-08-26 and cb_soh is a SNAPSHOT taken at propose
+    # time, so the already-proposed Viomi batch rendered CB SOH blank
+    # (operator P0). Backfilling on READ means existing batches show the
+    # value without anyone re-proposing.
+    _acct = str(b.get("account", "")).strip().lower()
+    _cb_map = None
+    if _acct in ("audio array",):
+        _cb_map = _cached_cb_soh_map()
+    elif _acct == "viomi":
+        _cb_map = _cached_cb_soh_map_tonor()
+    if _cb_map and any(l.get("cb_soh") is None for l in lines):
+        for l in lines:
+            if l.get("cb_soh") is None and l.get("model"):
+                key = str(l["model"]).split("(")[0].strip().lower()
+                if key in _cb_map:
+                    l["cb_soh"] = int(_cb_map[key])
     b["lines"] = lines
     b["events"] = events
     b["summary"] = _summarize(lines)

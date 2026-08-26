@@ -70,6 +70,24 @@ _SIGNAL_RANK = {
 }
 
 
+def _s(row, key) -> str:
+    """String field, NaN-safe. `row.get(k) or ""` is NOT enough: pandas puts
+    float('nan') in missing object cells and NaN is TRUTHY in Python, so the
+    nan survives into the response and FastAPI raises
+    "Out of range float values are not JSON compliant: nan".
+    """
+    v = row.get(key)
+    if v is None:
+        return ""
+    try:
+        if isinstance(v, float) and pd.isna(v):
+            return ""
+    except Exception:
+        pass
+    sv = str(v).strip()
+    return "" if sv.lower() in ("nan", "none", "<na>") else sv
+
+
 def _num(row, key, default=0.0) -> float:
     try:
         v = row.get(key, default)
@@ -98,7 +116,7 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
     raise more than one (e.g. lost sales AND accelerating)."""
     out: list[dict] = []
 
-    asin_type = str(r.get("asin_type") or "").strip()
+    asin_type = _s(r, "asin_type")
     is_eol = asin_type.lower() == "eol" or bool(r.get("is_eol"))
 
     vel        = _num(r, "sales_velocity")
@@ -112,22 +130,22 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
     lost       = _num(r, "lost_units_3m")
     oos_wks    = _num(r, "oos_weeks_3m")
     thin_wks   = _num(r, "thin_weeks_3m")
-    flag       = str(r.get("momentum_flag") or "").strip().upper()
+    flag       = _s(r, "momentum_flag").upper()
 
     # Weeks of cover currently at Amazon, on the velocity actually in use.
     cover = (am_avail / vel) if vel > 0 else None
 
     base = {
         "account":        account,
-        "brand":          r.get("brand") or "",
-        "model":          r.get("model") or "",
-        "sku":            r.get("sku") or "",
-        "asin":           r.get("asin") or "",
+        "brand":          _s(r, "brand"),
+        "model":          _s(r, "model"),
+        "sku":            _s(r, "sku"),
+        "asin":           _s(r, "asin"),
         "asin_type":      asin_type,
         "velocity":       round(vel, 1),
         "window_velocity": round(win_vel, 1),
         "last_2_velocity": round(l2_vel, 1),
-        "velocity_basis": r.get("velocity_basis") or "window",
+        "velocity_basis": _s(r, "velocity_basis") or "window",
         "amazon_available": int(am_avail),
         "weeks_cover":    (round(cover, 1) if cover is not None else None),
         "mother_wh":      int(ampm),
@@ -303,6 +321,14 @@ def build_watchlist(accounts: list[str] | None = None,
         -(x.get("units_at_stake") or 0),
         -(x.get("velocity") or 0),
     ))
+
+    # Final guard: any non-finite float anywhere in the payload would 500 the
+    # endpoint at serialization time. Cheap to scrub, expensive to debug live.
+    import math
+    for r in rows:
+        for k, v in list(r.items()):
+            if isinstance(v, float) and not math.isfinite(v):
+                r[k] = None
 
     counts: dict[str, int] = {}
     for r in rows:
