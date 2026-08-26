@@ -389,7 +389,7 @@ def propose_plan(
                          ship_from_wh, qty, original_send_qty, added_by,
                          real_am_inv, mother_inv, weekly_velocity, cb_soh, master_carton,
                          hazmat, ixd_flag, notes, category)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (batch_id, sku, destination_fc) DO NOTHING
                     """,
                     (
