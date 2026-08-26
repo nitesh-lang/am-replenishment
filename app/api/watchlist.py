@@ -15,10 +15,15 @@ from app.services import replen_watchlist
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
-def _accounts(account: str | None) -> list[str] | None:
-    if not account:
+def _csv(value: str | None) -> list[str] | None:
+    if not value:
         return None
-    return [a.strip() for a in account.split(",") if a.strip()]
+    out = [a.strip() for a in value.split(",") if a.strip()]
+    return out or None
+
+
+def _accounts(account: str | None) -> list[str] | None:
+    return _csv(account)
 
 
 @router.get("")
@@ -31,12 +36,17 @@ def get_watchlist(
     sales_window: int = Query(default=12, ge=1, le=52),
     replenish_weeks: int = Query(default=8, ge=1, le=52),
     velocity_mode: str = Query(default="max"),
+    asin_type: str | None = Query(
+        default=None,
+        description="Comma-separated ASIN Types to keep; omit for all.",
+    ),
 ):
     return replen_watchlist.build_watchlist(
         accounts=_accounts(account),
         sales_window=sales_window,
         replenish_weeks=replenish_weeks,
         velocity_mode=velocity_mode,
+        asin_types=_csv(asin_type),
     )
 
 
@@ -47,12 +57,16 @@ def get_email_draft(
     replenish_weeks: int = Query(default=8, ge=1, le=52),
     velocity_mode: str = Query(default="max"),
     week_tag: str | None = Query(default=None),
+    asin_type: str | None = Query(default=None),
 ):
+    # Same filter args as GET /watchlist, so the draft always describes exactly
+    # the set the operator has on screen.
     wl = replen_watchlist.build_watchlist(
         accounts=_accounts(account),
         sales_window=sales_window,
         replenish_weeks=replenish_weeks,
         velocity_mode=velocity_mode,
+        asin_types=_csv(asin_type),
     )
     # Default the week to the same "latest completed sales week" the Plans
     # module stamps, so the email and the plan batches agree on the period.

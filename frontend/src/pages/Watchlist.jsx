@@ -32,6 +32,12 @@ export default function Watchlist() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [signalFilter, setSignalFilter] = useState("");
+  // ASIN Type is filtered SERVER-side (same param on both endpoints) so the
+  // email draft can never describe a different set than what's on screen.
+  const [asinTypes, setAsinTypes] = useState([]);
+  // Options survive across fetches — the filtered response only reports the
+  // types that are still present, which would make the chips vanish on click.
+  const [asinTypeOpts, setAsinTypeOpts] = useState([]);
 
   // Email draft — fetched on demand, then fully editable before the operator
   // copies it out. Nothing is ever sent from here.
@@ -48,14 +54,20 @@ export default function Watchlist() {
     if (accounts.length && accounts.length < ACCOUNTS.length) {
       p.set("account", accounts.join(","));
     }
+    if (asinTypes.length) p.set("asin_type", asinTypes.join(","));
     return p.toString();
-  }, [accounts, salesWindow, coverWeeks, velocityMode]);
+  }, [accounts, salesWindow, coverWeeks, velocityMode, asinTypes]);
 
   useEffect(() => {
     setLoading(true); setErr(""); setDraft(null);
     fetch(`${BASE}/watchlist?${qs}`)
       .then(r => r.json())
-      .then(setData)
+      .then(j => {
+        setData(j);
+        // Only refresh the chip list from an UNFILTERED response, otherwise
+        // picking one type would drop every other option from the row.
+        if (!asinTypes.length) setAsinTypeOpts(j?.asin_types_available || []);
+      })
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
   }, [qs]);
@@ -142,6 +154,28 @@ export default function Watchlist() {
             <option value="window">Selected window only</option>
           </select>
         </label>
+
+        {asinTypeOpts.length > 0 && (
+          <div className="w-full border-t border-slate-100 pt-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">ASIN Type</span>
+            {asinTypeOpts.map(t => {
+              const on = asinTypes.includes(t);
+              return (
+                <button key={t}
+                  onClick={() => setAsinTypes(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t])}
+                  className={cn("px-2.5 py-1 text-xs font-medium rounded-md border transition-colors",
+                    on ? "bg-sky-600 text-white border-sky-600"
+                       : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50")}>
+                  {t}
+                </button>
+              );
+            })}
+            {asinTypes.length > 0 && (
+              <button onClick={() => setAsinTypes([])}
+                className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
+            )}
+          </div>
+        )}
       </div>
 
       {err && <div className="bg-red-50 text-red-800 border border-red-200 rounded-md p-3 mb-4 text-sm">{err}</div>}
@@ -179,7 +213,7 @@ export default function Watchlist() {
       {!loading && !rows.length && (
         <div className="bg-white border border-slate-200 rounded-lg p-8 text-center text-slate-500 text-sm">
           Nothing on the watchlist for this selection — no model clears the materiality
-          threshold (20 units and at least one week of its own demand).
+          threshold (20+ units, or a gap worth 4+ weeks of the model's own demand).
         </div>
       )}
 
@@ -211,6 +245,14 @@ export default function Watchlist() {
                 <span>vel {r.velocity}/wk ({r.velocity_basis})</span>
                 <span>Amazon {r.amazon_available}{r.weeks_cover != null && ` · ${r.weeks_cover}wk cover`}</span>
                 <span>Mother WH {r.mother_wh}</span>
+                {/* CB SOH exists only for Audio Array and Tonor. null means
+                    "no vendor warehouse", so the chip is hidden rather than
+                    shown as 0 — a 0 would read as "we checked, it's empty". */}
+                {r.cb_soh != null && (
+                  <span className="px-1.5 rounded bg-emerald-50 text-emerald-700 font-medium">
+                    CB SOH {r.cb_soh}
+                  </span>
+                )}
                 <span>China pipeline {r.china_pipeline}</span>
                 <span>system asks {r.replen_qty}</span>
                 {r.lost_units_3m > 0 && <span>lost 3m {r.lost_units_3m}</span>}

@@ -1348,6 +1348,47 @@ def calculate_replenishment(
         df["thin_weeks_3m"]  = pd.to_numeric(df.get("thin_weeks_3m", 0),  errors="coerce").fillna(0).astype(int)
         df["lost_units_3m"]  = pd.to_numeric(df.get("lost_units_3m", 0),  errors="coerce").fillna(0).astype(int)
         df["momentum_flag"]  = df.get("momentum_flag", pd.Series("", index=df.index)).fillna("").astype(str)
+
+        # Second momentum pass for Tonor under the Viomi account.
+        # compute_oos_signals is brand-keyed: one call resolves ONE snapshot
+        # file + ONE weekly-sales brand tag. The call above runs as "Viomi",
+        # which reads the Nexlev snapshot and Viomi's raw shipments — so the
+        # 31 Tonor rows lifted from the AA sheet matched nothing and silently
+        # carried lost_units_3m = 0. That made every lost-sales signal
+        # structurally unreachable for Tonor. Tonor has its own snapshot
+        # (Inventory_snapshot_tonor.xlsx) and its own sales tag, so run it
+        # again for that brand and write the result into Tonor rows only.
+        # Same brand-scoped pattern as the cb_soh lookup further down.
+        if account.upper() == "VIOMI" and "brand" in df.columns:
+            _is_ton = df["brand"].astype(str).str.strip().str.lower() == _TONOR_BRAND
+            if bool(_is_ton.any()):
+                try:
+                    _tsig = compute_oos_signals("Tonor", sales, weeks=13,
+                                                current_ampm_series=_cur_ampm,
+                                                master_df=master)
+                    if _tsig is not None and not _tsig.empty:
+                        _t = _tsig.reset_index()
+                        _t["sku"] = _t["sku"].astype(str).str.strip().str.upper()
+                        _lookup = _t.set_index("sku")
+                        _keys = df["SKU"].astype(str).str.strip().str.upper()
+                        _hits = 0
+                        for _col, _default in (("oos_weeks_3m", 0), ("thin_weeks_3m", 0),
+                                               ("lost_units_3m", 0), ("momentum_flag", "")):
+                            if _col not in _lookup.columns:
+                                continue
+                            _vals = _keys.map(_lookup[_col])
+                            # Tonor rows only — never overwrite a Viomi/Nexlev
+                            # row that legitimately resolved in the first pass.
+                            _mask = _is_ton & _vals.notna()
+                            _hits = max(_hits, int(_mask.sum()))
+                            if _col == "momentum_flag":
+                                df.loc[_mask, _col] = _vals[_mask].astype(str)
+                            else:
+                                df.loc[_mask, _col] = pd.to_numeric(
+                                    _vals[_mask], errors="coerce").fillna(_default).astype(int)
+                        print(f"ℹ️ Viomi: Tonor momentum resolved for {_hits} row(s)")
+                except Exception as _te:
+                    print(f"⚠️ Tonor momentum pass skipped: {_te}")
     except Exception as e:
         print(f"⚠️ AMPM momentum enrichment skipped: {e}")
         df["oos_weeks_3m"]  = 0

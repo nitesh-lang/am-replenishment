@@ -53,10 +53,24 @@ NEW_LAUNCH_TYPES = {"new", "new launch", "to be launched"}
 MIN_UNITS_AT_STAKE = 20          # absolute floor, units
 MIN_WEEKS_OF_VELOCITY = 1.0      # ... and at least this many weeks of demand
 
+# ...but a flat 20-unit floor is the WRONG test for a slow mover, and it was
+# silently excluding whole brands. Tonor sells 1-2/wk: TM20 lost 18 units,
+# which is NINE WEEKS of its own demand, and the floor threw it away while
+# waving through a 20-unit gap on a model that sells 40/wk (half a week).
+# So a row also qualifies on a purely relative basis: a long outage measured
+# in the model's own weeks of demand. The small absolute guard stops
+# near-zero-velocity noise (0.2/wk * 4 = 1 unit is not a decision).
+LONG_OUTAGE_WEEKS = 4.0          # weeks of the model's own demand
+LONG_OUTAGE_MIN_UNITS = 5        # ... with a floor so tiny movers stay out
+
 
 def _material(units_at_stake: float, velocity: float) -> bool:
-    return (units_at_stake >= MIN_UNITS_AT_STAKE
-            and units_at_stake >= velocity * MIN_WEEKS_OF_VELOCITY)
+    if (units_at_stake >= MIN_UNITS_AT_STAKE
+            and units_at_stake >= velocity * MIN_WEEKS_OF_VELOCITY):
+        return True
+    return (velocity > 0
+            and units_at_stake >= velocity * LONG_OUTAGE_WEEKS
+            and units_at_stake >= LONG_OUTAGE_MIN_UNITS)
 
 
 # Priority order for sorting; lower sorts first.
@@ -86,6 +100,27 @@ def _s(row, key) -> str:
         pass
     sv = str(v).strip()
     return "" if sv.lower() in ("nan", "none", "<na>") else sv
+
+
+def _int_or_none(row, key):
+    """Nullable int for columns that are legitimately empty on some rows.
+    cb_soh is None for every account/brand without vendor-warehouse stock —
+    that is a real "not applicable", not a zero, and must not render as 0.
+    """
+    v = row.get(key)
+    if v is None or v is pd.NA:
+        return None
+    try:
+        if isinstance(v, float) and pd.isna(v):
+            return None
+        if pd.isna(v):
+            return None
+    except Exception:
+        pass
+    try:
+        return int(v)
+    except Exception:
+        return None
 
 
 def _num(row, key, default=0.0) -> float:
@@ -131,6 +166,10 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
     oos_wks    = _num(r, "oos_weeks_3m")
     thin_wks   = _num(r, "thin_weeks_3m")
     flag       = _s(r, "momentum_flag").upper()
+    # CB SOH = final_cb_qty, the 1P vendor stock sitting in the CB warehouse.
+    # Populated ONLY for Audio Array and for Tonor under the Viomi account;
+    # None everywhere else, which means "no vendor warehouse", not zero.
+    cb_soh     = _int_or_none(r, "cb_soh")
 
     # Weeks of cover currently at Amazon, on the velocity actually in use.
     cover = (am_avail / vel) if vel > 0 else None
@@ -149,6 +188,7 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
         "amazon_available": int(am_avail),
         "weeks_cover":    (round(cover, 1) if cover is not None else None),
         "mother_wh":      int(ampm),
+        "cb_soh":         cb_soh,
         "china_pipeline": int(pipeline),
         "replen_qty":     int(replen),
         "warehouse_shortfall": int(shortfall),
@@ -157,6 +197,17 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
         "thin_weeks_3m":  int(thin_wks),
         "momentum_flag":  flag,
     }
+
+    # CB warehouse stock is NOT automatic relief — it is committed to the 1P
+    # vendor channel and moving it to 3P is a commercial decision, not a
+    # replenishment one. So it never reclassifies a signal; it is surfaced as
+    # an extra option so Naresh can weigh it. Only mentioned when it is worth
+    # weighing (clears the same materiality bar as the signal itself).
+    cb_hint = ""
+    if cb_soh and _material(cb_soh, vel):
+        cb_hint = (f" CB warehouse also holds {cb_soh} units of this model — "
+                   f"worth checking whether part of that can cover the gap "
+                   f"before the China stock lands.")
 
     # ---- 1/2. Lost sales, split by whether relief is already coming --------
     # Only counts as lost-sales if we actually have evidence of demand AND of
@@ -176,7 +227,7 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
                 "action": (
                     "Relief is on the water — plan the inward and get an FBA send "
                     "raised the day it lands. Check the ETA covers the gap; if not, "
-                    "expedite or air-freight a part quantity."
+                    "expedite or air-freight a part quantity." + cb_hint
                 ),
             })
         else:
@@ -213,6 +264,7 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
                     + (f"Mother WH is {int(shortfall)} short of the full ask this week."
                        if shortfall > 0 else
                        "Ship what AMPM holds this week while the PO runs.")
+                    + cb_hint
                 ),
             })
 
@@ -284,8 +336,17 @@ def _classify(r: dict, account: str, replenish_weeks: int) -> list[dict]:
 def build_watchlist(accounts: list[str] | None = None,
                     sales_window: int = 12,
                     replenish_weeks: int = 8,
-                    velocity_mode: str = "max") -> dict:
-    """Watchlist rows across accounts, highest-priority signal first."""
+                    velocity_mode: str = "max",
+                    asin_types: list[str] | None = None) -> dict:
+    """Watchlist rows across accounts, highest-priority signal first.
+
+    `asin_types` filters to the given ASIN Types (case-insensitive). It is
+    applied SERVER-side rather than in the browser so the email draft and the
+    on-screen list can never disagree — the draft is built from the same
+    filtered set the operator is looking at. `asin_types_available` always
+    reports the unfiltered options so the chips don't disappear once one is
+    selected.
+    """
     accts = [a for a in (accounts or WATCHLIST_ACCOUNTS)
              if a.strip().upper() != "FOSSIL"]
     rows: list[dict] = []
@@ -302,19 +363,40 @@ def build_watchlist(accounts: list[str] | None = None,
         # Normalise the column names this module reads.
         d = df.copy()
         d.columns = [str(c).strip() for c in d.columns]
-        ren = {}
+        # Both cases can be present at once and only ONE of them is populated
+        # for a given block of rows — the Tonor rows lifted from the AA sheet
+        # carry `SKU` and leave `sku` NaN. Picking the first column that
+        # merely EXISTS therefore blanked the SKU on every Tonor card, so
+        # coalesce across the candidates instead of choosing one.
         for want, cands in {
             "sku":   ("sku", "SKU"),
             "asin":  ("asin", "ASIN"),
             "model": ("model", "Model"),
         }.items():
-            for c in cands:
-                if c in d.columns:
-                    ren[c] = want
-                    break
-        d = d.rename(columns=ren)
+            present = [c for c in cands if c in d.columns]
+            if not present:
+                continue
+            col = d[present[0]]
+            for c in present[1:]:
+                col = col.where(col.notna() & (col.astype(str).str.strip() != ""), d[c])
+            d = d.drop(columns=[c for c in present if c != want], errors="ignore")
+            d[want] = col
         for r in d.to_dict(orient="records"):
             rows.extend(_classify(r, acct, replenish_weeks))
+
+    # Options for the chip row — computed BEFORE filtering, so selecting one
+    # type doesn't remove the others from the UI.
+    available = sorted({r["asin_type"] for r in rows if r.get("asin_type")},
+                       key=str.lower)
+
+    # Match case-insensitively but report back the canonical labels, so the
+    # email subject reads "ASIN Type: New Launch", not "new launch".
+    wanted = {t.strip().lower() for t in (asin_types or []) if t and t.strip()}
+    selected_labels: list[str] = []
+    if wanted:
+        rows = [r for r in rows if (r.get("asin_type") or "").lower() in wanted]
+        by_lower = {a.lower(): a for a in available}
+        selected_labels = [by_lower.get(t, t) for t in sorted(wanted)]
 
     rows.sort(key=lambda x: (
         _SIGNAL_RANK.get(x["signal"], 99),
@@ -338,6 +420,8 @@ def build_watchlist(accounts: list[str] | None = None,
         "rows": rows,
         "counts": counts,
         "accounts": accts,
+        "asin_types_available": available,
+        "asin_types": selected_labels,
         "sales_window": sales_window,
         "replenish_weeks": replenish_weeks,
         "velocity_mode": velocity_mode,
@@ -405,14 +489,18 @@ def build_email_draft(watchlist: dict, week_tag: str | None = None,
 
     wk = week_tag or ""
     scope = ", ".join(accounts)
+    types = watchlist.get("asin_types") or []
+    type_scope = (" · ASIN Type: " + ", ".join(types)) if types else ""
     subject = (f"Replenishment watchlist{(' — ' + wk) if wk else ''} — "
-               f"{scope} ({len(rows)} models to review)")
+               f"{scope}{type_scope} ({len(rows)} models to review)")
 
     L: list[str] = []
     L.append("Hi,")
     L.append("")
     L.append(f"Below is this week's replenishment watchlist for {scope}"
-             f"{(' (' + wk + ')') if wk else ''}. "
+             f"{(' (' + wk + ')') if wk else ''}"
+             + (f", filtered to ASIN Type {', '.join(types)}" if types else "")
+             + ". "
              "These are models where the system number alone would under-serve "
              "demand, with the reason and the suggested action for each.")
     L.append("")
@@ -433,6 +521,10 @@ def build_email_draft(watchlist: dict, week_tag: str | None = None,
             L.append(f"  {g['account']} | {g['model']} ({g['sku']}) "
                      f"[{g['asin_type'] or 'no ASIN type'}]")
             L.append(f"    {g['headline']}")
+            if g.get("cb_soh") is not None:
+                _n = g["cb_soh"]
+                L.append(f"    CB SOH: {_n} unit{'' if _n == 1 else 's'} "
+                         f"in the CB warehouse")
             L.append(f"    Why   : {g['why']}")
             L.append(f"    Action: {g['action']}")
             L.append("")
