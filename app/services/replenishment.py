@@ -208,6 +208,27 @@ def drop_moved_to_viomi(df, label: str = ""):
     return df[keep]
 
 
+def _drop_tonor_1p(df):
+    """Tonor sells 1P through Cambium's vendor account, but its REPLENISHMENT
+    demand must be seller-account (Amazon) only — same rule Audio Array has
+    always had. Operator 2026-08-26, P0: after Tonor moved to the Viomi
+    account it inherited Viomi's "Amazon + 1p Sales" channel rule and started
+    counting 1P units as sellable demand.
+
+    Brand-scoped rather than account-scoped: Nexlev/Viomi's own SKUs keep
+    their 1p Sales, only Tonor rows lose them.
+    """
+    if df is None or not len(df) or "brand" not in df.columns or "channel" not in df.columns:
+        return df
+    is_tonor = df["brand"].astype(str).str.strip().str.lower() == _TONOR_BRAND
+    is_1p = df["channel"].astype(str).str.strip().str.lower() == "1p sales"
+    drop = is_tonor & is_1p
+    n = int(drop.sum())
+    if n:
+        print(f"ℹ️ Tonor: dropped {n} 1p Sales row(s) — seller-account demand only")
+    return df[~drop]
+
+
 def _filter_sales_by_brand(df, account: str):
     """Keep only the sales rows whose brand belongs to `account`."""
     if "brand" not in df.columns:
@@ -767,6 +788,7 @@ def calculate_replenishment(
         sales_n = sales_n[sales_n["channel"] == "Amazon"]
     elif account.upper() in ("NEXLEV", "VIOMI"):
         sales_n = sales_n[sales_n["channel"].isin(["Amazon", "1p Sales"])]
+        sales_n = _drop_tonor_1p(sales_n)
     elif account.upper() == "WHITE MULBERRY":
         sales_n = _apply_wm_channel_filter(sales_n, master)
 
@@ -844,6 +866,7 @@ def calculate_replenishment(
         sales_4 = sales_4[sales_4["channel"] == "Amazon"]
     elif account.upper() in ("NEXLEV", "VIOMI"):
         sales_4 = sales_4[sales_4["channel"].isin(["Amazon", "1p Sales"])]
+        sales_4 = _drop_tonor_1p(sales_4)
     elif account.upper() == "WHITE MULBERRY":
         sales_4 = _apply_wm_channel_filter(sales_4, master)
 
@@ -900,6 +923,7 @@ def calculate_replenishment(
         sales_2 = sales_2[sales_2["channel"] == "Amazon"]
     elif account.upper() in ("NEXLEV", "VIOMI"):
         sales_2 = sales_2[sales_2["channel"].isin(["Amazon", "1p Sales"])]
+        sales_2 = _drop_tonor_1p(sales_2)
     elif account.upper() == "WHITE MULBERRY":
         sales_2 = _apply_wm_channel_filter(sales_2, master)
 
@@ -1363,6 +1387,19 @@ def calculate_replenishment(
                 df["cb_soh"] = _mk.map(cb_map).astype("Int64")
         except Exception as _e:
             print(f"⚠️ AA CB SOH merge skipped: {_e}")
+    elif account.upper() == "VIOMI":
+        # Tonor moved here 2026-08-26 and brought its 1P vendor stock with it.
+        # Operator P0: CB SOH rendered blank for Tonor at the approver stage.
+        # Scope the lookup to Tonor-branded rows so Nexlev/Viomi/WM rows keep
+        # cb_soh = None (they have no vendor warehouse stock).
+        try:
+            cb_map = _cb_soh_by_model("Tonor")
+            if cb_map and "model" in df.columns and "brand" in df.columns:
+                _mk = df["model"].astype(str).str.split("(").str[0].str.strip().str.lower()
+                _is_tonor = df["brand"].astype(str).str.strip().str.lower() == _TONOR_BRAND
+                df["cb_soh"] = _mk.where(_is_tonor).map(cb_map).astype("Int64")
+        except Exception as _e:
+            print(f"⚠️ Tonor CB SOH merge skipped: {_e}")
 
     return df
 

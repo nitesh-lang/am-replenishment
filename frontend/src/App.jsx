@@ -15,6 +15,7 @@ import SalesAnalytics from "./pages/SalesAnalytics";
 import RegionSales from "./pages/RegionSales";
 import ChinaReorder from "./pages/ChinaReorder";
 import ChinaReorderV2 from "./pages/ChinaReorderV2";
+import Watchlist from "./pages/Watchlist";
 import CBReplenishment from "./pages/CBReplenishment";
 import CBReplenishmentV2 from "./pages/CBReplenishmentV2";
 import WMReplenishment from "./pages/WMReplenishment";
@@ -86,6 +87,7 @@ function App() {
           <Route path="/sales-analytics"       element={<Gated moduleKey="sales-analytics"><SalesAnalytics /></Gated>} />
           <Route path="/region-sales"          element={<Gated moduleKey="region-sales"><RegionSales /></Gated>} />
           <Route path="/china-reorder"         element={<Gated moduleKey="china-reorder"><ChinaReorderV2 /></Gated>} />
+          <Route path="/watchlist"             element={<Gated moduleKey="replenishment"><Watchlist /></Gated>} />
           <Route path="/china-reorder-v1"      element={<Gated moduleKey="china-reorder"><ChinaReorder /></Gated>} />
           <Route path="/china-reorder-v2"      element={<Navigate to="/china-reorder" replace />} />
 

@@ -811,12 +811,14 @@ export default function FCAllocationV2() {
               // approver_email; backend accepts either. Nex / Viomi /
               // Tonor stay Sagar-only.
               const ACC = String(account).toUpperCase();
+              // Operator 2026-08-26: the approver for Replenishment and FC
+              // Allocation is Sagar AND Kanwal AND Tushar for every account —
+              // any one of them can act. Multi-approver is comma-separated and
+              // permission checks split-and-membership-check it (cc78ef2).
+              // Fossil Replenishment V2 keeps its own routing; this constant
+              // is not shared with that page.
               const APPROVER =
-                ["FOSSIL", "AUDIOARRAY", "AUDIO ARRAY"].includes(ACC)
-                  ? "kanwal@cambiumretail.com"
-                  : ["WHITE MULBERRY", "WHITEMULBERRY", "WM"].includes(ACC)
-                    ? "tushar@cambiumretail.com,sagar@cambiumretail.com"
-                    : "sagar@cambiumretail.com";
+                "sagar@cambiumretail.com,kanwal@cambiumretail.com,tushar@cambiumretail.com";
               const buildRows = () => rows
                 .map((r) => {
                   // qty = LITERAL Working Value Naresh typed. Blank Working

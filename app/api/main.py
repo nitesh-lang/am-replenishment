@@ -19,6 +19,7 @@ from app.api.fc_transfer import router as fc_transfer_router
 from app.api.fc_final_allocation import router as fc_final_allocation_router
 from app.api.region_sales import router as region_sales_router  # ✅ NEW
 from app.api.china_reorder import router as china_reorder_router
+from app.api.watchlist import router as watchlist_router
 from app.api.cb_replenishment import router as cb_replenishment_router
 from app.api.wm_replenishment import router as wm_replenishment_router
 from app.api.fossil_replenishment import router as fossil_router
@@ -199,6 +200,8 @@ app.include_router(fc_transfer_router)
 app.include_router(fc_final_allocation_router)
 app.include_router(region_sales_router)  # ✅ NEW
 app.include_router(china_reorder_router)
+app.include_router(watchlist_router)
+app.include_router(watchlist_router, prefix="/api")
 app.include_router(cb_replenishment_router, prefix="/api")
 app.include_router(wm_replenishment_router, prefix="/api")
 app.include_router(fossil_router)
@@ -237,6 +240,7 @@ _SPA_ROUTES = {
     "/dashboard", "/replenishment", "/replenishment-v1", "/replenishment-v2",
     "/fba-inbound", "/fc-allocation", "/fc-allocation-v1", "/fc-allocation-v2",
     "/po-creation", "/china-reorder", "/china-reorder-v1", "/china-reorder-v2",
+    "/watchlist",
     "/cb-replenishment", "/cb-replenishment-v1", "/cb-replenishment-v2",
     "/wm-replenishment", "/wm-replenishment-v1", "/wm-replenishment-v2",
     "/fossil-replenishment", "/fossil-replenishment-v1", "/fossil-replenishment-v2",

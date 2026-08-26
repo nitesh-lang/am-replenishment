@@ -41,6 +41,7 @@ export default function Layout({ children }) {
     { name: "FC Allocation",   path: "/fc-allocation",         show: canAccess("fc-allocation") },
     { name: "PO Creation",     path: "/po-creation",           show: canAccess("fc-allocation") },
     { name: "Reorder",         path: "/china-reorder",         show: canAccess("china-reorder") },
+    { name: "Watchlist",       path: "/watchlist",             show: canAccess("replenishment") },
     { name: "CB",              path: "/cb-replenishment",      show: canAccess("cb-replenishment") },
     { name: "Clicktech",       path: "/wm-replenishment",      show: canAccess("wm-replenishment") },
     { name: "Fossil",          path: "/fossil-replenishment",  show: canAccess("fossil-replenishment") },
