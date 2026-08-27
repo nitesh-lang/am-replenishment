@@ -15,6 +15,7 @@ import { SOPModal, SOPButton } from "../components/SOPModal";
 import { FossilReplenishmentSOPContent } from "../components/SOPContents";
 import DataFreshnessBanner from "../components/DataFreshnessBanner";
 import { cn } from "../lib/cn";
+import { ColumnGroupToggles, isColumnVisible, groupsFromColumns } from "../components/ColumnGroupToggles";
 import { proposePlan, saveDraft } from "../api/plans";
 import { useAuth } from "../auth/AuthContext";
 
@@ -167,9 +168,29 @@ export default function FossilReplenishmentV2() {
     { id: "Remarks",                         accessorKey: "Remarks",                        header: "Remarks",    size: 360, meta: { group: "plan" } },
   ], []);
 
+  // Collapsible column sections (same component as Reorder / Replenishment /
+  // FC Allocation). Purely presentational — the export still walks the full
+  // column list, and the Identity group is deliberately not offered as a
+  // chip so the row can never lose its SKU/Model.
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const toggleGroup = (key) => setCollapsedGroups(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+  const GROUP_LABELS = { sales: "Sales", inv: "Inventory", plan: "Plan" };
+  const groupChips = useMemo(
+    () => groupsFromColumns(columns, GROUP_LABELS).filter(g => g.key !== "id"),
+    [columns]
+  );
+  const visibleColumns = useMemo(
+    () => columns.filter(c => isColumnVisible(c, collapsedGroups)),
+    [columns, collapsedGroups]
+  );
+
   const table = useReactTable({
     data: filteredRows,
-    columns,
+    columns: visibleColumns,
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
@@ -265,13 +286,13 @@ export default function FossilReplenishmentV2() {
   const groupedHeaders = useMemo(() => {
     const out = [];
     let prev = null;
-    columns.forEach(c => {
+    visibleColumns.forEach(c => {
       const g = c.meta?.group || "_";
       if (g === prev) out[out.length - 1].span += 1;
       else { out.push({ key: g, ...groupMeta[g], span: 1 }); prev = g; }
     });
     return out;
-  }, [columns]);
+  }, [visibleColumns]);
 
   const densityCls = {
     comfy:   "[&_td]:py-2.5",
@@ -553,11 +574,14 @@ export default function FossilReplenishmentV2() {
                   </button>
                 ))}
               </div>
-              <button className="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center gap-1.5">
-                <Settings2 className="w-3.5 h-3.5" /> Columns
-              </button>
+
             </div>
           </div>
+        </div>
+
+        {/* Collapsible column sections */}
+        <div className="mb-2">
+          <ColumnGroupToggles groups={groupChips} collapsed={collapsedGroups} onToggle={toggleGroup} />
         </div>
 
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">

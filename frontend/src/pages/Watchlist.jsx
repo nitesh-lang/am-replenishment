@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "../lib/cn";
 
 /* ============================================================
@@ -35,6 +36,18 @@ export default function Watchlist() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [signalFilter, setSignalFilter] = useState("");
+  // Card expansion. With ~90 rows the old always-expanded cards made the page
+  // a wall of text; the default is now a one-line summary per model, expanded
+  // on click. Keyed by account|sku|signal (stable across filtering, unlike
+  // the render index).
+  const [openCards, setOpenCards] = useState(() => new Set());
+  const [allOpen, setAllOpen] = useState(false);
+  const cardKey = (r) => `${r.account}|${r.sku}|${r.signal}`;
+  const toggleCard = (k) => setOpenCards(prev => {
+    const next = new Set(prev);
+    next.has(k) ? next.delete(k) : next.add(k);
+    return next;
+  });
   // ASIN Type is filtered SERVER-side (same param on both endpoints) so the
   // email draft can never describe a different set than what's on screen.
   const [asinTypes, setAsinTypes] = useState([]);
@@ -225,6 +238,15 @@ export default function Watchlist() {
             </button>
           );
         })}
+        <button
+          onClick={() => {
+            if (allOpen) { setOpenCards(new Set()); setAllOpen(false); }
+            else { setOpenCards(new Set(shown.map(cardKey))); setAllOpen(true); }
+          }}
+          className="ml-auto px-3 py-1.5 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50"
+        >
+          {allOpen ? "Collapse all" : "Expand all"}
+        </button>
       </div>
 
       {loading && <div className="text-sm text-slate-500">Loading…</div>}
@@ -239,10 +261,19 @@ export default function Watchlist() {
       <div className="space-y-2">
         {shown.map((r, i) => {
           const meta = SIGNAL_META[r.signal] || { label: r.signal, tone: "bg-slate-100 text-slate-700 border-slate-200" };
+          const k = cardKey(r);
+          const open = openCards.has(k);
           return (
-            <div key={`${r.account}-${r.sku}-${r.signal}-${i}`}
+            <div key={`${k}-${i}`}
               className="bg-white border border-slate-200 rounded-lg p-3">
-              <div className="flex flex-wrap items-center gap-2 mb-1">
+              <div
+                role="button"
+                onClick={() => toggleCard(k)}
+                className="flex flex-wrap items-center gap-2 cursor-pointer select-none"
+              >
+                {open
+                  ? <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  : <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
                 <span className={cn("px-2 py-0.5 rounded text-[11px] font-bold border", meta.tone)}>
                   {meta.label}
                 </span>
@@ -264,7 +295,11 @@ export default function Watchlist() {
                   ~{(r.units_at_stake || 0).toLocaleString()} units at stake
                 </span>
               </div>
-              <div className="text-sm font-medium text-slate-800">{r.headline}</div>
+              {!open && (
+                <div className="text-xs text-slate-500 mt-1 pl-5 truncate">{r.headline}</div>
+              )}
+              {open && (<>
+              <div className="text-sm font-medium text-slate-800 mt-1">{r.headline}</div>
               <div className="text-xs text-slate-600 mt-1"><b>Why:</b> {r.why}</div>
               <div className="text-xs text-slate-800 mt-0.5"><b>Action:</b> {r.action}</div>
               <div className="flex flex-wrap gap-3 mt-2 text-[11px] text-slate-500 tabular-nums">
@@ -298,6 +333,7 @@ export default function Watchlist() {
                 <span>system asks {r.replen_qty}</span>
                 {r.lost_units_3m > 0 && <span>lost 3m {r.lost_units_3m}</span>}
               </div>
+              </>)}
             </div>
           );
         })}

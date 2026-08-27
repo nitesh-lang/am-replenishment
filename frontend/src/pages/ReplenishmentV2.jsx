@@ -120,6 +120,11 @@ export default function ReplenishmentV2() {
 
   // Collapsible column sections (visibility). Set of collapsed group keys.
   const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  // Chip-filter panel visibility. Collapsed by default — the chip wall was
+  // most of the visual noise on this page. Active selections stay visible
+  // in a slim summary strip when the panel is closed (a filter must never
+  // be applied invisibly).
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const toggleGroup = (key) => setCollapsedGroups(prev => {
     const next = new Set(prev);
     next.has(key) ? next.delete(key) : next.add(key);
@@ -279,6 +284,12 @@ export default function ReplenishmentV2() {
     () => [...new Set(rows.map(r => r.listing_status).filter(Boolean))].sort(),
     [rows]
   );
+
+  // Count of active chip selections — badge on the Filters toggle, and the
+  // guard that keeps active filters visible when the panel is collapsed.
+  const activeFilterCount =
+    selectedAsinTypes.length + selectedBrands.length +
+    selectedCategories.length + selectedStatuses.length;
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -475,16 +486,19 @@ export default function ReplenishmentV2() {
     rep:  { label: "Replen",            tint: "" },
     log:  { label: "Logistics",         tint: "" },
   };
+  // Band derives from the VISIBLE columns — deriving from the full column
+  // array made collapsed sections keep their colSpan in the band, shifting
+  // every header to the right of them off its own body column.
   const groupedHeaders = useMemo(() => {
     const out = [];
     let prev = null;
-    columns.forEach(c => {
+    visibleColumns.forEach(c => {
       const g = c.meta?.group || "_";
       if (g === prev) out[out.length - 1].span += 1;
       else { out.push({ key: g, ...groupMeta[g], span: 1 }); prev = g; }
     });
     return out;
-  }, [columns]);
+  }, [visibleColumns]);
 
   /* ============================================================
      DENSITY
@@ -917,14 +931,50 @@ export default function ReplenishmentV2() {
                   </button>
                 ))}
               </div>
-              <button className="px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center gap-1.5">
-                <Settings2 className="w-3.5 h-3.5" /> Columns
-              </button>
+              {/* Was a dead "Columns" button (no onClick since the V2 rebuild).
+                  Column visibility lives in the Sections bar; this now opens
+                  the chip-filter panel instead. */}
+              {(asinTypes.length > 0 || brands.length > 1 || categories.length > 0 || listingStatuses.length > 0) && (
+                <button
+                  onClick={() => setFiltersOpen(o => !o)}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium rounded-md border inline-flex items-center gap-1.5",
+                    filtersOpen
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                      : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700"
+                  )}
+                >
+                  <Settings2 className="w-3.5 h-3.5" /> Filters
+                  {activeFilterCount > 0 && (
+                    <span className="px-1.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold tabular-nums">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                  {filtersOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                </button>
+              )}
             </div>
           </div>
 
+          {!filtersOpen && activeFilterCount > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-[10px] uppercase tracking-wider text-amber-600 font-semibold">Filtered by</span>
+              {[...selectedAsinTypes.map(v => ["ASIN Type", v]),
+                 ...selectedBrands.map(v => ["Brand", v]),
+                 ...selectedCategories.map(v => ["Category", v]),
+                 ...selectedStatuses.map(v => ["Status", v])].map(([k, v]) => (
+                <span key={`${k}:${v}`} className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800">
+                  {v}
+                </span>
+              ))}
+              <button
+                onClick={() => { setSelectedAsinTypes([]); setSelectedBrands([]); setSelectedCategories([]); setSelectedStatuses([]); }}
+                className="ml-1 text-slate-500 hover:text-slate-900 underline decoration-dotted"
+              >clear all</button>
+            </div>
+          )}
           {/* Category + Status chip filters */}
-          {(asinTypes.length > 0 || brands.length > 1 || categories.length > 0 || listingStatuses.length > 0) && (
+          {(asinTypes.length > 0 || brands.length > 1 || categories.length > 0 || listingStatuses.length > 0) && filtersOpen && (
             <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
               {asinTypes.length > 0 && (
                 <>

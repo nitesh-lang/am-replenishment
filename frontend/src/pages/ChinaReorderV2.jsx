@@ -404,16 +404,19 @@ export default function ChinaReorderV2() {
     quality: { label: "Quality",   tint: "bg-emerald-50 text-emerald-700" },
     money:   { label: "Margin",    tint: "" },
   };
+  // Band derives from the VISIBLE columns — deriving from the full column
+  // array made collapsed sections keep their colSpan in the band, shifting
+  // every header to the right of them off its own body column.
   const groupedHeaders = useMemo(() => {
     const out = [];
     let prev = null;
-    columns.forEach(c => {
+    visibleColumns.forEach(c => {
       const g = c.meta?.group || "_";
       if (g === prev) out[out.length - 1].span += 1;
       else { out.push({ key: g, ...groupMeta[g], span: 1 }); prev = g; }
     });
     return out;
-  }, [columns]);
+  }, [visibleColumns]);
 
   const densityCls = {
     comfy:   "[&_td]:py-2.5",
