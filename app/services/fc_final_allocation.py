@@ -1397,11 +1397,73 @@ def _account_active_fcs(account: str) -> list[str]:
     return sorted(led.loc[led["Date"] == latest, "Location"].dropna().unique().tolist())
 
 
+def _ledger_stock_by_sku_fc(account: str) -> dict:
+    """{(SKU_upper, FC_upper): (ending_balance, in_transit)} at the ledger's
+    LATEST date, SELLABLE only — the same basis fc_planning uses.
+
+    Needed because a SKU can hold real FC stock while having NO shipment rows
+    in the account's FBA Sales files (see _seed_master_shadow_rows). Returns
+    {} on any failure so seeding still happens, just without enrichment.
+    """
+    try:
+        from app.services.fc_planning import load_fc_data
+        _, led = load_fc_data(account)
+    except Exception as e:
+        print(f"⚠️ shadow-row ledger enrich skipped for {account}: {e}")
+        return {}
+    if led is None or led.empty:
+        return {}
+    led = led.copy()
+    led.columns = led.columns.astype(str).str.strip()
+    need = {"MSKU", "Location", "Ending Warehouse Balance"}
+    if not need.issubset(set(led.columns)):
+        return {}
+    if "Disposition" in led.columns:
+        led = led[led["Disposition"].astype(str).str.strip().str.upper() == "SELLABLE"]
+    # Latest date ONLY — without this the balances sum across every day in
+    # the file (see reference_ledger_latest_date_filter).
+    if "Date" in led.columns:
+        _dt = pd.to_datetime(led["Date"], errors="coerce", format="%m/%d/%Y")
+        _miss = _dt.isna()
+        if _miss.any():
+            _dt.loc[_miss] = pd.to_datetime(led.loc[_miss, "Date"], errors="coerce")
+        led = led.assign(_dt=_dt)
+        _lat = led["_dt"].max()
+        if pd.notna(_lat):
+            led = led[led["_dt"] == _lat]
+    if led.empty:
+        return {}
+    sku = (led["MSKU"].astype(str).str.strip().str.upper()
+           .str.replace(r"^FB[^A]", "FBA", regex=True))
+    fc = led["Location"].astype(str).str.strip().str.upper()
+    end = pd.to_numeric(led["Ending Warehouse Balance"], errors="coerce").fillna(0)
+    itw = (pd.to_numeric(led["In Transit Between Warehouses"], errors="coerce").fillna(0)
+           if "In Transit Between Warehouses" in led.columns
+           else pd.Series(0, index=led.index))
+    agg = (pd.DataFrame({"_s": sku, "_f": fc, "_e": end, "_t": itw})
+             .groupby(["_s", "_f"], as_index=False)[["_e", "_t"]].sum())
+    return {(r["_s"], r["_f"]): (int(r["_e"]), int(r["_t"]))
+            for _, r in agg.iterrows()}
+
+
 def _seed_master_shadow_rows(df_plan: pd.DataFrame, account: str) -> pd.DataFrame:
     """For each Active master SKU missing from df_plan, add one row per
-    active FC with zero SOH/velocity. Downstream target_cover / send_qty
-    logic runs uniformly; shadow rows surface as fc_inventory=0,
-    send_qty=0 with allocation_logic='master-only'."""
+    active FC. Downstream target_cover / send_qty logic runs uniformly;
+    shadow rows surface with allocation_logic='master-only'.
+
+    fc_inventory / fc_in_transit are seeded from the LEDGER, not zeroed.
+    Operator 2026-08-27: "unable to see inv in fc tab for ke-01 but sometime
+    back the data was there". df_plan is built by grouping the account's FBA
+    Sales shipments by (sku, FC), so a SKU with no shipment rows in THIS
+    seller account never enters the plan and fell through to this seeder —
+    which hard-zeroed inventory. KE-01 (FBA79488) is exactly that: zero
+    Viomi shipment rows, but the Viomi ledger holds 60 sellable units across
+    AMD2/BLR7/BLR8/BOM5/MAA4 on the latest date. It showed 0 at all 18 FCs.
+    A shadow row exists to keep the SKU VISIBLE; showing a false 0 for stock
+    we actually hold is worse than not showing it, because the operator
+    reads it as "no stock" and ships more. Velocity legitimately stays 0 —
+    there genuinely are no shipments in this account.
+    """
     master = _load_account_master(account)
     if master is None or master.empty:
         return df_plan
@@ -1423,9 +1485,16 @@ def _seed_master_shadow_rows(df_plan: pd.DataFrame, account: str) -> pd.DataFram
     if not fcs:
         return df_plan
 
-    # Cross-product: missing SKUs × active FCs
+    # Real per-(SKU, FC) stock for these SKUs — see the docstring.
+    stock_map = _ledger_stock_by_sku_fc(account)
+
+    # Cross-product: missing SKUs × active FCs, PLUS any FC where the ledger
+    # holds stock for this SKU even if that FC isn't in the active list —
+    # otherwise the units stay invisible, which is the bug we're fixing.
     rows: list[dict] = []
+    enriched_units = 0
     for _, r in missing.iterrows():
+        _sku_u = str(r["sku"]).strip().upper()
         base = {
             "sku": r["sku"],
             "model": r.get("model", "-"),
@@ -1435,12 +1504,18 @@ def _seed_master_shadow_rows(df_plan: pd.DataFrame, account: str) -> pd.DataFram
             "master_carton": r.get("master_carton", 0),
             "ampm_inventory": r.get("ampm_inventory", 0),
         }
-        for fc in fcs:
-            rows.append({**base, "fulfillment_center": fc})
+        stock_fcs = {f for (s, f) in stock_map if s == _sku_u}
+        for fc in sorted(set(fcs) | stock_fcs):
+            end, itw = stock_map.get((_sku_u, str(fc).strip().upper()), (0, 0))
+            enriched_units += end
+            rows.append({**base, "fulfillment_center": fc,
+                         "fc_inventory": end, "fc_in_transit": itw})
 
     shadow = pd.DataFrame(rows)
 
-    # Zero-fill everything else that fc_planning would have provided
+    # Zero-fill everything else that fc_planning would have provided.
+    # fc_inventory / fc_in_transit are set above and must NOT be re-zeroed —
+    # the `not in shadow.columns` guard is what protects them.
     zero_cols = [
         "window_velocity", "last_2_velocity", "weekly_velocity",
         "total_units_90d", "total_units_sold", "units_last_14d",
@@ -1451,6 +1526,9 @@ def _seed_master_shadow_rows(df_plan: pd.DataFrame, account: str) -> pd.DataFram
     for c in zero_cols:
         if c not in shadow.columns:
             shadow[c] = 0
+    if enriched_units:
+        print(f"ℹ️ {account}: shadow rows carry {enriched_units} ledger unit(s) "
+              f"for {len(missing)} master-only SKU(s)")
     if "velocity_basis" not in shadow.columns:
         shadow["velocity_basis"] = "window"
     if "listing_status" not in shadow.columns:
