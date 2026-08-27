@@ -522,13 +522,26 @@ export default function ReplenishmentV2() {
     ];
     const lines = [...preamble, headers.join(",")];
 
-    table.getSortedRowModel().rows.forEach(({ original: r }) => {
+    table.getSortedRowModel().rows.forEach(row => {
+      const r = row.original;
+      // Read the TABLE's value for each column, never r[id].
+      // r[id] silently exports "" or a stale number for any column whose id
+      // doesn't match a raw field — accessorFn columns (Trend had no field at
+      // all; Total sold qty is basis-aware and exported the window total even
+      // when the row was on the 2wk basis) and columns where accessorKey
+      // differs from id (Mother WH reads model_ampm_inventory). getValue()
+      // is the same source the on-screen cell uses, so export == what you see.
+      const byId = new Map(row.getAllCells().map(c => [c.column.id, c]));
       const cells = order.map(id => {
-        let v = id === "working_value"
-          ? (workingValues[r.sku] ?? r.working_value ?? "")
-          : id === "master_carton"
-            ? (masterCartons[r.model] ?? r.master_carton ?? "")
-            : r[id];
+        let v;
+        if (id === "working_value") {
+          v = workingValues[r.sku] ?? r.working_value ?? "";
+        } else if (id === "master_carton") {
+          v = masterCartons[r.model] ?? r.master_carton ?? "";
+        } else {
+          const cell = byId.get(id);
+          v = cell ? cell.getValue() : r[id];
+        }
         if (v == null) v = "";
         const s = String(v).replace(/"/g, '""');
         return /[",\n]/.test(s) ? `"${s}"` : s;

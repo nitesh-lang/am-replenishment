@@ -315,9 +315,15 @@ export default function WMReplenishmentV2() {
     const order = columns.map(c => c.id);
     const headers = order.map(id => columns.find(c => c.id === id).header);
     const lines = [headers.join(",")];
-    table.getSortedRowModel().rows.forEach(({ original: r }) => {
+    table.getSortedRowModel().rows.forEach(row => {
+      const r = row.original;
+      // Read the TABLE's value per column, never r[id] — r[id] silently
+      // exports "" for accessorFn columns and a stale value when accessorKey
+      // differs from id. Same fix as ReplenishmentV2/FCAllocationV2 exportCSV.
+      const byId = new Map(row.getAllCells().map(c => [c.column.id, c]));
       const cells = order.map(id => {
-        let v = r[id];
+        const _cell = byId.get(id);
+        let v = _cell ? _cell.getValue() : r[id];
         if (v == null) v = "";
         const s = String(v).replace(/"/g, '""');
         return /[",\n]/.test(s) ? `"${s}"` : s;

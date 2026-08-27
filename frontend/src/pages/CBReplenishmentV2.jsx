@@ -384,13 +384,19 @@ export default function CBReplenishmentV2() {
     // Append a status column so operator can see EOL vs Active alongside numbers.
     headers.push("CB Status");
     const lines = [headers.join(",")];
-    table.getSortedRowModel().rows.forEach(({ original: r }) => {
+    table.getSortedRowModel().rows.forEach(row => {
+      const r = row.original;
+      // Read the TABLE's value per column, never r[id] — r[id] silently
+      // exports "" for accessorFn columns and a stale value when accessorKey
+      // differs from id. Same fix as ReplenishmentV2/FCAllocationV2 exportCSV.
+      const byId = new Map(row.getAllCells().map(c => [c.column.id, c]));
       const cells = order.map(id => {
+        const _cell = byId.get(id);
         let v = id === "working_value"
           ? (workingValues[r.model] ?? r.working_value ?? r.po_requirement ?? "")
           : id === "remarks"
             ? (remarksValues[r.model] ?? r.remarks ?? "")
-            : r[id];
+            : (_cell ? _cell.getValue() : r[id]);
         if (v == null) v = "";
         const s = String(v).replace(/"/g, '""');
         return /[",\n]/.test(s) ? `"${s}"` : s;

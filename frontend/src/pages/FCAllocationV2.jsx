@@ -689,11 +689,20 @@ export default function FCAllocationV2() {
     ];
     const lines = [...preamble, headers.join(",")];
 
-    table.getSortedRowModel().rows.forEach(({ original: r }) => {
+    table.getSortedRowModel().rows.forEach(row => {
+      const r = row.original;
+      // Read the TABLE's value per column, never r[id] — see the same fix in
+      // ReplenishmentV2.exportCSV. Here r[id] blanked Cluster (accessorFn) and
+      // exported the window total for Total sold qty on 2wk-basis rows.
+      const byId = new Map(row.getAllCells().map(c => [c.column.id, c]));
       const cells = order.map(id => {
-        let v = isFossil && (id === "send_qty" || id === "remarks")
-          ? getFossilField(r, id === "send_qty" ? "send_qty" : "remarks")
-          : r[id];
+        let v;
+        if (isFossil && (id === "send_qty" || id === "remarks")) {
+          v = getFossilField(r, id === "send_qty" ? "send_qty" : "remarks");
+        } else {
+          const cell = byId.get(id);
+          v = cell ? cell.getValue() : r[id];
+        }
         if (v == null) v = "";
         const s = String(v).replace(/"/g, '""');
         return /[",\n]/.test(s) ? `"${s}"` : s;

@@ -286,9 +286,15 @@ export default function FossilReplenishmentV2() {
     const order = columns.map(c => c.id);
     const headers = order.map(id => columns.find(c => c.id === id).header);
     const lines = [headers.join(",")];
-    table.getSortedRowModel().rows.forEach(({ original: r }) => {
+    table.getSortedRowModel().rows.forEach(row => {
+      const r = row.original;
+      // Read the TABLE's value per column, never r[id] — r[id] silently
+      // exports "" for accessorFn columns and a stale value when accessorKey
+      // differs from id. Same fix as ReplenishmentV2/FCAllocationV2 exportCSV.
+      const byId = new Map(row.getAllCells().map(c => [c.column.id, c]));
       const cells = order.map(id => {
-        let v = r[id];
+        const _cell = byId.get(id);
+        let v = _cell ? _cell.getValue() : r[id];
         // VD rows: 4wk top avg should be blank
         if (id === "Last 4 Weeks Top Avg" && r["Assortment Type"] === "VD") v = "";
         if (v == null) v = "";
