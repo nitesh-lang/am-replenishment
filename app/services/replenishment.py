@@ -1456,18 +1456,37 @@ def calculate_replenishment(
 # CB EOL helper — shared by AA Replenishment + FC Allocation
 # =================================================
 def _apply_cb_eol_gate(df, model_col: str = "model", asin_col: str = "asin",
-                       zero_cols: list = None):
-    """AA-only gate for CB-EOL ASINs (operator rule 2026-08-14):
+                       zero_cols: list = None, status_col: str = "listing_status"):
+    """AA gate for CB-EOL ASINs — FLAG THEM, NEVER HIDE THEM.
 
-      Model has 1 ASIN  → CB-EOL row is DROPPED (as before, 2026-08-11 rule).
-      Model has 2+ ASINs → CB-EOL rows are KEPT so both siblings are
-                           visible; `is_eol=True` flag added; specified
-                           `zero_cols` set to 0 so the EOL row won't
-                           consume plan qty (approver sees the row for
-                           audit but can't reorder it).
+    Current rule (operator 2026-08-27): *"EOLs should be present in account,
+    shouldn't be hidden, but should have remarks of CB EOL which we have
+    already."* So this gate drops NOTHING. Every row survives; CB-EOL rows get
+    `is_eol=True` (the frontend already renders the rose "EOL" badge on the SKU
+    cell and strikes through the ASIN) and their `zero_cols` are set to 0, so
+    an EOL line is fully visible for audit but cannot be reordered or consume
+    plan quantity on an OrderPilot push.
 
-    Ensures `is_eol` column exists on ALL rows (False for non-EOL, True
-    for surviving EOL siblings) so frontend can badge consistently.
+    History — why this changed twice:
+      2026-08-11/14: solo-EOL models were DROPPED; only EOL siblings of a
+        duplicate-model ASIN were kept-and-zeroed.
+      2026-08-27: AA-25M went missing from AA Replenishment. Root cause: the
+        `CB` column in CB Replenishment_Master carries TWO meanings and the
+        gate read only one. For a mature SKU `CB = No` means "we are exiting";
+        for a new ASIN it means "not in the CB 1P vendor programme yet".
+        Dropping on the second meaning deleted rows the AA sheet marks Active
+        — AA-25M (ASIN Type "Tail", sold in W34, 51 units/12wk), AM-K1 and
+        AH-50 Ear Cushion (both selling in W34), plus a batch of "New" /
+        "To be Launched" products. Those are launches, not exits.
+        The drop was also never reconcilable with the older standing rule
+        (feedback_never_drop_rows_silently, 2026-08-05): "never ever drop any
+        data unless it was asked" — zero data is fine, invisible is not.
+
+    Do not reintroduce a drop here. If EOL rows need to be out of the way,
+    that is a frontend filter the operator can toggle, not a silent delete.
+
+    Ensures `is_eol` exists on ALL rows (False for non-EOL) so the frontend
+    can badge consistently.
     """
     import pandas as _pd
     if df is None or len(df) == 0:
@@ -1484,31 +1503,13 @@ def _apply_cb_eol_gate(df, model_col: str = "model", asin_col: str = "asin",
     if not eol or asin_col not in df.columns or model_col not in df.columns:
         return df
     _asin = df[asin_col].astype(str).str.strip().str.upper()
-    _is_eol = _asin.isin(eol)
-    # Count ASINs per model. Empty ASINs (blank rows) don't count.
-    _valid_asin = _asin != ""
-    _model = df[model_col].astype(str).str.strip()
-    _counts = (
-        df.loc[_valid_asin]
-          .assign(_m=_model[_valid_asin])
-          .groupby("_m")[asin_col]
-          .nunique()
-    )
-    _dup_models = set(_counts[_counts >= 2].index)
-    is_duplicate_model = _model.isin(_dup_models)
-    # Rows to drop: EOL AND model has only 1 ASIN (no active sibling)
-    drop_mask = _is_eol & ~is_duplicate_model
-    keep_mask = ~drop_mask
-    dropped = int(drop_mask.sum())
-    kept_eol = int((_is_eol & is_duplicate_model).sum())
-    df = df.loc[keep_mask].reset_index(drop=True)
-    # Recompute for the retained frame
-    _asin2 = df[asin_col].astype(str).str.strip().str.upper()
-    _is_eol2 = _asin2.isin(eol)
-    df["is_eol"] = _is_eol2
-    # Zero out plan/qty columns on surviving EOL rows so they don't
-    # take stock from OrderPilot pushes. Keep informational fields
-    # (real_am_inv, mother_inv, cb_soh, weekly_velocity) intact.
+    # No row is removed — flag only. See the docstring before changing this.
+    df = df.reset_index(drop=True)
+    df["is_eol"] = df[asin_col].astype(str).str.strip().str.upper().isin(eol)
+    kept_eol = int(df["is_eol"].sum())
+    # Zero out plan/qty columns on EOL rows so they don't take stock from
+    # OrderPilot pushes. Keep informational fields (real_am_inv, mother_inv,
+    # cb_soh, weekly_velocity) intact — the row must still read as real data.
     zero_cols = zero_cols or [
         "replenishment_qty", "recommended_qty",
         "cartons_needed", "excess_units",
@@ -1518,9 +1519,9 @@ def _apply_cb_eol_gate(df, model_col: str = "model", asin_col: str = "asin",
     for c in zero_cols:
         if c in df.columns:
             df.loc[df["is_eol"], c] = 0
-    if dropped or kept_eol:
-        print(f"[AA CB-EOL gate] dropped {dropped} (solo-EOL) · "
-              f"kept {kept_eol} EOL siblings with qty=0 (duplicate models)")
+    if kept_eol:
+        print(f"[AA CB-EOL gate] flagged {kept_eol} CB-EOL row(s) with qty=0 "
+              f"— none dropped (operator 2026-08-27: EOLs stay visible)")
     return df
 
 

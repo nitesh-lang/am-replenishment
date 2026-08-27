@@ -1119,7 +1119,7 @@ export default function ReplenishmentV2() {
                                 {r.sku}
                                 {r.is_eol && (
                                   <span
-                                    title="CB-EOL sibling of a duplicate-model ASIN — visible for audit but replenishment_qty is 0"
+                                    title="CB EOL — Cambium has marked this SKU CB=No in CB Replenishment_Master. Kept visible on purpose; replenishment qty is forced to 0 so it cannot be reordered."
                                     className="px-1 py-0.5 text-[9px] font-bold rounded bg-rose-100 text-rose-700"
                                   >
                                     EOL
