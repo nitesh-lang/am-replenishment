@@ -134,7 +134,7 @@ def _num(row, key, default=0.0) -> float:
 
 
 def _rows_for_account(account: str, sales_window: int, replenish_weeks: int,
-                      velocity_mode: str) -> pd.DataFrame:
+                      velocity_mode: str, lost_basis: str = "avg") -> pd.DataFrame:
     from app.services.replenishment import calculate_replenishment
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -143,6 +143,7 @@ def _rows_for_account(account: str, sales_window: int, replenish_weeks: int,
             replenish_weeks=replenish_weeks,
             account=account,
             velocity_mode=velocity_mode,
+            lost_basis=lost_basis,
         )
 
 
@@ -392,7 +393,8 @@ def build_watchlist(accounts: list[str] | None = None,
                     sales_window: int = 12,
                     replenish_weeks: int = 8,
                     velocity_mode: str = "max",
-                    asin_types: list[str] | None = None) -> dict:
+                    asin_types: list[str] | None = None,
+                    lost_basis: str = "avg") -> dict:
     """Watchlist rows across accounts, highest-priority signal first.
 
     `asin_types` filters to the given ASIN Types (case-insensitive). It is
@@ -407,9 +409,17 @@ def build_watchlist(accounts: list[str] | None = None,
     rows: list[dict] = []
     errors: list[str] = []
 
+    # Lost-units basis is a WATCHLIST-scoped option (operator 2026-08-27):
+    # "avg" here by default, while the shared momentum module keeps "peak"
+    # as ITS default so the Replenishment tab's numbers stay untouched.
+    lb = (lost_basis or "avg").strip().lower()
+    if lb not in ("avg", "2wk", "peak"):
+        lb = "avg"
+
     for acct in accts:
         try:
-            df = _rows_for_account(acct, sales_window, replenish_weeks, velocity_mode)
+            df = _rows_for_account(acct, sales_window, replenish_weeks,
+                                   velocity_mode, lost_basis=lb)
         except Exception as e:
             errors.append(f"{acct}: {type(e).__name__}: {e}")
             continue
@@ -485,6 +495,7 @@ def build_watchlist(accounts: list[str] | None = None,
         "sales_window": sales_window,
         "replenish_weeks": replenish_weeks,
         "velocity_mode": velocity_mode,
+        "lost_basis": lb,
         "errors": errors,
     }
 
@@ -598,10 +609,14 @@ def build_email_draft(watchlist: dict, week_tag: str | None = None,
                      f"attached/linked watchlist.")
             L.append("")
 
+    _lb_label = {"avg": "average weekly sales", "2wk": "last-2-week run rate",
+                 "peak": "peak week"}.get(watchlist.get("lost_basis") or "avg",
+                                          "average weekly sales")
     L.append("Figures are from the Replenishment tab for the selected sales "
              f"window ({watchlist.get('sales_window')} weeks) at "
              f"{watchlist.get('replenish_weeks')}-week cover, velocity basis "
-             f"'{watchlist.get('velocity_mode')}'.")
+             f"'{watchlist.get('velocity_mode')}'. Lost-units figures are "
+             f"benchmarked against {_lb_label}.")
     L.append("")
     L.append("Thanks,")
     L.append("Naresh")

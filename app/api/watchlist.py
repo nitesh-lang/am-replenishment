@@ -40,6 +40,11 @@ def get_watchlist(
         default=None,
         description="Comma-separated ASIN Types to keep; omit for all.",
     ),
+    lost_basis: str = Query(
+        default="avg",
+        description="Benchmark for lost-units: avg (default) | 2wk | peak. "
+                    "Watchlist-only — other tabs keep the historical peak basis.",
+    ),
 ):
     return replen_watchlist.build_watchlist(
         accounts=_accounts(account),
@@ -47,6 +52,7 @@ def get_watchlist(
         replenish_weeks=replenish_weeks,
         velocity_mode=velocity_mode,
         asin_types=_csv(asin_type),
+        lost_basis=lost_basis,
     )
 
 
@@ -58,6 +64,7 @@ def get_email_draft(
     velocity_mode: str = Query(default="max"),
     week_tag: str | None = Query(default=None),
     asin_type: str | None = Query(default=None),
+    lost_basis: str = Query(default="avg"),
 ):
     # Same filter args as GET /watchlist, so the draft always describes exactly
     # the set the operator has on screen.
@@ -67,6 +74,7 @@ def get_email_draft(
         replenish_weeks=replenish_weeks,
         velocity_mode=velocity_mode,
         asin_types=_csv(asin_type),
+        lost_basis=lost_basis,
     )
     # Default the week to the same "latest completed sales week" the Plans
     # module stamps, so the email and the plan batches agree on the period.

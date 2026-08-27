@@ -27,6 +27,9 @@ export default function Watchlist() {
   const [salesWindow, setSalesWindow] = useState(12);
   const [coverWeeks, setCoverWeeks] = useState(8);
   const [velocityMode, setVelocityMode] = useState("max");
+  // Benchmark for the lost-units figures — Watchlist-only option; the
+  // Replenishment tab keeps its historical peak-based numbers.
+  const [lostBasis, setLostBasis] = useState("avg");
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -55,13 +58,14 @@ export default function Watchlist() {
       sales_window: salesWindow,
       replenish_weeks: coverWeeks,
       velocity_mode: velocityMode,
+      lost_basis: lostBasis,
     });
     if (accounts.length && accounts.length < ACCOUNTS.length) {
       p.set("account", accounts.join(","));
     }
     if (asinTypes.length) p.set("asin_type", asinTypes.join(","));
     return p.toString();
-  }, [accounts, salesWindow, coverWeeks, velocityMode, asinTypes]);
+  }, [accounts, salesWindow, coverWeeks, velocityMode, asinTypes, lostBasis]);
 
   useEffect(() => {
     setLoading(true); setErr(""); setDraft(null);
@@ -157,6 +161,15 @@ export default function Watchlist() {
             className="px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
             <option value="max">Higher of window / 2wk</option>
             <option value="window">Selected window only</option>
+          </select>
+        </label>
+        <label className="text-xs text-slate-600" title="What a flagged week is measured against when counting lost units. Simple math: benchmark minus that week's actual sales.">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1">Lost-units basis</div>
+          <select value={lostBasis} onChange={e => setLostBasis(e.target.value)}
+            className="px-2 py-1.5 text-sm rounded-md border border-slate-200 bg-white">
+            <option value="avg">Average weekly sales</option>
+            <option value="2wk">Last 2 weeks</option>
+            <option value="peak">Peak week</option>
           </select>
         </label>
 

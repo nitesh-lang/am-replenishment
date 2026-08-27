@@ -18,8 +18,25 @@ Output columns (surfaced on the Replenishment tab):
   oos_weeks_3m       int   Layer-1 count (AMPM=0 weeks)
   thin_weeks_3m      int   Layer-2 count (thinning without hitting 0)
   lost_units_3m      int   COMBINED: for each flagged week, sum of
-                           max(0, peak_velocity − actual_sales_that_week)
+                           max(0, benchmark − actual_sales_that_week)
   momentum_flag      str   RED / AMBER / '' (see rules below)
+
+lost_basis — what "benchmark" means (operator 2026-08-27: "dont take peak
+numbers, just sales vs cover selected basis as simple math, also give option
+if last 2 week or considering peak days" — scoped to the WATCHLIST only:
+"hope we are doing changes in watchlist not other modules"):
+  "peak" (DEFAULT here) — the historical behaviour. Default stays peak so
+         the Replenishment tab and every other existing caller render
+         byte-identical numbers; ONLY replen_watchlist passes a different
+         basis. Do not change this default without the operator.
+  "avg"  — the SKU's average weekly sales over the momentum window. The
+         watchlist's default: peak-based counterfactuals booked absurd
+         losses (AM-W45: 387 "lost" units, of which 122 assumed a 40-unit
+         week would have been a 162-unit week).
+  "2wk"  — trailing-2-week average, for "what is it doing right now".
+NOTE: lost_basis changes only the SIZE of the loss. Which weeks get flagged
+(OOS / THIN, and thus momentum_flag) is unchanged — THIN detection still
+compares against 70% of peak, which is a detector, not a valuation.
 
 Momentum flag:
   RED    "Bleeding"  — oos_weeks ≥ 2
@@ -307,12 +324,15 @@ def _weekly_sales_from_raw_shipments(
 
 @lru_cache(maxsize=32)
 def _cached_signals(brand_key: str, weeks: int, current_ws_iso: str,
-                    sales_hash: int, master_hash: int) -> pd.DataFrame:
+                    sales_hash: int, master_hash: int,
+                    lost_basis: str = "peak") -> pd.DataFrame:
     """Memoize the whole compute. Module-level slots hold the sales +
-    master DataFrames (not part of cache key because they're heavy)."""
+    master DataFrames (not part of cache key because they're heavy).
+    lost_basis IS part of the key — different bases are different results."""
     global _SALES_CACHE, _MASTER_CACHE
     return _compute(_SALES_CACHE, _MASTER_CACHE, brand_key, weeks,
-                    _date.fromisoformat(current_ws_iso))
+                    _date.fromisoformat(current_ws_iso),
+                    lost_basis=lost_basis)
 
 
 _SALES_CACHE: pd.DataFrame | None = None
@@ -325,6 +345,7 @@ def _compute(
     brand: str,
     weeks: int,
     current_ws: _date,
+    lost_basis: str = "peak",
 ) -> pd.DataFrame:
     hist = _ampm_history(brand, weeks, current_ws)
     if hist.empty:
@@ -352,6 +373,19 @@ def _compute(
     peak = sales_wide.max(axis=1).fillna(0)
     avg  = sales_wide.mean(axis=1).fillna(0)
 
+    # Benchmark for VALUING a flagged week (see module docstring, lost_basis).
+    # Flag detection below still uses avg/peak exactly as before.
+    _lb = (lost_basis or "peak").strip().lower()
+    if _lb == "avg":
+        benchmark = avg
+    elif _lb == "2wk":
+        # Trailing 2 weeks of the momentum window; falls back to the window
+        # average when the tail is empty (new SKU with no recent sales rows).
+        benchmark = sales_wide.iloc[:, -2:].mean(axis=1).fillna(0)
+        benchmark = benchmark.where(benchmark > 0, avg)
+    else:
+        benchmark = peak
+
     oos_weeks  = pd.Series(0, index=hist.index, dtype=int)
     thin_weeks = pd.Series(0, index=hist.index, dtype=int)
     lost_units = pd.Series(0.0, index=hist.index)
@@ -374,10 +408,11 @@ def _compute(
         )
         thin_weeks = thin_weeks + is_thin.astype(int)
 
-        # Combined lost units: (peak − actual) for each flagged week,
-        # clipped ≥ 0
+        # Combined lost units: (benchmark − actual) for each flagged week,
+        # clipped ≥ 0. Benchmark follows lost_basis; default is the window
+        # average, NOT peak (peak booked fantasy losses — see docstring).
         flagged = is_oos | is_thin
-        lost_this_week = (peak - sales_w).clip(lower=0)
+        lost_this_week = (benchmark - sales_w).clip(lower=0)
         lost_units = lost_units + flagged.astype(int) * lost_this_week
 
     # Momentum flag
@@ -408,11 +443,13 @@ def compute_oos_signals(
     weeks: int = DEFAULT_WEEKS,
     current_ampm_series: pd.Series | None = None,  # kept for API compat; unused
     master_df: pd.DataFrame | None = None,
+    lost_basis: str = "peak",
 ) -> pd.DataFrame:
     """Public entry point. brand is one of Nexlev/Viomi/Audio Array/
     White Mulberry/Tonor. `master_df` should be the account's
     replenishment master (needs SKU, ASIN, Model columns) so we can
-    attribute Amazon-channel sales (which come by ASIN, not SKU)."""
+    attribute Amazon-channel sales (which come by ASIN, not SKU).
+    lost_basis: "peak" (default, historical) | "avg" | "2wk" — see module docstring."""
     global _SALES_CACHE, _MASTER_CACHE
     _SALES_CACHE = weekly_sales
     _MASTER_CACHE = master_df
@@ -420,4 +457,5 @@ def compute_oos_signals(
     sales_hash  = int(len(weekly_sales))  if weekly_sales is not None else 0
     master_hash = int(len(master_df))    if master_df    is not None else 0
     return _cached_signals(brand.lower(), weeks, ws.isoformat(),
-                           sales_hash, master_hash)
+                           sales_hash, master_hash,
+                           (lost_basis or "peak").strip().lower())

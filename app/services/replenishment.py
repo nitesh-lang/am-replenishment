@@ -606,9 +606,14 @@ def calculate_replenishment(
     replenish_weeks: int,
     account: str = "NEXLEV",
     velocity_mode: str = "max",
+    lost_basis: str = "peak",
 ) -> pd.DataFrame:
     """
     Core replenishment calculation.
+
+    lost_basis: benchmark for the lost_units_3m momentum column.
+    DEFAULT "peak" = the historical numbers this tab has always shown;
+    only the Watchlist passes "avg"/"2wk". See ampm_history's docstring.
     """
 
     # ---------------------------------------------
@@ -1335,7 +1340,8 @@ def calculate_replenishment(
         )
         signals = compute_oos_signals(brand_name, sales, weeks=13,
                                       current_ampm_series=_cur_ampm,
-                                      master_df=master)
+                                      master_df=master,
+                                      lost_basis=lost_basis)
         if not signals.empty:
             df["_sku_norm"] = _sku_norm.values
             df = df.merge(
@@ -1365,7 +1371,8 @@ def calculate_replenishment(
                 try:
                     _tsig = compute_oos_signals("Tonor", sales, weeks=13,
                                                 current_ampm_series=_cur_ampm,
-                                                master_df=master)
+                                                master_df=master,
+                                                lost_basis=lost_basis)
                     if _tsig is not None and not _tsig.empty:
                         _t = _tsig.reset_index()
                         _t["sku"] = _t["sku"].astype(str).str.strip().str.upper()
