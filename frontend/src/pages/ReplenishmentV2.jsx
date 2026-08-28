@@ -354,7 +354,10 @@ export default function ReplenishmentV2() {
      COLUMNS
   ============================================================ */
   const columns = useMemo(() => [
-    { id: "model",            accessorKey: "model",            header: "Model",     size: 130, meta: { sticky: 1, group: "id" } },
+    // size MUST equal the sticky-2 left offset (150px) — the sticky offsets are
+    // hard-coded, so a mismatch opens a band where scrolled columns bleed
+    // through next to SKU (operator screenshot, 2026-08-28).
+    { id: "model",            accessorKey: "model",            header: "Model",     size: 150, meta: { sticky: 1, group: "id" } },
     { id: "sku",              accessorKey: "sku",              header: "SKU",       size: 95,  meta: { sticky: 2, group: "id" } },
     { id: "asin",             accessorKey: "asin",             header: "ASIN",      size: 100, meta: { group: "list" } },
     { id: "trend",            accessorFn: r => classifyTrend(r.weekly_sales || []), header: "Trend", size: 110, meta: { group: "vel" } },
@@ -1123,7 +1126,9 @@ export default function ReplenishmentV2() {
                         <th
                           key={h.id}
                           onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}
-                          style={{ width: h.getSize() }}
+                          style={meta.sticky
+                            ? { width: h.getSize(), minWidth: h.getSize(), maxWidth: h.getSize() }
+                            : { width: h.getSize() }}
                           className={cn(
                             "px-3 py-2.5 border-b-2 border-slate-300 select-none",
                             meta.numeric ? "text-right" : "text-left",
@@ -1171,11 +1176,11 @@ export default function ReplenishmentV2() {
                           let content;
                           if (colId === "model") {
                             content = (
-                              <span className="font-semibold text-slate-900 inline-flex items-center gap-1">
+                              <span className="font-semibold text-slate-900 inline-flex items-center gap-1 max-w-full">
                                 {isExpanded
-                                  ? <ChevronDown  className="w-3.5 h-3.5 text-indigo-600" />
-                                  : <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
-                                {r.model}
+                                  ? <ChevronDown  className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
+                                <span className="truncate" title={r.model}>{r.model}</span>
                               </span>
                             );
                           } else if (colId === "sku") {
@@ -1330,10 +1335,13 @@ export default function ReplenishmentV2() {
                               key={cell.id}
                               onMouseDown={meta.numeric ? (e) => onCellMouseDown(ri, ci, e) : undefined}
                               onMouseEnter={() => onCellMouseEnter(ri, ci)}
+                              style={meta.sticky
+                                ? { width: cell.column.getSize(), minWidth: cell.column.getSize(), maxWidth: cell.column.getSize() }
+                                : undefined}
                               className={cn(
                                 meta.numeric ? "text-right" : "text-left",
-                                meta.sticky === 1 && "sticky left-0 bg-white z-[1] shadow-[1px_0_0_#e2e8f0]",
-                                meta.sticky === 2 && "sticky left-[150px] bg-white z-[1] shadow-[1px_0_0_#e2e8f0]",
+                                meta.sticky === 1 && "sticky left-0 bg-white z-[1] shadow-[1px_0_0_#e2e8f0] overflow-hidden",
+                                meta.sticky === 2 && "sticky left-[150px] bg-white z-[1] shadow-[1px_0_0_#e2e8f0] overflow-hidden",
                                 isExpanded && meta.sticky && "!bg-indigo-50",
                                 meta.group === "vel" && isBumped && colId !== "trend" && "bg-indigo-50/40",
                                 isSelected && "bg-indigo-100 outline outline-1 outline-indigo-500 outline-offset-[-1px]",

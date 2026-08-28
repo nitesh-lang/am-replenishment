@@ -1278,7 +1278,9 @@ export default function FCAllocationV2() {
                         <th
                           key={h.id}
                           onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}
-                          style={{ width: h.getSize() }}
+                          style={meta.sticky
+                            ? { width: h.getSize(), minWidth: h.getSize(), maxWidth: h.getSize() }
+                            : { width: h.getSize() }}
                           className={cn(
                             "px-3 py-2.5 border-b-2 border-slate-300 select-none",
                             meta.numeric ? "text-right" : "text-left",
@@ -1331,11 +1333,11 @@ export default function FCAllocationV2() {
                           let content;
                           if (colId === "model") {
                             content = (
-                              <span className="font-semibold text-slate-900 inline-flex items-center gap-1">
+                              <span className="font-semibold text-slate-900 inline-flex items-center gap-1 max-w-full">
                                 {isExpanded
-                                  ? <ChevronDown className="w-3.5 h-3.5 text-indigo-600" />
-                                  : <ChevronRight className="w-3.5 h-3.5 text-slate-300" />}
-                                {r.model}
+                                  ? <ChevronDown className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  : <ChevronRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />}
+                                <span className="truncate" title={r.model}>{r.model}</span>
                               </span>
                             );
                           } else if (colId === "sku") {
@@ -1474,11 +1476,14 @@ export default function FCAllocationV2() {
                               key={cell.id}
                               onMouseDown={meta.numeric ? (e) => onCellMouseDown(globalRowIdx, ci, e) : undefined}
                               onMouseEnter={() => onCellMouseEnter(globalRowIdx, ci)}
+                              style={meta.sticky
+                                ? { width: cell.column.getSize(), minWidth: cell.column.getSize(), maxWidth: cell.column.getSize() }
+                                : undefined}
                               className={cn(
                                 meta.numeric ? "text-right" : "text-left",
-                                meta.sticky === 1 && "sticky left-0 bg-white z-[1] shadow-[1px_0_0_#e2e8f0]",
-                                meta.sticky === 2 && "sticky left-[140px] bg-white z-[1] shadow-[1px_0_0_#e2e8f0]",
-                                meta.sticky === 3 && "sticky left-[250px] bg-white z-[1] shadow-[1px_0_0_#e2e8f0]",
+                                meta.sticky === 1 && "sticky left-0 bg-white z-[1] shadow-[1px_0_0_#e2e8f0] overflow-hidden",
+                                meta.sticky === 2 && "sticky left-[140px] bg-white z-[1] shadow-[1px_0_0_#e2e8f0] overflow-hidden",
+                                meta.sticky === 3 && "sticky left-[250px] bg-white z-[1] shadow-[1px_0_0_#e2e8f0] overflow-hidden",
                                 isExpanded && meta.sticky && "!bg-indigo-50",
                                 isSelected && "bg-indigo-100 outline outline-1 outline-indigo-500 outline-offset-[-1px]",
                               )}
