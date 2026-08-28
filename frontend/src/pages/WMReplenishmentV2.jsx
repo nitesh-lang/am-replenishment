@@ -16,6 +16,7 @@ import { SOPModal, SOPButton } from "../components/SOPModal";
 import { WMReplenishmentSOPContent } from "../components/SOPContents";
 import DataFreshnessBanner from "../components/DataFreshnessBanner";
 import { cn } from "../lib/cn";
+import { EDIT_CELL, EDIT_CELL_PRIMARY } from "../components/editCell";
 import { ColumnGroupToggles, isColumnVisible, groupsFromColumns } from "../components/ColumnGroupToggles";
 
 /* ============================================================
@@ -596,7 +597,8 @@ export default function WMReplenishmentV2() {
                                     setRows(rows.map(d => d.model === r.model ? { ...d, po_requirement: value } : d));
                                   }}
                                   onBlur={e => saveRow(r.model, e.target.value, r.remarks || "")}
-                                  className="w-16 text-right px-1.5 py-1 border border-slate-200 rounded text-xs font-mono"
+                                  title="Working quantity — saves automatically when you leave the cell"
+                                  className={cn(EDIT_CELL_PRIMARY, "w-20 text-right px-2 py-1.5 text-xs font-mono")}
                                 />
                                 {status && (
                                   <span className={cn("text-[9px]",
@@ -618,7 +620,7 @@ export default function WMReplenishmentV2() {
                                   setRows(rows.map(d => d.model === r.model ? { ...d, remarks: value } : d));
                                 }}
                                 onBlur={e => saveRow(r.model, r.po_requirement || 0, e.target.value)}
-                                className="w-44 px-1.5 py-1 border border-slate-200 rounded text-xs"
+                                className={cn(EDIT_CELL, "w-44 px-2 py-1.5 text-xs placeholder:text-transparent hover:placeholder:text-slate-400 focus:placeholder:text-slate-400")}
                                 placeholder="—"
                               />
                             );

@@ -20,6 +20,8 @@ import { FCAllocationSOPContent } from "../components/SOPContents";
 import DataFreshnessBanner from "../components/DataFreshnessBanner";
 import { ColumnGroupToggles, isColumnVisible, groupsFromColumns } from "../components/ColumnGroupToggles";
 import { cn } from "../lib/cn";
+import { AsinTag } from "../components/AsinTag";
+import { EDIT_CELL, EDIT_CELL_PRIMARY } from "../components/editCell";
 
 /* ============================================================
    FC ALLOCATION V2 — TanStack + shadcn-style
@@ -1356,7 +1358,7 @@ export default function FCAllocationV2() {
                             const cl = FC_CLUSTER[r.fulfillment_center?.toUpperCase()] || r.cluster || "-";
                             content = <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">{cl}</span>;
                           } else if (colId === "asin") {
-                            content = <span className={cn("font-mono text-xs", r.is_eol ? "text-rose-500 line-through" : "text-slate-500")}>{r.asin || "—"}</span>;
+                            content = <AsinTag asin={r.asin} eol={r.is_eol} />;
                           } else if (colId === "inbound_to_fc") {
                             const v = r.inbound_to_fc || 0;
                             content = v > 0
@@ -1370,7 +1372,7 @@ export default function FCAllocationV2() {
                                   value={getFossilField(r, "send_qty") ?? 0}
                                   onClick={e => e.stopPropagation()}
                                   onChange={e => setFossilField(r, "send_qty", e.target.value)}
-                                  className="w-16 text-right px-1.5 py-1 border border-slate-200 rounded text-xs font-mono"
+                                  className={cn(EDIT_CELL, "w-16 text-right px-2 py-1.5 text-xs font-mono")}
                                 />
                               );
                             } else {
@@ -1388,7 +1390,7 @@ export default function FCAllocationV2() {
                                   value={fossilEdits[ck]?.cluster_po ?? r.cluster_po ?? 0}
                                   onClick={e => e.stopPropagation()}
                                   onChange={e => setFossilEdits(p => ({ ...p, [ck]: { ...p[ck], cluster_po: e.target.value } }))}
-                                  className="w-16 text-right px-1.5 py-1 border border-slate-200 rounded text-xs font-mono"
+                                  className={cn(EDIT_CELL, "w-16 text-right px-2 py-1.5 text-xs font-mono")}
                                 />
                               );
                             }
@@ -1403,7 +1405,7 @@ export default function FCAllocationV2() {
                                 value={getFossilField(r, "remarks") ?? ""}
                                 onClick={e => e.stopPropagation()}
                                 onChange={e => setFossilField(r, "remarks", e.target.value)}
-                                className="w-32 px-1.5 py-1 border border-slate-200 rounded text-xs"
+                                className={cn(EDIT_CELL, "w-32 px-2 py-1.5 text-xs")}
                                 placeholder="—"
                               />
                             );
@@ -1417,7 +1419,8 @@ export default function FCAllocationV2() {
                                   onClick={e => e.stopPropagation()}
                                   onChange={e => setWorkingValues(p => ({ ...p, [key]: e.target.value }))}
                                   onBlur={() => autoSaveInput(r)}
-                                  className="w-16 text-right px-1.5 py-1 border border-amber-300 rounded text-xs font-mono bg-amber-50/60 font-semibold"
+                                  title="Type the quantity to send — saves automatically when you leave the cell"
+                                  className={cn(EDIT_CELL_PRIMARY, "w-20 text-right px-2 py-1.5 text-xs font-mono")}
                                   placeholder="—"
                                 />
                                 {autoSavingKey === key && <span className="text-[9px] text-amber-600">…</span>}
@@ -1433,7 +1436,7 @@ export default function FCAllocationV2() {
                                 onChange={e => setRemarksMap(p => ({ ...p, [key]: e.target.value }))}
                                 onBlur={() => autoSaveInput(r)}
                                 placeholder="add remarks…"
-                                className="w-full px-1.5 py-1 border border-slate-200 rounded text-xs bg-white"
+                                className={cn(EDIT_CELL, "w-full px-2 py-1.5 text-xs placeholder:text-transparent hover:placeholder:text-slate-400 focus:placeholder:text-slate-400")}
                               />
                             );
                           } else if (colId === "fill_pct") {

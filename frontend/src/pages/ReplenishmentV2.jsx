@@ -22,6 +22,8 @@ import { ReplenishmentSOPContent } from "../components/SOPContents";
 import DataFreshnessBanner from "../components/DataFreshnessBanner";
 import { ColumnGroupToggles, isColumnVisible, groupsFromColumns } from "../components/ColumnGroupToggles";
 import { cn } from "../lib/cn";
+import { AsinTag } from "../components/AsinTag";
+import { EDIT_CELL, EDIT_CELL_PRIMARY } from "../components/editCell";
 
 /* ============================================================
    REPLENISHMENT V2 — TanStack + shadcn-style
@@ -1191,7 +1193,7 @@ export default function ReplenishmentV2() {
                               </span>
                             );
                           } else if (colId === "asin") {
-                            content = <span className={cn("font-mono text-xs", r.is_eol ? "text-rose-500 line-through" : "text-slate-500")}>{r.asin || "—"}</span>;
+                            content = <AsinTag asin={r.asin} eol={r.is_eol} />;
                           } else if (colId === "trend") {
                             content = <Sparkline data={r.weekly_sales || []} />;
                           } else if (colId === "sales_velocity") {
@@ -1266,7 +1268,8 @@ export default function ReplenishmentV2() {
                                     setDirty(true);
                                   }}
                                   onBlur={() => autoSaveRow(r)}
-                                  className="w-16 text-right px-1.5 py-1 border border-amber-300 rounded text-xs font-mono bg-amber-50/60 disabled:bg-amber-50/40 font-semibold"
+                                  title="Type the quantity to work with — saves automatically when you leave the cell"
+                                  className={cn(EDIT_CELL_PRIMARY, "w-20 text-right px-2 py-1.5 text-xs font-mono")}
                                   placeholder="—"
                                 />
                                 {autoSavingSku === r.sku && <span className="text-[9px] text-amber-600">…</span>}
@@ -1285,7 +1288,7 @@ export default function ReplenishmentV2() {
                                 }}
                                 onBlur={() => autoSaveRow(r)}
                                 placeholder="add remarks…"
-                                className="w-full px-1.5 py-1 border border-slate-200 rounded text-xs bg-white disabled:bg-slate-50"
+                                className={cn(EDIT_CELL, "w-full px-2 py-1.5 text-xs placeholder:text-transparent hover:placeholder:text-slate-400 focus:placeholder:text-slate-400")}
                               />
                             );
                           } else if (colId === "master_carton") {
@@ -1305,7 +1308,8 @@ export default function ReplenishmentV2() {
                                     });
                                   } catch {}
                                 }}
-                                className="w-12 text-right px-1.5 py-1 border border-slate-200 rounded text-xs font-mono"
+                                title="Master carton size — saves as you type"
+                                className={cn(EDIT_CELL, "w-14 text-right px-2 py-1.5 text-xs font-mono")}
                               />
                             );
                           } else if (colId === "ixd_type") {
