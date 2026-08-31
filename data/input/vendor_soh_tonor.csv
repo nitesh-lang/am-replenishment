@@ -1,28 +1,28 @@
 SKU,ASIN,Brand,Model,category_l0,category_l1,category_l2,NLC,Qty,Channel,Type,Week,OpenPOUnits,Aged90PlusUnits,UnsellableUnits,SellableCost,SnapshotDate
-FBA79577,B0CSCT63BL,Tonor,TM310,Conference Microphone,Wired,,965.0,2,1p,,,5,1,0,4085.13,2026-08-22
-FBA79576,B0BRCR2QQ7,Tonor,TC30S+,Condenser Microphone,Boom Arm Kit + RGB,,1749.0,2,1p,,,0,1,0,5103.47,2026-08-22
-FBA79579,B0CQX4GVSB,Tonor,D2,Dynamic Microphone,Hand held Mic,,1244.0,0,1p,,,0,0,0,,2026-08-22
-FBK77102,B07GVGMW59,Tonor,G11,Conference Microphone,Wired,,1108.0,23,1p,,,13,0,3,43308.75,2026-08-22
-FBA79115,B0C8JDHLX9,Tonor,T10,Accessories,Boom Arm Kit,,603.0,2,1p,,,0,2,0,2401.47,2026-08-22
-FBA79111,B0BRKFP94K,Tonor,TD510,Dynamic Microphone,USB/XLR Mic,,2412.0,4,1p,,,2,3,2,13743.63,2026-08-22
-FBA77111,B08CVP2HXP,Tonor,TC30,Condenser Microphone,Tripod,,1327.0,39,1p,,,-2,2,9,64158.35,2026-08-22
-FBA77117,B078WNW4YW,Tonor,S20,Accessories,Microphone Isolation Shield,,1174.0,38,1p,,,0,12,1,66003.46,2026-08-22
-FBA79574,B0B4WTHLX5,Tonor,TC30S,Condenser Microphone,Tripod+RGB,,1448.0,0,1p,,,0,0,0,,2026-08-22
-FBA77113,B01ISNU3X4,Tonor,K1,Dynamic Microphone,Hand held Mic,,848.0,120,1p,,,114,32,7,158854.33,2026-08-22
-FBA79696,B0CQX3VB1R,Tonor,TD310+,Dynamic Microphone,Hand held Mic + Boom Arm,,927.0,18,1p,,,0,6,2,30644.99,2026-08-22
-FBA77104,B089SJGQBH,Tonor,TC20,Condenser Microphone,Boom Arm Kit - XLR,,3015.0,0,1p,,,0,0,0,,2026-08-22
-FBA77101,B07WLWN2ZT,Tonor,TC-777,Condenser Microphone,Tripod,,1206.0,34,1p,,,27,12,14,55361.91,2026-08-22
-FBA79585,B0CFKHCQ8W,Tonor,T20LP,Accessories,Low Profile Boom Arm,,845.0,0,1p,,,1,0,2,0.0,2026-08-22
-FBA79578,B0CFKZ72N7,Tonor,D5,Dynamic Microphone,Hand held Mic,,1688.0,0,1p,,,0,0,0,,2026-08-22
-FBA79697,B0CQX4K9P5,Tonor,TD310,Dynamic Microphone,Hand held Mic + Stand,,790.0,62,1p,,,28,17,8,92096.25,2026-08-22
-FBA79582,B0CCVBQRFX,Tonor,TD510+,Dynamic Microphone,Hand held Mic + Boom Arm,,3491.0,0,1p,,,0,0,0,,2026-08-22
-FBA77105,B089FVQD3Z,Tonor,T30,Accessories,Boom Arm Kit,,1477.0,7,1p,,,2,0,0,13344.03,2026-08-22
-FBA77103,B09Z5Q194D,Tonor,ORCA001,Condenser Microphone,Stand,,2412.0,0,1p,,,0,0,2,0.0,2026-08-22
-FBA79116,B0BYHHSLPC,Tonor,TC-777 PRO,Condenser Microphone,Tripod - RGB,,1086.0,39,1p,,,32,6,12,62163.8,2026-08-22
-FBA79114,B0CCV74CL7,Tonor,TC310+,Condenser Microphone,Boom Arm Kit - USB - RGB,,1689.0,14,1p,,,0,0,6,28289.37,2026-08-22
-FBA79113,B0BTCXQQ6M,Tonor,TC310,Condenser Microphone,Tripod - RGB,,1206.0,1,1p,,,2,1,2,1751.16,2026-08-22
-FBA77116,B0BBL47VR5,Tonor,TC40S,Condenser Microphone,Boom Arm Kit - USB - RGB,,1930.0,5,1p,,,0,5,1,12931.87,2026-08-22
-FBA77114,B07TSN2H9D,Tonor,TC-2030,Condenser Microphone,Boom Arm Kit - USB,,4423.0,0,1p,,,0,0,1,0.0,2026-08-22
-FBA77115,B08V1JS3NY,Tonor,TC40,Condenser Microphone,Boom Arm Kit - USB,,1930.0,1,1p,,,0,1,3,2481.49,2026-08-22
-FBA79575,B0BG8CJXHH,Tonor,TC30+,Condenser Microphone,Boom Arm Kit,,1568.0,2,1p,,,0,2,1,4893.05,2026-08-22
-FBA77110,B08NDB5NWP,Tonor,TM20,Conference Microphone,Wired,,1695.0,7,1p,,,0,0,1,14852.16,2026-08-22
+FBA79578,B0CFKZ72N7,Tonor,D5,Dynamic Microphone,Hand held Mic,,1688.0,0,1p,,,4,0,0,,2026-08-29
+FBA77103,B09Z5Q194D,Tonor,ORCA001,Condenser Microphone,Stand,,2412.0,0,1p,,,0,0,1,0.0,2026-08-29
+FBA79116,B0BYHHSLPC,Tonor,TC-777 PRO,Condenser Microphone,Tripod - RGB,,1086.0,52,1p,,,26,6,7,81425.21,2026-08-29
+FBA79696,B0CQX3VB1R,Tonor,TD310+,Dynamic Microphone,Hand held Mic + Boom Arm,,927.0,19,1p,,,65,6,2,32126.65,2026-08-29
+FBA79697,B0CQX4K9P5,Tonor,TD310,Dynamic Microphone,Hand held Mic + Stand,,790.0,50,1p,,,47,13,6,74765.98,2026-08-29
+FBA77113,B01ISNU3X4,Tonor,K1,Dynamic Microphone,Hand held Mic,,848.0,119,1p,,,187,28,3,157844.32,2026-08-29
+FBA79114,B0CCV74CL7,Tonor,TC310+,Condenser Microphone,Boom Arm Kit - USB - RGB,,1689.0,12,1p,,,35,0,4,24248.04,2026-08-29
+FBA79574,B0B4WTHLX5,Tonor,TC30S,Condenser Microphone,Tripod+RGB,,1448.0,0,1p,,,9,0,0,,2026-08-29
+FBK77102,B07GVGMW59,Tonor,G11,Conference Microphone,Wired,,1108.0,11,1p,,,72,0,1,20745.11,2026-08-29
+FBA77117,B078WNW4YW,Tonor,S20,Accessories,Microphone Isolation Shield,,1174.0,36,1p,,,0,12,1,62508.69,2026-08-29
+FBA77114,B07TSN2H9D,Tonor,TC-2030,Condenser Microphone,Boom Arm Kit - USB,,4423.0,0,1p,,,7,0,1,0.0,2026-08-29
+FBA77115,B08V1JS3NY,Tonor,TC40,Condenser Microphone,Boom Arm Kit - USB,,1930.0,1,1p,,,0,1,1,2481.49,2026-08-29
+FBA77110,B08NDB5NWP,Tonor,TM20,Conference Microphone,Wired,,1695.0,1,1p,,,36,0,2,2121.74,2026-08-29
+FBA77106,B082W4B7SX,Tonor,T20,Accessories,Boom Arm Kit,,1164.0,0,1p,,,17,0,0,,2026-08-29
+FBA77104,B089SJGQBH,Tonor,TC20,Condenser Microphone,Boom Arm Kit - XLR,,3015.0,0,1p,,,0,0,0,,2026-08-29
+FBA77116,B0BBL47VR5,Tonor,TC40S,Condenser Microphone,Boom Arm Kit - USB - RGB,,1930.0,5,1p,,,0,5,1,12931.87,2026-08-29
+FBA79111,B0BRKFP94K,Tonor,TD510,Dynamic Microphone,USB/XLR Mic,,2412.0,4,1p,,,26,3,1,13743.63,2026-08-29
+FBA79575,B0BG8CJXHH,Tonor,TC30+,Condenser Microphone,Boom Arm Kit,,1568.0,2,1p,,,0,2,1,4893.05,2026-08-29
+FBA79577,B0CSCT63BL,Tonor,TM310,Conference Microphone,Wired,,965.0,3,1p,,,9,1,0,5836.29,2026-08-29
+FBA79579,B0CQX4GVSB,Tonor,D2,Dynamic Microphone,Hand held Mic,,1244.0,0,1p,,,0,0,0,,2026-08-29
+FBA77105,B089FVQD3Z,Tonor,T30,Accessories,Boom Arm Kit,,1477.0,9,1p,,,0,0,0,17156.62,2026-08-29
+FBA79576,B0BRCR2QQ7,Tonor,TC30S+,Condenser Microphone,Boom Arm Kit + RGB,,1749.0,1,1p,,,3,1,0,3082.8,2026-08-29
+FBA79113,B0BTCXQQ6M,Tonor,TC310,Condenser Microphone,Tripod - RGB,,1206.0,2,1p,,,49,1,2,3502.32,2026-08-29
+FBA77111,B08CVP2HXP,Tonor,TC30,Condenser Microphone,Tripod,,1327.0,101,1p,,,6,2,4,164375.62,2026-08-29
+FBA77101,B07WLWN2ZT,Tonor,TC-777,Condenser Microphone,Tripod,,1206.0,36,1p,,,23,12,8,58257.82,2026-08-29
+FBA79115,B0C8JDHLX9,Tonor,T10,Accessories,Boom Arm Kit,,603.0,2,1p,,,0,2,0,2401.47,2026-08-29
+FBA79585,B0CFKHCQ8W,Tonor,T20LP,Accessories,Low Profile Boom Arm,,845.0,0,1p,,,7,0,2,0.0,2026-08-29
