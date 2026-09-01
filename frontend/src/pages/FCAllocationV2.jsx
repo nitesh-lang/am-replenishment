@@ -1214,39 +1214,40 @@ export default function FCAllocationV2() {
                 </>
               )}
 
-              {categories.length > 0 && listingStatuses.length > 0 && (
-                <span className="text-slate-200 mx-2">·</span>
-              )}
+            </div>
+          )}
 
-              {listingStatuses.length > 0 && (
-                <>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Status</span>
-                  {listingStatuses.map(ls => {
-                    const on = selectedStatuses.includes(ls);
-                    const dot =
-                      ls === "Active" ? "bg-emerald-500" :
-                      ls === "EOL"    ? "bg-red-500" :
-                                        "bg-slate-400";
-                    return (
-                      <button
-                        key={ls}
-                        onClick={() => setSelectedStatuses(p => p.includes(ls) ? p.filter(s => s !== ls) : [...p, ls])}
-                        className={cn(
-                          "px-2.5 py-1 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 transition-colors",
-                          on
-                            ? "bg-slate-900 text-white border-slate-900"
-                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                        )}
-                      >
-                        <span className={cn("w-1.5 h-1.5 rounded-full", dot)} />
-                        {ls}
-                      </button>
-                    );
-                  })}
-                  {selectedStatuses.length > 0 && (
-                    <button onClick={() => setSelectedStatuses([])} className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
-                  )}
-                </>
+          {/* Status (Active / EOL) stays OUTSIDE the collapsible Filters panel —
+              operator 2026-09-01: "active eol has gone from replenishment tab".
+              It is the highest-frequency filter; burying it behind the Filters
+              toggle read as removed. Only the bulky chip walls stay collapsed. */}
+          {listingStatuses.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mr-1">Status</span>
+              {listingStatuses.map(ls => {
+                const on = selectedStatuses.includes(ls);
+                const dot =
+                  ls === "Active" ? "bg-emerald-500" :
+                  ls === "EOL"    ? "bg-red-500" :
+                                    "bg-slate-400";
+                return (
+                  <button
+                    key={ls}
+                    onClick={() => setSelectedStatuses(p => p.includes(ls) ? p.filter(s => s !== ls) : [...p, ls])}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 transition-colors",
+                      on
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    <span className={cn("w-1.5 h-1.5 rounded-full", dot)} />
+                    {ls}
+                  </button>
+                );
+              })}
+              {selectedStatuses.length > 0 && (
+                <button onClick={() => setSelectedStatuses([])} className="text-xs text-slate-500 hover:text-slate-900 ml-1">clear</button>
               )}
             </div>
           )}
