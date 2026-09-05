@@ -688,7 +688,7 @@ export default function ReplenishmentV2() {
               // Fossil Replenishment V2 keeps its own routing; this constant
               // is not shared with that page.
               const APPROVER =
-                "sagar@cambiumretail.com,kanwal@cambiumretail.com,tushar@cambiumretail.com";
+                "sagar@cambiumretail.com,kanwal@cambiumretail.com,tushar@cambiumretail.com,aniruddh@cambiumretail.com";
               const buildRows = () => (rows || [])
                 .map((r) => {
                   // qty = LITERAL Working Value Naresh typed. Never fall
