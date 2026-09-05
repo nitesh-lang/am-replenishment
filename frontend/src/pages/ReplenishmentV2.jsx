@@ -146,9 +146,16 @@ export default function ReplenishmentV2() {
       .catch(() => {});
   }, [account]);
 
-  // Brands are account-specific — a stale brand filter would blank the table
-  // after switching accounts (same trap as the Reorder category filter).
-  useEffect(() => { setSelectedBrands([]); setSelectedAsinTypes([]); }, [account]);
+  // Brands, ASIN types AND categories are account-specific — a stale selection
+  // survives the account switch as an ORPHAN: its chip no longer renders (the
+  // chip list is built from the new account's rows) so it cannot be un-clicked,
+  // and it silently filters the table — operator 2026-09-05: "category is
+  // freezed". Categories are the worst case (AA's "Bundles" exists nowhere
+  // else). Status is deliberately NOT reset: Active/EOL exist in every account,
+  // so it can never orphan, and operators keep it pinned across switches.
+  useEffect(() => {
+    setSelectedBrands([]); setSelectedAsinTypes([]); setSelectedCategories([]);
+  }, [account]);
 
   useEffect(() => {
     setLoading(true);
