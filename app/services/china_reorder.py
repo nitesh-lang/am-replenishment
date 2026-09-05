@@ -88,7 +88,34 @@ def _load_reviews_by_asin() -> pd.DataFrame:
 
 
 def _load_margin_by_asin() -> pd.DataFrame:
-    """ASIN → (net_margin_inr, net_margin_pct). Pooled across brand files."""
+    """ASIN → (net_margin_inr, net_margin_pct).
+
+    PRIMARY source (operator 2026-09-05: "pull margin numbers directly from
+    margin tool which is under weekly project"): Additional/margin/
+    margin_snapshot.csv, written by scripts/margin_pull.py from the Weekly
+    monorepo's margin ETL output. Always current — the old per-brand xlsx
+    drops had gone six weeks stale without anyone noticing.
+
+    FALLBACK: the legacy Additional/margin/*.xlsx "Margin Data" sheets, so a
+    machine where the puller has never run degrades to the old behaviour
+    instead of blanking every margin column.
+    """
+    try:
+        snap = get("Additional/margin/margin_snapshot.csv")
+        snap = snap.copy()
+        snap.columns = [str(c).strip() for c in snap.columns]
+        if {"asin", "net_margin", "net_margin_pct"}.issubset(snap.columns):
+            out = pd.DataFrame({
+                "asin": snap["asin"].astype(str).str.strip().str.upper(),
+                "net_margin_inr": pd.to_numeric(snap["net_margin"], errors="coerce"),
+                "net_margin_pct": pd.to_numeric(snap["net_margin_pct"], errors="coerce"),
+            })
+            out = out[out["asin"] != ""].drop_duplicates(subset=["asin"], keep="first")
+            if len(out):
+                return out
+    except Exception as e:
+        print(f"⚠️ margin_snapshot.csv not loaded ({e}) — falling back to legacy xlsx")
+
     parts = []
     for f, sheet in _MARGIN_FILES:
         try:
