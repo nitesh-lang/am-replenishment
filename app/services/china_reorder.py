@@ -138,13 +138,34 @@ def _load_margin_by_asin() -> pd.DataFrame:
 
 
 def _load_returns_by_asin() -> pd.DataFrame:
-    """ASIN → returns_90d.
+    """ASIN → returns_90d (1P + 3P combined).
 
-    FBA returns: row-level with `return-date` — filter to last 90 days,
-    sum `quantity` per ASIN.
-    1p Returns: ASIN-level summary already (~90-day viewing range in
-    the file's banner), take the `Customer Returns` column directly.
+    PRIMARY source (operator 2026-09-07: "take 1p as well as 3p returns from
+    project weekly fastapi"): Additional/returns/returns_snapshot.csv, written
+    by scripts/returns_weekly_pull.py from the Weekly monorepo's returns ETL —
+    one row per ASIN with returns_3p / returns_1p / return_units (combined,
+    ~90-day window) already computed. Always current; the old xlsx drops had
+    gone six weeks stale.
+
+    FALLBACK: the legacy Additional/returns/*.xlsx + 1p Returns.xlsx path, so
+    a machine where the puller has never run degrades to old behaviour instead
+    of blanking the returns column.
     """
+    try:
+        snap = get("Additional/returns/returns_snapshot.csv")
+        snap = snap.copy()
+        snap.columns = [str(c).strip() for c in snap.columns]
+        if {"asin", "return_units"}.issubset(snap.columns):
+            out = pd.DataFrame({
+                "asin": snap["asin"].astype(str).str.strip().str.upper(),
+                "returns_90d": pd.to_numeric(snap["return_units"], errors="coerce").fillna(0),
+            })
+            out = out[out["asin"] != ""].drop_duplicates(subset=["asin"], keep="first")
+            if len(out):
+                return out
+    except Exception as e:
+        print(f"⚠️ returns_snapshot.csv not loaded ({e}) — falling back to legacy xlsx")
+
     cutoff = pd.Timestamp.now(tz="UTC").tz_localize(None) - pd.Timedelta(days=90)
     parts = []
 
