@@ -645,6 +645,39 @@ def calculate_replenishment(
         - amazon_inventory["afn-unsellable-quantity"]
     )
 
+    # DUMMY-SHIPMENT EXCLUSIONS (operator 2026-09-09, inbound_exclusions.xlsx):
+    # AMPM-check shipments created on SC/OrderPilot that will never arrive.
+    # Amazon reports them in afn-inbound-*, inflating inbound and therefore
+    # UNDERSTATING the replenishment ask. Subtract their remaining units
+    # per SKU (clamped ≥0) and rebuild the row's Final Inv from the adjusted
+    # inbound so both columns stay consistent. Slugs mirror amazon_inv_map —
+    # each account subtracts only from the seller accounts it actually reads.
+    try:
+        from app.services.inbound_exclusions import excluded_units_by_sku
+        _excl_slugs = {
+            "NEXLEV":         ["nexlev"],
+            "VIOMI":          ["viomi"],
+            "AUDIO ARRAY":    ["audio_array", "viomi"],
+            "WHITE MULBERRY": ["wm", "viomi"],
+        }.get(account.upper(), [])
+        _excl = excluded_units_by_sku(_excl_slugs)
+        if _excl:
+            _sk = amazon_inventory["sku"].astype(str).str.strip().str.upper()
+            _sub = _sk.map(_excl).fillna(0)
+            if float(_sub.sum()) > 0:
+                _before = float(amazon_inventory["inbound_inventory"].sum())
+                amazon_inventory["inbound_inventory"] = (
+                    amazon_inventory["inbound_inventory"] - _sub
+                ).clip(lower=0)
+                amazon_inventory["amazon_inventory"] = (
+                    amazon_inventory["fba_inv"] + amazon_inventory["inbound_inventory"]
+                )
+                print(f"ℹ️ {account}: inbound reduced by "
+                      f"{int(_before - float(amazon_inventory['inbound_inventory'].sum()))} "
+                      f"dummy-shipment unit(s) (inbound_exclusions.xlsx)")
+    except Exception as _ee:
+        print(f"⚠️ inbound exclusions skipped: {_ee}")
+
     amazon_inventory = (
         amazon_inventory
         .groupby("asin", as_index=False)

@@ -1038,6 +1038,20 @@ def calculate_final_allocation(
     if inbound_csv.exists():
         try:
             inb = pd.read_csv(inbound_csv)
+            # DUMMY-SHIPMENT EXCLUSIONS (operator 2026-09-09): AMPM-check
+            # shipments that will never arrive — drop their rows entirely so
+            # inbound_to_fc stops netting down send_qty against phantom stock.
+            try:
+                from app.services.inbound_exclusions import excluded_shipment_ids
+                _excl_ids = excluded_shipment_ids()
+                if _excl_ids:
+                    _n0 = len(inb)
+                    inb = inb[~inb["ShipmentId"].astype(str).str.strip().isin(_excl_ids)]
+                    if len(inb) < _n0:
+                        print(f"ℹ️ {account}: {_n0 - len(inb)} dummy inbound "
+                              f"row(s) excluded from inbound_to_fc")
+            except Exception as _ee:
+                print(f"⚠️ FC inbound exclusions skipped: {_ee}")
             inb["SellerSKU"]     = inb["SellerSKU"].astype(str).str.strip().str.upper()
             inb["DestinationFC"] = inb["DestinationFC"].astype(str).str.strip().str.upper()
             # Exclude RECEIVING — those units are physically at the FC and will
